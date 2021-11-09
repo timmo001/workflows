@@ -16,10 +16,6 @@ on:
         required: true
   workflow_dispatch:
 
-concurrency:
-  group: lint-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
-
 jobs:
   lint-prettier:
     name: 👕 Prettier
