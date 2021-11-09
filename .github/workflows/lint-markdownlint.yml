@@ -1,0 +1,30 @@
+name: Lint - MarkdownLint
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-markdownlint:
+    name: 👕 MarkdownLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v2.4.0
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🚀 Run mdl
+        uses: actionshub/markdownlint@2.0.2

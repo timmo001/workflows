@@ -1,0 +1,41 @@
+name: Lint - JSONLint
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-jsonlint:
+    name: 👕 JSONLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v2.4.0
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🚀 Run JSONLint
+        run: |
+          sudo apt install -y jsonlint
+          for file in $(find ./ -type f -name "*.json"); do
+            if ! jsonlint-php -q $file; then
+              export FAILED=1
+            else
+              echo "$file OK"
+            fi
+          done
+          if [ "${FAILED}" = "1" ]; then
+            exit 1
+          fi

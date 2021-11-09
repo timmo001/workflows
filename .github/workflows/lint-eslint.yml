@@ -1,0 +1,35 @@
+name: Lint - ESLint
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+
+concurrency:
+  group: lint-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-eslint:
+    name: 👕 ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v2.4.0
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🏗 Set up Node.js
+        uses: actions/setup-node@v2.4.1
+        with:
+          node-version: 16.x
+          cache: yarn
+      - name: 🏗 Install linux dependencies
+        run: |
+          sudo apt update
+          sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev
+      - name: ⤵️ Install dependencies
+        run: |
+          yarn install
+        env:
+          CI: true
+      - name: 🚀 Run ESLint
+        run: yarn eslint

@@ -1,0 +1,37 @@
+name: Lint - Prettier
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_call:
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-prettier:
+    name: 👕 Prettier
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v2.4.0
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🚀 Run Prettier
+        uses: creyD/prettier_action@v4.0
+        with:
+          prettier_options: --write **/*.{js,json,ts,tsx,yml,yaml}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

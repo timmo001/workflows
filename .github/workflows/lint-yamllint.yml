@@ -1,0 +1,35 @@
+name: Lint - YAMLLint
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-yamllint:
+    name: 👕 YAMLLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v2.4.0
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🚀 Run YAMLLint
+        uses: ibiqlik/action-yamllint@v3.1
+        with:
+          file_or_dir: .
+          config_file: .yamllint.yml
+          format: colored
+          strict: false
