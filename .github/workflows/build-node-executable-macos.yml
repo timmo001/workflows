@@ -11,7 +11,6 @@ on:
       ICON_NAME:
         required: true
 
-
 jobs:
   build-app-macos:
     name: 🚀 Build Application - MacOS
