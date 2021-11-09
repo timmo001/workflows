@@ -15,7 +15,7 @@ on:
 
 jobs:
   lint-markdown-links:
-    name: 👕 Markdown Link Check
+    name: 👕 Markdown Links
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub
