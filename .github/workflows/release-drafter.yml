@@ -9,7 +9,7 @@ on:
         required: true
 
 jobs:
-  update_release_draft:
+  release-drafter:
     name: ✏️ Draft release
     runs-on: ubuntu-latest
     steps:
