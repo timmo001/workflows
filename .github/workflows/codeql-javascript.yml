@@ -4,10 +4,6 @@ name: CodeQL - JavaScript
 on:
   workflow_call:
 
-concurrency:
-  group: codeql-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
-
 jobs:
   analyze:
     name: Analyze
