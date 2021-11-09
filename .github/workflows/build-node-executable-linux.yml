@@ -30,9 +30,6 @@ jobs:
       - name: 🏗 Install dependencies
         run: |
           yarn install:all:ci
-      - name: 🧹 Auto Clean
-        run: |
-          yarn autoclean:all
       - name: 🚀 Package
         run: |
           yarn package
