@@ -22,7 +22,9 @@ jobs:
           pip install -U pylint
       - name: 📦 Install
         run: |
-          pip install ${{ secrets.CODE_PATH }}
+          cd ${{ secrets.CODE_PATH }}
+          pip install .
       - name: 🚀 Run Pylint
         run: |
-          pylint ${{ secrets.CODE_PATH }}
+          cd ${{ secrets.CODE_PATH }}
+          pylint .
