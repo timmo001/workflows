@@ -1,4 +1,4 @@
-name: Lint - PyLint
+name: Lint - Pylint
 
 # yamllint disable-line rule:truthy
 on:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   lint-pylint:
-    name: 👕 Run PyLint
+    name: 👕 Run Pylint
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub
@@ -23,11 +23,11 @@ jobs:
         run: |
           pip install -r requirements.txt
         working-directory: ${{ secrets.CODE_PATH }}
-      - name: 📦 Install PyLint
+      - name: 📦 Install Pylint
         run: |
           pip install -U pylint
         working-directory: ${{ secrets.CODE_PATH }}
-      - name: 🚀 Run pylint
+      - name: 🚀 Run Pylint
         run: |
           pylint .
         working-directory: ${{ secrets.CODE_PATH }}
