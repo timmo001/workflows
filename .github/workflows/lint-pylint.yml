@@ -14,19 +14,15 @@ jobs:
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v2.4.0
-      - name: 📦 Install Requirements
-        run: |
-          pip install -r requirements.txt
-        working-directory: ${{ secrets.CODE_PATH }}
-      - name: 📦 Install
-        run: |
-          pip install .
-        working-directory: ${{ secrets.CODE_PATH }}
       - name: 📦 Install Pylint
         run: |
           pip install -U pylint
-        working-directory: ${{ secrets.CODE_PATH }}
+      - name: 📦 Install
+        run: |
+          cd ${{ secrets.CODE_PATH }}
+          pip install -r requirements.txt
+          pip install .
       - name: 🚀 Run Pylint
         run: |
+          cd ${{ secrets.CODE_PATH }}
           pylint .
-        working-directory: ${{ secrets.CODE_PATH }}

@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v2.4.0
       - name: 📦 Install Black
         run: |
-          pip install black
+          pip install -U black
         working-directory: ${{ secrets.CODE_PATH }}
       - name: 🚀 Run black
         run: |
