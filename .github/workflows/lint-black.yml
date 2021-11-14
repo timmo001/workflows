@@ -3,6 +3,9 @@ name: Lint - Black
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
+    secrets:
+      CODE_PATH:
+        required: true
 
 jobs:
   lint-black:
@@ -19,4 +22,4 @@ jobs:
       - name: 🚀 Run black
         run: |
           pip install -U black
-          black --check .
+          black --check ${{ secrets.CODE_PATH }}
