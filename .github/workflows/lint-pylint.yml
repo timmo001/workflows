@@ -19,7 +19,9 @@ jobs:
           pip install -U pylint
       - name: 📦 Install
         run: |
+          ls -la
           cd ${{ secrets.CODE_PATH }}
+          ls -la
           pip install .
       - name: 🚀 Run Pylint
         run: |
