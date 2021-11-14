@@ -19,7 +19,15 @@ jobs:
         id: python
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
+      - name: 📦 Install Requirements
+        run: |
+          pip install -r requirements.txt
+        working-directory: ${{ secrets.CODE_PATH }}
+      - name: 📦 Install Black
+        run: |
+          pip install black
+        working-directory: ${{ secrets.CODE_PATH }}
       - name: 🚀 Run black
         run: |
-          pip install -U black
-          black --check ${{ secrets.CODE_PATH }}
+          black --check .
+        working-directory: ${{ secrets.CODE_PATH }}

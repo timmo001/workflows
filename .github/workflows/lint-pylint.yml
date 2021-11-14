@@ -19,7 +19,15 @@ jobs:
         id: python
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
-      - name: 🚀 Run pylint
+      - name: 📦 Install Requirements
+        run: |
+          pip install -r requirements.txt
+        working-directory: ${{ secrets.CODE_PATH }}
+      - name: 📦 Install PyLint
         run: |
           pip install -U pylint
-          pylint ${{ secrets.CODE_PATH }}
+        working-directory: ${{ secrets.CODE_PATH }}
+      - name: 🚀 Run pylint
+        run: |
+          pylint .
+        working-directory: ${{ secrets.CODE_PATH }}
