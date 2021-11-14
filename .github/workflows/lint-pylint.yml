@@ -14,6 +14,9 @@ jobs:
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v2.4.0
+      - name: 📦 Install build dependencies
+        run: |
+          pip install -U setuptools wheel
       - name: 📦 Install Pylint
         run: |
           pip install -U pylint
