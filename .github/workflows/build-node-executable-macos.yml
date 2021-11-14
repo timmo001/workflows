@@ -41,7 +41,7 @@ jobs:
           plutil -lint ./scripts/Info.plist
           mkdir -p ${{ secrets.APP_NAME }}.app/Contents/{MacOS,Resources,MacOS/traybin}
           cp scripts/Info.plist ${{ secrets.APP_NAME }}.app/Contents
-          cp out/{${{ secrets.APP_FILE }},${{ secrets.APP_FILE }}-tray,xdg-open} ${{ secrets.APP_NAME }}.app/Contents/MacOS
+          cp out/{${{ secrets.APP_FILE }},xdg-open} ${{ secrets.APP_NAME }}.app/Contents/MacOS
           cp out/traybin/tray_darwin_release ${{ secrets.APP_NAME }}.app/Contents/MacOS/traybin
           cp out/${{ secrets.ICON_NAME }}.icns ${{ secrets.APP_NAME }}.app/Contents/Resources
           cp -R out/${{ secrets.ICON_NAME }}.* ${{ secrets.APP_NAME }}.app/Contents/MacOS
