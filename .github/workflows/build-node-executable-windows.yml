@@ -13,13 +13,6 @@ jobs:
         uses: actions/checkout@v2.4.0
         with:
           ref: ${{ github.head_ref }}
-      - name: 📦 Install
-        run: |
-          pip install .
-        working-directory: gui
-      - name: 🚀 Build GUI
-        run: |
-          yarn build:gui
       - name: 🏗 Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
