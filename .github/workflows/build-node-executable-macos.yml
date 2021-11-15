@@ -28,14 +28,17 @@ jobs:
       - name: 🏗 Install dependencies
         run: |
           yarn install:all:ci
-      - name: 🚀 Package
+      - name: 📦 Package
         run: |
           yarn package
+      - name: 📦 Archive
+        run: |
+          zip -r out.zip out
       - name: ⬆ Upload Artifacts - Output
         uses: actions/upload-artifact@v2
         with:
           name: macos-out
-          path: out
+          path: out.zip
       - name: 🚀 Create dmg file
         run: |
           plutil -lint ./scripts/Info.plist

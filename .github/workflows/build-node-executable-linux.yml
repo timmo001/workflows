@@ -30,14 +30,18 @@ jobs:
       - name: 🏗 Install dependencies
         run: |
           yarn install:all:ci
-      - name: 🚀 Package
+      - name: 📦 Package
         run: |
           yarn package
+      - name: 📦 Archive
+        run: |
+          sudo apt-get install -y zip
+          zip out.zip out
       - name: ⬆ Upload Artifacts - Output
         uses: actions/upload-artifact@v2
         with:
           name: linux-out
-          path: out
+          path: out.zip
       - name: 🚀 Create apk file
         run: |
           nfpm package --config nfpm.yaml --packager apk

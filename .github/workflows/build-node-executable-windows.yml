@@ -20,14 +20,17 @@ jobs:
       - name: 🏗 Add console hide command
         run: |
           Add-Content -Path .\src\index.ts -Value $(Get-Content -Path .\scripts\windowsConsoleHide.js)
-      - name: 🚀 Package
+      - name: 📦 Package
         run: |
           yarn package
+      - name: 📦 Archive
+        run: |
+          Compress-Archive -DestinationPath out.zip -Path out
       - name: ⬆ Upload Artifacts - Output
         uses: actions/upload-artifact@v2
         with:
           name: windows-out
-          path: out
+          path: out.zip
       - name: 🚀 Create setup file
         uses: joncloud/makensis-action@v3.6
         with:
