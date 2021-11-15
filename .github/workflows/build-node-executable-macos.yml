@@ -39,13 +39,13 @@ jobs:
       - name: 🚀 Create dmg file
         run: |
           plutil -lint ./scripts/Info.plist
-          mkdir -p ${{ secrets.APP_NAME }}/.app/Contents/{MacOS,Resources}
-          cp scripts/Info.plist ${{ secrets.APP_NAME }}/.app/Contents
-          cp out/${{ secrets.APP_FILE }} ${{ secrets.APP_NAME }}/.app/Contents/MacOS
-          cp out/xdg-open ${{ secrets.APP_NAME }}/.app/Contents/MacOS
-          cp out/${{ secrets.ICON_NAME }}.icns ${{ secrets.APP_NAME }}/.app/Contents/Resources
-          cp -R out/${{ secrets.ICON_NAME }}.* ${{ secrets.APP_NAME }}/.app/Contents/MacOS
-          cp out/package.json ${{ secrets.APP_NAME }}/.app/Contents/MacOS
+          mkdir -p ${{ secrets.APP_NAME }}.app/Contents/{MacOS,Resources}
+          cp scripts/Info.plist ${{ secrets.APP_NAME }}.app/Contents
+          cp out/${{ secrets.APP_FILE }} ${{ secrets.APP_NAME }}.app/Contents/MacOS
+          cp out/xdg-open ${{ secrets.APP_NAME }}.app/Contents/MacOS
+          cp out/${{ secrets.ICON_NAME }}.icns ${{ secrets.APP_NAME }}.app/Contents/Resources
+          cp -R out/${{ secrets.ICON_NAME }}.* ${{ secrets.APP_NAME }}.app/Contents/MacOS
+          cp out/package.json ${{ secrets.APP_NAME }}.app/Contents/MacOS
           npx appdmg appdmg.json ${{ secrets.APP_NAME }}.dmg
       - name: ⬆ Upload Artifacts - dmg
         uses: actions/upload-artifact@v2
