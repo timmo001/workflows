@@ -16,7 +16,8 @@ jobs:
       - name: 🚀 Install GUI (Manual)
         run: |
           cd gui
-          pip3 install .
+          pip install .
+          python3 -m pip install .
       - name: 🚀 Build GUI
         run: |
           yarn build:gui
