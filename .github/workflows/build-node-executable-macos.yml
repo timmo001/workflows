@@ -41,7 +41,8 @@ jobs:
           plutil -lint ./scripts/Info.plist
           mkdir -p ${{ secrets.APP_NAME }}/.app/Contents/{MacOS,Resources}
           cp scripts/Info.plist ${{ secrets.APP_NAME }}/.app/Contents
-          cp out/{${{ secrets.APP_FILE }},xdg-open} ${{ secrets.APP_NAME }}/.app/Contents/MacOS
+          cp out/${{ secrets.APP_FILE }} ${{ secrets.APP_NAME }}/.app/Contents/MacOS
+          cp out/xdg-open ${{ secrets.APP_NAME }}/.app/Contents/MacOS
           cp out/${{ secrets.ICON_NAME }}.icns ${{ secrets.APP_NAME }}/.app/Contents/Resources
           cp -R out/${{ secrets.ICON_NAME }}.* ${{ secrets.APP_NAME }}/.app/Contents/MacOS
           cp out/package.json ${{ secrets.APP_NAME }}/.app/Contents/MacOS
