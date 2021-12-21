@@ -3,9 +3,6 @@ name: Build Linux
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
-    secrets:
-      CONTAINER_SLUG:
-        required: true
 
 jobs:
   build-linux:
