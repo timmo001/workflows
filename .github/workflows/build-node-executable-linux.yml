@@ -35,7 +35,7 @@ jobs:
           yarn package
       - name: 📦 Archive
         run: |
-          tar -zcvf out..tar.gz out
+          tar -zcvf out.tar.gz out
       - name: ⬆ Upload Artifacts - Output
         uses: actions/upload-artifact@v2
         with:
