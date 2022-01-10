@@ -12,6 +12,10 @@ jobs:
     name: 🚀 Build Application - Linux
     runs-on: ubuntu-latest
     steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v2.4.0
+        with:
+          ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
         uses: actions/setup-node@v2.5.1
         with:
@@ -29,10 +33,7 @@ jobs:
           sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev libopengl0
           wget https://github.com/goreleaser/nfpm/releases/download/v2.11.3/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
-      - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v2.4.0
-        with:
-          ref: ${{ github.head_ref }}
+          rm ./nfpm_amd64.deb
       - name: 🏗 Install dependencies
         run: |
           yarn install:all:ci
