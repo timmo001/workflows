@@ -35,13 +35,12 @@ jobs:
           yarn package
       - name: 📦 Archive
         run: |
-          sudo apt-get install -y zip
-          zip out.zip out
+          tar -zcvf out..tar.gz out
       - name: ⬆ Upload Artifacts - Output
         uses: actions/upload-artifact@v2
         with:
           name: linux-out
-          path: out.zip
+          path: out.tar.gz
       - name: 🚀 Create apk file
         run: |
           nfpm package --config nfpm.yaml --packager apk
