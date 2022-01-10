@@ -34,7 +34,7 @@ jobs:
           wget https://github.com/goreleaser/nfpm/releases/download/v2.11.3/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
           rm ./nfpm_amd64.deb
-      - name: 🏗 Install dependencies
+      - name: 🏗 Install packages
         run: |
           yarn install:all:ci
       - name: 📦 Package
