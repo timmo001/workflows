@@ -16,7 +16,7 @@ jobs:
           wget https://github.com/goreleaser/nfpm/releases/download/v2.8.0/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v2.4.0
+        uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
