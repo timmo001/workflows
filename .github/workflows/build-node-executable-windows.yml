@@ -27,7 +27,7 @@ jobs:
         run: |
           Compress-Archive -DestinationPath out.zip -Path out
       - name: ⬆ Upload Artifacts - Output
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: windows-out
           path: out.zip
@@ -36,7 +36,7 @@ jobs:
         with:
           script-file: "scripts/installer.nsi"
       - name: ⬆ Upload Artifacts - Setup
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: windows-setup
           path: "*setup.exe"
