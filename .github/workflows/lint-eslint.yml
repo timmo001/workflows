@@ -3,6 +3,9 @@ name: Lint - ESLint
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
+    secrets:
+      CODE_PATH:
+        required: false
 
 jobs:
   lint-eslint:
@@ -27,5 +30,8 @@ jobs:
           yarn install
         env:
           CI: true
+        working-directory: ${{ secrets.CODE_PATH }}
       - name: 🚀 Run ESLint
-        run: yarn eslint
+        run: |
+          yarn eslint
+        working-directory: ${{ secrets.CODE_PATH }}
