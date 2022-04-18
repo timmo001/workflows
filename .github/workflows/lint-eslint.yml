@@ -21,6 +21,8 @@ jobs:
         with:
           node-version: 16.x
           cache: yarn
+          check-latest: true
+          cache-dependency-path: "${{ secrets.CODE_PATH }}/**/yarn.lock"
       - name: 🏗 Install linux dependencies
         run: |
           sudo apt update
