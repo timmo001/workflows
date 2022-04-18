@@ -20,9 +20,11 @@ jobs:
         working-directory: ${{ secrets.CODE_PATH }}
       - name: 📦 Install
         run: |
+          ls -al
           pip install .
         working-directory: ${{ secrets.CODE_PATH }}
       - name: 🚀 Run Pylint
         run: |
+          ls -al
           pylint .
         working-directory: ${{ secrets.CODE_PATH }}
