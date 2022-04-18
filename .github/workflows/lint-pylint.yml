@@ -20,8 +20,12 @@ jobs:
       - name: 📦 Install
         run: |
           ls -al
-          pip install ${{ secrets.CODE_PATH }}
+          cd ${{ secrets.CODE_PATH }}
+          ls -al
+          pip install .
       - name: 🚀 Run Pylint
         run: |
           ls -al
-          pylint ${{ secrets.CODE_PATH }}
+          cd ${{ secrets.CODE_PATH }}
+          ls -al
+          pylint .
