@@ -17,14 +17,11 @@ jobs:
       - name: 📦 Install Pylint
         run: |
           pip install -U pylint
-        working-directory: ${{ secrets.CODE_PATH }}
       - name: 📦 Install
         run: |
           ls -al
-          pip install .
-        working-directory: ${{ secrets.CODE_PATH }}
+          pip install ${{ secrets.CODE_PATH }}
       - name: 🚀 Run Pylint
         run: |
           ls -al
-          pylint .
-        working-directory: ${{ secrets.CODE_PATH }}
+          pylint ${{ secrets.CODE_PATH }}
