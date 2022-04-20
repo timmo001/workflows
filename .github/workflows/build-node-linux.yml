@@ -3,6 +3,9 @@ name: Build Linux
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
+    secrets:
+      CODE_PATH:
+        required: true
 
 jobs:
   build-linux:
@@ -26,12 +29,14 @@ jobs:
           cache: yarn
       - name: 🏗 Install dependencies
         run: |
+          cd ${{ secrets.CODE_PATH }}
           yarn install
       - name: 🏗️ Build
         run: |
+          cd ${{ secrets.CODE_PATH }}
           yarn build
       - name: ⬆ Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: build
-          path: build
+          path: ${{ secrets.CODE_PATH }}/build
