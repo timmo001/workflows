@@ -6,6 +6,8 @@ on:
     secrets:
       CODE_PATH:
         required: true
+      MODULE_NAME:
+        required: true
 
 jobs:
   lint-pylint:
@@ -24,4 +26,4 @@ jobs:
       - name: 🚀 Run Pylint
         run: |
           cd ${{ secrets.CODE_PATH }}
-          pylint .
+          pylint ${{ secrets.MODULE_NAME }}
