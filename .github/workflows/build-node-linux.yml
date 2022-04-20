@@ -1,4 +1,5 @@
-name: Build Linux
+---
+name: Build Node Linux
 
 # yamllint disable-line rule:truthy
 on:
@@ -8,7 +9,7 @@ on:
         required: true
 
 jobs:
-  build-linux:
+  build-node-linux:
     name: 🚀 Build - Linux
     runs-on: ubuntu-latest
     steps:

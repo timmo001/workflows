@@ -9,7 +9,7 @@ on:
         required: true
 
 jobs:
-  build-app-linux:
+  build-python-linux:
     name: 🚀 Build Application - Linux
     runs-on: ubuntu-latest
     steps:
