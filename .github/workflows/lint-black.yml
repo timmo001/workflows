@@ -8,7 +8,7 @@ on:
         required: false
         type: string
         default: "."
-      pre-command:
+      pre-run-command:
         required: false
         type: string
 
@@ -23,9 +23,9 @@ jobs:
         run: |
           pip install --upgrade black
         working-directory: ${{ inputs.code-path }}
-      - name: 🚀 Run pre-command
-        if: ${{ inputs.pre-command }}
-        run: ${{ inputs.pre-command }}
+      - name: 🚀 Run pre-run-command
+        if: ${{ inputs.pre-run-command }}
+        run: ${{ inputs.pre-run-command }}
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run black
         run: |
