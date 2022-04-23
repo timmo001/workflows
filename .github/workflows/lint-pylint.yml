@@ -3,9 +3,17 @@ name: Lint - Pylint
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
-    secrets:
-      CODE_PATH:
-        required: true
+    inputs:
+      code-path:
+        required: false
+        type: string
+        default: "."
+      pre-command:
+        required: false
+        type: string
+      pre-install:
+        required: false
+        type: string
 
 jobs:
   lint-pylint:
@@ -17,12 +25,20 @@ jobs:
       - name: 📦 Install Pylint
         run: |
           pip install -U pylint
-        working-directory: ${{ secrets.CODE_PATH }}
+        working-directory: ${{ inputs.code-path }}
+      - name: 🚀 Run pre-install
+        if: ${{ inputs.pre-install }}
+        run: ${{ inputs.pre-install }}
+        working-directory: ${{ inputs.code-path }}
       - name: 📦 Install
         run: |
           pip install .
-        working-directory: ${{ secrets.CODE_PATH }}
+        working-directory: ${{ inputs.code-path }}
+      - name: 🚀 Run pre-command
+        if: ${{ inputs.pre-command }}
+        run: ${{ inputs.pre-command }}
+        working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run Pylint
         run: |
           pylint .
-        working-directory: ${{ secrets.CODE_PATH }}
+        working-directory: ${{ inputs.code-path }}
