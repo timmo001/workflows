@@ -4,9 +4,11 @@ name: Build Python Linux
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
-    secrets:
-      CODE_PATH:
-        required: true
+    inputs:
+      code-path:
+        required: false
+        type: string
+        default: "."
 
 jobs:
   build-python-linux:
@@ -32,7 +34,7 @@ jobs:
           rm ./nfpm_amd64.deb
       - name: 🏗 Install packages
         run: |
-          cd ${{ secrets.CODE_PATH }}
+          cd ${{ inputs.code-path }}
           pip install .
       # - name: 🚀 Create apk file
       #   run: |

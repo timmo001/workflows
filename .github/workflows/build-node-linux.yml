@@ -4,9 +4,11 @@ name: Build Node Linux
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
-    secrets:
-      CODE_PATH:
-        required: true
+    inputs:
+      code-path:
+        required: false
+        type: string
+        default: "."
 
 jobs:
   build-node-linux:
@@ -28,17 +30,17 @@ jobs:
         with:
           node-version: 16.x
           cache: yarn
-          cache-dependency-path: ${{ secrets.CODE_PATH }}/**/yarn.lock
+          cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
       - name: 🏗 Install dependencies
         run: |
-          cd ${{ secrets.CODE_PATH }}
+          cd ${{ inputs.code-path }}
           yarn install
       - name: 🏗️ Build
         run: |
-          cd ${{ secrets.CODE_PATH }}
+          cd ${{ inputs.code-path }}
           yarn build
       - name: ⬆ Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: build
-          path: ${{ secrets.CODE_PATH }}/build
+          path: ${{ inputs.code-path }}/build
