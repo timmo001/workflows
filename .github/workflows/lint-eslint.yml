@@ -3,10 +3,11 @@ name: Lint - ESLint
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
-    secrets:
-      CODE_PATH:
+    inputs:
+      code-path:
         required: false
-
+        type: string
+        default: "."
 jobs:
   lint-eslint:
     name: 👕 ESLint
@@ -22,7 +23,7 @@ jobs:
           node-version: 16.x
           cache: yarn
           check-latest: true
-          cache-dependency-path: "${{ secrets.CODE_PATH }}/**/yarn.lock"
+          cache-dependency-path: "${{ inputs.code-path }}/**/yarn.lock"
       - name: 🏗 Install linux dependencies
         run: |
           sudo apt update
@@ -32,8 +33,8 @@ jobs:
           yarn install
         env:
           CI: true
-        working-directory: ${{ secrets.CODE_PATH }}
+        working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run ESLint
         run: |
           yarn eslint
-        working-directory: ${{ secrets.CODE_PATH }}
+        working-directory: ${{ inputs.code-path }}
