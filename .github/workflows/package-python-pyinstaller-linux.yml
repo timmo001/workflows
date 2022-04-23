@@ -8,11 +8,11 @@ on:
       additional-pyinstaller-options:
         required: false
         type: string
-      pre-package-command:
-        required: false
-        type: string
       entry-point-file:
         required: true
+        type: string
+      pre-package-command:
+        required: false
         type: string
 
 jobs:
