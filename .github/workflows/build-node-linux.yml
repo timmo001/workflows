@@ -1,11 +1,15 @@
-name: Build Linux
+---
+name: Build Node Linux
 
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
+    secrets:
+      CODE_PATH:
+        required: true
 
 jobs:
-  build-linux:
+  build-node-linux:
     name: 🚀 Build - Linux
     runs-on: ubuntu-latest
     steps:
@@ -16,22 +20,25 @@ jobs:
           wget https://github.com/goreleaser/nfpm/releases/download/v2.8.0/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v2.4.0
+        uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
-        uses: actions/setup-node@v2.5.1
+        uses: actions/setup-node@v3
         with:
           node-version: 16.x
           cache: yarn
+          cache-dependency-path: ${{ secrets.CODE_PATH }}/**/yarn.lock
       - name: 🏗 Install dependencies
         run: |
+          cd ${{ secrets.CODE_PATH }}
           yarn install
       - name: 🏗️ Build
         run: |
+          cd ${{ secrets.CODE_PATH }}
           yarn build
       - name: ⬆ Upload Artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: build
-          path: build
+          path: ${{ secrets.CODE_PATH }}/build

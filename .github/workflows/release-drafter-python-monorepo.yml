@@ -30,10 +30,8 @@ jobs:
         if: ${{ github.event_name == 'pull_request_target' }}
         run: |
           echo "${{ steps.release_drafter.outputs.tag_name }}"
-          npm version ${{ steps.release_drafter.outputs.tag_name }} \
-            --allow-same-version \
-            --no-git-tag-version
-          cat package.json
+          find . -type f -name "version.txt" -maxdepth 2 -exec \
+            sh -c 'echo "${{ steps.release_drafter.outputs.tag_name }}" | {}'
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys CC86BB64
           sudo add-apt-repository ppa:rmescandon/yq
           sudo apt update

@@ -8,10 +8,14 @@ on:
         required: false
         type: string
         default: "."
-      pre-command:
+      module-name:
         required: false
         type: string
-      pre-install:
+        default: "."
+      pre-run-command:
+        required: false
+        type: string
+      pre-install-command:
         required: false
         type: string
 
@@ -21,24 +25,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v2.4.0
+        uses: actions/checkout@v3
       - name: 📦 Install Pylint
         run: |
-          pip install -U pylint
+          pip install --upgrade pylint
         working-directory: ${{ inputs.code-path }}
-      - name: 🚀 Run pre-install
-        if: ${{ inputs.pre-install }}
-        run: ${{ inputs.pre-install }}
-        working-directory: ${{ inputs.code-path }}
+      - name: 🚀 Run pre-install-command
+        if: ${{ inputs.pre-install-command }}
+        run: |
+          cd ${{ inputs.code-path }}
+          ${{ inputs.pre-install-command }}
       - name: 📦 Install
         run: |
+          cd ${{ inputs.code-path }}
           pip install .
-        working-directory: ${{ inputs.code-path }}
-      - name: 🚀 Run pre-command
-        if: ${{ inputs.pre-command }}
-        run: ${{ inputs.pre-command }}
-        working-directory: ${{ inputs.code-path }}
+      - name: 🚀 Run pre-run-command
+        if: ${{ inputs.pre-run-command }}
+        run: |
+          cd ${{ inputs.code-path }}
+          ${{ inputs.pre-run-command }}
       - name: 🚀 Run Pylint
         run: |
-          pylint .
-        working-directory: ${{ inputs.code-path }}
+          cd ${{ inputs.code-path }}
+          pylint ${{ inputs.module-name }}

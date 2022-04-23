@@ -3,6 +3,9 @@ name: Lint - ESLint
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
+    secrets:
+      CODE_PATH:
+        required: false
 
 jobs:
   lint-eslint:
@@ -10,14 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v2.4.0
+        uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
-        uses: actions/setup-node@v2.5.1
+        uses: actions/setup-node@v3
         with:
           node-version: 16.x
           cache: yarn
+          check-latest: true
+          cache-dependency-path: "${{ secrets.CODE_PATH }}/**/yarn.lock"
       - name: 🏗 Install linux dependencies
         run: |
           sudo apt update
@@ -27,5 +32,8 @@ jobs:
           yarn install
         env:
           CI: true
+        working-directory: ${{ secrets.CODE_PATH }}
       - name: 🚀 Run ESLint
-        run: yarn eslint
+        run: |
+          yarn eslint
+        working-directory: ${{ secrets.CODE_PATH }}
