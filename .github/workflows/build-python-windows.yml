@@ -1,0 +1,31 @@
+---
+name: Build Python Windows
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      code-path:
+        required: false
+        type: string
+        default: "."
+
+jobs:
+  build-python-windows:
+    name: 🚀 Build Application - Windows
+    runs-on: windows-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🏗 Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.10"
+          architecture: "x64"
+          cache: "pip"
+      - name: 🏗 Install packages
+        run: |
+          cd ${{ inputs.code-path }}
+          pip install .
