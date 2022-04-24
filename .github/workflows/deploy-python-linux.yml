@@ -32,7 +32,7 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           python setup.py sdist bdist_wheel
-      - name: ↗️ Publish to PyPI
+      - name: 🚀 Publish to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
