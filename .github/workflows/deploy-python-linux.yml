@@ -1,5 +1,5 @@
 ---
-name: Build Python Linux
+name: Deploy Python Linux
 
 # yamllint disable-line rule:truthy
 on:
@@ -11,7 +11,7 @@ on:
         default: "."
 
 jobs:
-  build-python-linux:
+  deploy-python-linux:
     name: 🚀 Deploy Application - Linux
     runs-on: ubuntu-latest
     steps:
