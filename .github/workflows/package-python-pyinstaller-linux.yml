@@ -37,9 +37,9 @@ jobs:
           wget https://github.com/goreleaser/nfpm/releases/download/v2.15.1/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
           rm ./nfpm_amd64.deb
-      - name: 🏗 Install pyinstaller
+      - name: 🏗 Install setuptools, wheel, pyinstaller
         run: |
-          pip install --upgrade pyinstaller
+          pip install --upgrade setuptools wheel pyinstaller
       - name: 🚀 Run pre-package-command
         if: ${{ inputs.pre-package-command }}
         run: |

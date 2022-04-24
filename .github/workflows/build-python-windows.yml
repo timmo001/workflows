@@ -25,6 +25,9 @@ jobs:
           python-version: "3.10"
           architecture: "x64"
           cache: "pip"
+      - name: 🏗 Install setuptools, wheel
+        run: |
+          pip install --upgrade setuptools wheel
       - name: 🏗 Install packages
         run: |
           cd ${{ inputs.code-path }}
