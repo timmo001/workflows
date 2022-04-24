@@ -49,3 +49,12 @@ jobs:
         with:
           name: windows-dist
           path: "dist"
+      - name: 🚀 Create setup file
+        uses: joncloud/makensis-action@v3.6
+        with:
+          script-file: installer.nsi
+      - name: ⬆ Upload Artifacts - Setup
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-setup
+          path: "*setup.exe"
