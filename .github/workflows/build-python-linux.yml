@@ -9,6 +9,9 @@ on:
         required: false
         type: string
         default: "."
+      pre-install-command:
+        required: false
+        type: string
 
 jobs:
   build-python-linux:
@@ -28,6 +31,11 @@ jobs:
       - name: 🏗 Install setuptools, wheel
         run: |
           pip install --upgrade setuptools wheel
+      - name: 🚀 Run pre-install-command
+        if: ${{ inputs.pre-install-command }}
+        run: |
+          cd ${{ inputs.code-path }}
+          ${{ inputs.pre-install-command }}
       - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
