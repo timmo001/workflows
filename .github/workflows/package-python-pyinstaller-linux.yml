@@ -51,6 +51,11 @@ jobs:
             --noconfirm \
             ${{ inputs.additional-pyinstaller-options }} \
             ${{ inputs.entry-point-file }}
+      - name: ⬆ Upload Artifacts - dist
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-dist
+          path: "dist"
       - name: 🚀 Create apk file
         run: |
           nfpm package --config nfpm.yaml --packager apk
