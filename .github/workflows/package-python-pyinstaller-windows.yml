@@ -8,6 +8,10 @@ on:
       additional-pyinstaller-options:
         required: false
         type: string
+      create-setup:
+        required: false
+        type: boolean
+        default: false
       entry-point-file:
         required: true
         type: string
@@ -18,7 +22,7 @@ on:
 jobs:
   package-python-windows:
     name: 🚀 Package Application - Windows
-    runs-on: windows-latest
+    runs-on: ${{ inputs.create-setup && 'self-hosted' || 'windows-latest' }}
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v3
@@ -50,10 +54,12 @@ jobs:
           name: windows-dist
           path: "dist"
       - name: 🚀 Create setup file
+        if: ${{ inputs.create-setup }}
         uses: joncloud/makensis-action@v3.6
         with:
           script-file: installer.nsi
       - name: ⬆ Upload Artifacts - Setup
+        if: ${{ inputs.create-setup }}
         uses: actions/upload-artifact@v3
         with:
           name: windows-setup
