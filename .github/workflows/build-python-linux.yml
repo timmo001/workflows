@@ -25,38 +25,7 @@ jobs:
           python-version: "3.10"
           architecture: "x64"
           cache: "pip"
-      - name: 🏗 Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install libavahi-compat-libdnssd-dev
-          wget https://github.com/goreleaser/nfpm/releases/download/v2.11.3/nfpm_amd64.deb
-          sudo apt install ./nfpm_amd64.deb
-          rm ./nfpm_amd64.deb
       - name: 🏗 Install packages
         run: |
           cd ${{ inputs.code-path }}
           pip install .
-      # - name: 🚀 Create apk file
-      #   run: |
-      #     nfpm package --config nfpm.yaml --packager apk
-      # - name: ⬆ Upload Artifacts - apk
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: linux-apk
-      #     path: "*.apk"
-      # - name: 🚀 Create deb file
-      #   run: |
-      #     nfpm package --config nfpm.yaml --packager deb
-      # - name: ⬆ Upload Artifacts - deb
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: linux-deb
-      #     path: "*.deb"
-      # - name: 🚀 Create rpm file
-      #   run: |
-      #     nfpm package --config nfpm.yaml --packager rpm
-      # - name: ⬆ Upload Artifacts - rpm
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: linux-rpm
-      #     path: "*.rpm"
