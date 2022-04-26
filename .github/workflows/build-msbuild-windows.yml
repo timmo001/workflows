@@ -27,9 +27,14 @@ jobs:
         uses: microsoft/setup-msbuild@v1.1
         with:
           msbuild-architecture: x64
+      - name: 🏗 Set up NuGet
+        uses: nuget/setup-nuget@v1
+        with:
+          nuget-version: ${{ matrix.nuget }}
       - name: 🏗 Build
         run: |
           cd ${{ inputs.code-path }}
+          nuget restore ${{ inputs.package }}
           msbuild ${{ inputs.package }} `
             -t:rebuild `
             -verbosity:diag `
