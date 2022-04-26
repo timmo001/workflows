@@ -9,10 +9,15 @@ on:
         required: false
         type: string
         default: "."
-      package:
-        required: false
+      output-name:
+        required: true
         type: string
-        default: "."
+      output-path:
+        required: true
+        type: string
+      package:
+        required: true
+        type: string
 
 jobs:
   build-msbuild-windows:
@@ -38,4 +43,10 @@ jobs:
           msbuild ${{ inputs.package }} `
             -t:rebuild `
             -verbosity:diag `
-            -property:Configuration=Release
+            -property:Configuration=Release `
+            -property:Platform=x64
+      - name: ⬆ Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.output-name }}
+          path: ${{ inputs.output-path }}
