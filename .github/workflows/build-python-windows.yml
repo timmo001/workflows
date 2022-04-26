@@ -5,16 +5,16 @@ name: Build Python Windows
 on:
   workflow_call:
     inputs:
-      code-path:
-        required: false
-        type: string
-        default: "."
       additional-artifacts-name:
         required: false
         type: string
       additional-artifacts-path:
         required: false
         type: string
+      code-path:
+        required: false
+        type: string
+        default: "."
       pre-install-command:
         required: false
         type: string
