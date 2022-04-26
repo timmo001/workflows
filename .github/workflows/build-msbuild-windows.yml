@@ -25,6 +25,8 @@ jobs:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up MSBuild
         uses: microsoft/setup-msbuild@v1.1
+        with:
+          msbuild-architecture: x64
       - name: 🏗 Build
         run: |
           cd ${{ inputs.code-path }}
