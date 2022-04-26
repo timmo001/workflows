@@ -43,8 +43,7 @@ jobs:
           msbuild ${{ inputs.package }} `
             -t:rebuild `
             -verbosity:diag `
-            -property:Configuration=Release `
-            -property:Platform=x64
+            -property:Configuration=Release
       - name: ⬆ Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
