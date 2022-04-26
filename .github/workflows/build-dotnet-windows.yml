@@ -1,0 +1,30 @@
+---
+name: Build dotNET Linux
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      code-path:
+        required: false
+        type: string
+        default: "."
+
+jobs:
+  build-dotnet-windows:
+    name: 🚀 Build Application - Windows
+    runs-on: windows-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      # - name: 🏗 Set up dotNET
+      #   uses: actions/setup-dotnet@v2
+      #   with:
+      #     dotnet-version: "6.0.x"
+      - name: 🏗 Build
+        run: |
+          cd ${{ inputs.code-path }}
+          dotnet restore
+          dotnet build
