@@ -55,4 +55,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{ inputs.artifact-name }}
-          path: ${{ inputs.code-path }}/${{ inputs.artifact-path }}
+          path: ${{ inputs.artifact-path }}
