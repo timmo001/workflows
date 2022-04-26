@@ -5,6 +5,17 @@ name: Build Node Linux
 on:
   workflow_call:
     inputs:
+      additional-build-commands:
+        required: false
+        type: string
+      artifact-name:
+        required: false
+        type: string
+        default: "build"
+      artifact-path:
+        required: false
+        type: string
+        default: "build"
       code-path:
         required: false
         type: string
@@ -39,8 +50,9 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           yarn build
+          ${{ inputs.additional-build-commands }}
       - name: ⬆ Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: build
-          path: ${{ inputs.code-path }}/build
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.code-path }}/${{ inputs.artifact-path }}
