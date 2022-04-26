@@ -9,6 +9,12 @@ on:
         required: false
         type: string
         default: "."
+      additional-artifacts-name:
+        required: false
+        type: string
+      additional-artifacts-path:
+        required: false
+        type: string
       pre-install-command:
         required: false
         type: string
@@ -22,6 +28,12 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
+      - name: ⬇️ Download additional artifacts
+        uses: actions/download-artifact@v3
+        if: ${{ inputs.additional-artifacts-name }}
+        with:
+          name: ${{ inputs.additional-artifacts-name }}
+          path: ${{ inputs.additional-artifacts-path }}
       - name: 🏗 Set up Python
         uses: actions/setup-python@v3
         with:
