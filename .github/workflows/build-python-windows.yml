@@ -48,7 +48,7 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           ${{ inputs.pre-install-command }}
-      - name: 🏗 Install packages
+      - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
           pip install .
