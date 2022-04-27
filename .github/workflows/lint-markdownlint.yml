@@ -23,4 +23,4 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🚀 Run mdl
-        uses: actionshub/markdownlint@2.0.2
+        uses: actionshub/markdownlint@main
