@@ -73,8 +73,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          commit_message: |
-            Bump version
+          commit_message: Bump version
       - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
@@ -84,4 +83,5 @@ jobs:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
+          cd ${{ inputs.code-path }}
           twine upload dist/*
