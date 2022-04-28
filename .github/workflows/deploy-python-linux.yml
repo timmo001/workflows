@@ -93,7 +93,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          pull: "--rebase --autostash ..."
+          pull: "--ff --autostash"
           message: |
             Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
       # - name: 🏗 Install package
