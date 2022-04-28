@@ -38,6 +38,11 @@ jobs:
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - name: ⤵️ Pull latest changes from GitHub
+        run: |
+          git pull --ff
       - name: ⬇️ Download additional artifacts
         uses: actions/download-artifact@v3
         if: ${{ inputs.additional-artifacts-name }}
