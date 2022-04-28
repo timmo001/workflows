@@ -47,9 +47,9 @@ jobs:
           python-version: "3.10"
           architecture: "x64"
           cache: "pip"
-      - name: 🏗 Install setuptools, wheel, twine
+      - name: 🏗 Install setuptools, wheel, twine, incremental
         run: |
-          pip install --upgrade setuptools wheel twine
+          pip install --upgrade setuptools wheel twine incremental
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}
         run: |
