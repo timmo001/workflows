@@ -40,9 +40,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
-      - name: ⤵️ Pull latest changes from GitHub
-        run: |
-          git pull --ff
       - name: ⬇️ Download additional artifacts
         uses: actions/download-artifact@v3
         if: ${{ inputs.additional-artifacts-name }}
@@ -58,11 +55,9 @@ jobs:
       - name: 🏗 Install setuptools, wheel, twine, click, twisted, incremental
         run: |
           pip install --upgrade setuptools wheel twine click twisted incremental
-      - name: 🚀 Run pre-install-command
-        if: ${{ inputs.pre-install-command }}
+      - name: ⤵️ Pull latest changes from GitHub
         run: |
-          cd ${{ inputs.code-path }}
-          ${{ inputs.pre-install-command }}
+          git pull --ff
       - name: 🔢 Increment version - Developement
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
@@ -94,6 +89,11 @@ jobs:
         with:
           commit_message: |
             Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
+      - name: 🚀 Run pre-install-command
+        if: ${{ inputs.pre-install-command }}
+        run: |
+          cd ${{ inputs.code-path }}
+          ${{ inputs.pre-install-command }}
       - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
