@@ -76,25 +76,29 @@ jobs:
         id: get-version
         if: ${{ inputs.use-incremental }}
         run: |
-          python -c "from ${{ inputs.module-name }}._version import __version__\nprint(__version__.public())" | $VERSION
-          echo ::set-output name=version::"$VERSION"
+          result=$(python <<EOF
+          from ${{ inputs.module-name }}._version import __version__
+          print(__version__.public())
+          EOF
+          )
+          echo ::set-output name=version::"$result"
       - name: 🖊 Commit
         uses: EndBug/add-and-commit@v9
         if: ${{ inputs.use-incremental }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          pull: "--rebase --autostash"
+          pull: "--rebase"
           message: |
             Bump version to ${{ steps.get-version.outputs.version }} for ${{ inputs.module-name }}
       - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
           python setup.py sdist bdist_wheel
-      - name: 🚀 Publish to PyPI
-        env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: |
-          cd ${{ inputs.code-path }}
-          twine upload dist/*
+      # - name: 🚀 Publish to PyPI
+      #   env:
+      #     TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+      #     TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      #   run: |
+      #     cd ${{ inputs.code-path }}
+      #     twine upload dist/*
