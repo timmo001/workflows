@@ -79,7 +79,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           pull: "--rebase --autostash"
-          message: Bump version
+          message: Bump version for ${{ inputs.module-name }}
       - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
