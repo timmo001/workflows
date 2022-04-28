@@ -76,10 +76,7 @@ jobs:
         id: get-version
         if: ${{ inputs.use-incremental }}
         run: |
-          python -c "
-            from ${{ inputs.module-name }}._version import __version__
-            print(__version__.public())
-          " | $VERSION
+          python -c "from ${{ inputs.module-name }}._version import __version__\nprint(__version__.public())" | $VERSION
           echo ::set-output name=version::"$VERSION"
       - name: 🖊 Commit
         uses: EndBug/add-and-commit@v9
