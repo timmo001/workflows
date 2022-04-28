@@ -83,10 +83,6 @@ jobs:
           EOF
           )
           echo ::set-output name=version::"$result"
-      - name: Test
-        run: |
-          echo "${{ inputs.module-name }}"
-          echo "${{ steps.get-version.outputs.version }}"
       - name: 🖊 Commit
         uses: EndBug/add-and-commit@v9
         if: ${{ inputs.use-incremental }}
@@ -96,14 +92,14 @@ jobs:
           pull: "--ff --autostash"
           message: |
             Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
-      # - name: 🏗 Install package
-      #   run: |
-      #     cd ${{ inputs.code-path }}
-      #     python setup.py sdist bdist_wheel
-      # - name: 🚀 Publish to PyPI
-      #   env:
-      #     TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-      #     TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-      #   run: |
-      #     cd ${{ inputs.code-path }}
-      #     twine upload dist/*
+      - name: 🏗 Install package
+        run: |
+          cd ${{ inputs.code-path }}
+          python setup.py sdist bdist_wheel
+      - name: 🚀 Publish to PyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          cd ${{ inputs.code-path }}
+          twine upload dist/*
