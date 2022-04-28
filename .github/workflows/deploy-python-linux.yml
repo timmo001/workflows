@@ -83,19 +83,23 @@ jobs:
           EOF
           )
           echo ::set-output name=version::"$result"
-      - name: 🖊 Commit
-        uses: EndBug/add-and-commit@v9
-        if: ${{ inputs.use-incremental }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          pull: "--rebase"
-          message: |
-            Bump version to ${{ steps.get-version.outputs.version }} for ${{ inputs.module-name }}
-      - name: 🏗 Install package
+      - name: Test
         run: |
-          cd ${{ inputs.code-path }}
-          python setup.py sdist bdist_wheel
+          echo "${{ inputs.module-name }}"
+          echo "${{ steps.get-version.outputs.version }}"
+      # - name: 🖊 Commit
+      #   uses: EndBug/add-and-commit@v9
+      #   if: ${{ inputs.use-incremental }}
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     pull: '--rebase --autostash ...'
+      #     message: |
+      #       Bump version to ${{ steps.get-version.outputs.version }} for ${{ inputs.module-name }}
+      # - name: 🏗 Install package
+      #   run: |
+      #     cd ${{ inputs.code-path }}
+      #     python setup.py sdist bdist_wheel
       # - name: 🚀 Publish to PyPI
       #   env:
       #     TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
