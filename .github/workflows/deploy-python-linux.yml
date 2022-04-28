@@ -15,9 +15,16 @@ on:
         required: false
         type: string
         default: "."
+      module-name:
+        required: true
+        type: string
       pre-install-command:
         required: false
         type: string
+      use-incremental:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   deploy-python-linux:
@@ -48,6 +55,18 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           ${{ inputs.pre-install-command }}
+      - name: 🔢 Increment version - Developement
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+        run: |
+          cd ${{ inputs.code-path }}
+          python -m incremental.update ${{ inputs.module-name }} \
+            --dev
+      - name: 🔢 Increment version - Release
+        if: ${{ inputs.use-incremental && github.event_name == 'release' }}
+        run: |
+          cd ${{ inputs.code-path }}
+          python -m incremental.update ${{ inputs.module-name }} \
+            --newversion=${{ github.event.release.tag_name }}
       - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
