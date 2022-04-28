@@ -25,6 +25,11 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      PYPI_USERNAME:
+        required: true
+      PYPI_PASSWORD:
+        required: true
 
 jobs:
   deploy-python-linux:
