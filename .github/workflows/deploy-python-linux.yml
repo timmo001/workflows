@@ -76,6 +76,7 @@ jobs:
         id: get-version
         if: ${{ inputs.use-incremental }}
         run: |
+          cd ${{ inputs.code-path }}
           result=$(python <<EOF
           from ${{ inputs.module-name }}._version import __version__
           print(__version__.public())
