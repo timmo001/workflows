@@ -87,15 +87,15 @@ jobs:
         run: |
           echo "${{ inputs.module-name }}"
           echo "${{ steps.get-version.outputs.version }}"
-      # - name: 🖊 Commit
-      #   uses: EndBug/add-and-commit@v9
-      #   if: ${{ inputs.use-incremental }}
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     pull: '--rebase --autostash ...'
-      #     message: |
-      #       Bump version to ${{ steps.get-version.outputs.version }} for ${{ inputs.module-name }}
+      - name: 🖊 Commit
+        uses: EndBug/add-and-commit@v9
+        if: ${{ inputs.use-incremental }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          pull: "--rebase --autostash ..."
+          message: |
+            Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
       # - name: 🏗 Install package
       #   run: |
       #     cd ${{ inputs.code-path }}
