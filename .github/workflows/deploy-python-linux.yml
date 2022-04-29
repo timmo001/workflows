@@ -27,7 +27,7 @@ on:
         default: false
     secrets:
       PUSH_TOKEN:
-        required: false
+        required: true
       PYPI_USERNAME:
         required: true
       PYPI_PASSWORD:
