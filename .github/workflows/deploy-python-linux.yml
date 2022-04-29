@@ -91,7 +91,6 @@ jobs:
         with:
           commit_message: |
             Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
-          push_options: --force
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}
         run: |
