@@ -26,7 +26,7 @@ on:
         type: boolean
         default: false
     secrets:
-      GITHUB_PUSH_TOKEN:
+      PUSH_TOKEN:
         required: false
       PYPI_USERNAME:
         required: true
@@ -88,7 +88,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v4.14.1
         if: ${{ inputs.use-incremental }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PUSH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
         with:
           commit_message: |
             Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
