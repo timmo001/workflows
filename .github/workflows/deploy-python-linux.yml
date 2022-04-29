@@ -83,7 +83,6 @@ jobs:
           EOF
           )
           echo ::set-output name=version::"$result"
-
       - name: 🖊 Commit
         uses: stefanzweifel/git-auto-commit-action@v4.14.1
         if: ${{ inputs.use-incremental }}
