@@ -30,6 +30,8 @@ on:
         required: true
       PYPI_PASSWORD:
         required: true
+      GITHUB_PUSH_TOKEN:
+        required: false
 
 jobs:
   deploy-python-linux:
@@ -81,11 +83,12 @@ jobs:
           EOF
           )
           echo ::set-output name=version::"$result"
+
       - name: 🖊 Commit
         uses: stefanzweifel/git-auto-commit-action@v4.14.1
         if: ${{ inputs.use-incremental }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PUSH_TOKEN }}
         with:
           commit_message: |
             Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
