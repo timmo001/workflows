@@ -59,23 +59,17 @@ jobs:
         run: |
           pip install --upgrade setuptools wheel twine click twisted incremental
       - name: ⤵️ Pull latest changes from GitHub
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
           git pull --ff
       - name: 🔢 Increment version - Developement
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
           cd ${{ inputs.code-path }}
-          python -m incremental.update ${{ inputs.module-name }} \
-            --dev
-      - name: 🔢 Increment version - Release
-        if: ${{ inputs.use-incremental && github.event_name == 'release' }}
-        run: |
-          cd ${{ inputs.code-path }}
-          python -m incremental.update ${{ inputs.module-name }} \
-            --newversion=${{ github.event.release.tag_name }}
+          python -m incremental.update ${{ inputs.module-name }} --dev
       - name: 🔢 Get version
         id: get-version
-        if: ${{ inputs.use-incremental }}
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
           cd ${{ inputs.code-path }}
           result=$(python <<EOF
@@ -86,7 +80,7 @@ jobs:
           echo ::set-output name=version::"$result"
       - name: 🖊 Commit
         uses: stefanzweifel/git-auto-commit-action@v4.14.1
-        if: ${{ inputs.use-incremental }}
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
         with:
