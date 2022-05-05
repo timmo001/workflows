@@ -14,12 +14,6 @@ on:
 
 jobs:
   information:
-    if: |
-      github.event_name == 'release'
-      || (
-        github.event_name == 'workflow_run'
-        && github.event.workflow_run.conclusion == 'success'
-      )
     name: ℹ️ Gather container information
     runs-on: ubuntu-latest
     outputs:
