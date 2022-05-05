@@ -18,6 +18,10 @@ jobs:
       matrix:
         architecture:
           - amd64
+          - i386
+          - armhf
+          - armv7
+          - aarch64
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v3
