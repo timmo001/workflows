@@ -5,6 +5,9 @@ name: Deploy Container Linux
 on:
   workflow_call:
     inputs:
+      architecture:
+        required: true
+        type: string
       container-slug:
         required: true
         type: string
@@ -43,14 +46,9 @@ jobs:
           echo "::set-output name=environment::${environment}"
           echo "::set-output name=version::${version}"
   deploy:
-    name: 👷 Build & Deploy ${{ matrix.architecture }}
+    name: 👷 Build & Deploy ${{ inputs.architecture }}
     needs: information
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        architecture:
-          - amd64
-          - aarch64
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v3
@@ -59,9 +57,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.docker-cache
-          key: docker-${{ github.ref }}-${{ matrix.architecture }}-${{ github.sha }}
+          key: docker-${{ github.ref }}-${{ inputs.architecture }}-${{ github.sha }}
           restore-keys: |
-            docker-${{ github.ref }}-${{ matrix.architecture }}
+            docker-${{ github.ref }}-${{ inputs.architecture }}
       - name: 🏗 Set up QEMU
         uses: docker/setup-qemu-action@v1.2.0
       - name: 🏗 Set up Docker Buildx
@@ -70,20 +68,20 @@ jobs:
         id: flags
         run: |
           echo "::set-output name=date::$(date +"%Y-%m-%dT%H:%M:%SZ")"
-          from=$(yq --no-colors eval ".build_from.${{ matrix.architecture }}" "build.json")
+          from=$(yq --no-colors eval ".build_from.${{ inputs.architecture }}" "build.json")
           echo "::set-output name=from::${from}"
-          if [[ "${{ matrix.architecture}}" = "amd64" ]]; then
+          if [[ "${{ inputs.architecture}}" = "amd64" ]]; then
             echo "::set-output name=platform::linux/amd64"
-          elif [[ "${{ matrix.architecture }}" = "i386" ]]; then
+          elif [[ "${{ inputs.architecture }}" = "i386" ]]; then
             echo "::set-output name=platform::linux/386"
-          elif [[ "${{ matrix.architecture }}" = "armhf" ]]; then
+          elif [[ "${{ inputs.architecture }}" = "armhf" ]]; then
             echo "::set-output name=platform::linux/arm/v6"
-          elif [[ "${{ matrix.architecture }}" = "armv7" ]]; then
+          elif [[ "${{ inputs.architecture }}" = "armv7" ]]; then
             echo "::set-output name=platform::linux/arm/v7"
-          elif [[ "${{ matrix.architecture }}" = "aarch64" ]]; then
+          elif [[ "${{ inputs.architecture }}" = "aarch64" ]]; then
             echo "::set-output name=platform::linux/arm64/v8"
           else
-            echo "::error ::Could not determine platform for architecture ${{ matrix.architecture }}"
+            echo "::error ::Could not determine platform for architecture ${{ inputs.architecture }}"
             exit 1
           fi
       - name: 🏗 Login to GitHub Container Registry
@@ -98,18 +96,18 @@ jobs:
           push: true
           # yamllint disable rule:line-length
           tags: |
-            ghcr.io/timmo001/${{ inputs.container-slug }}/${{ matrix.architecture }}:${{ needs.information.outputs.environment }}
-            ghcr.io/timmo001/${{ inputs.container-slug }}/${{ matrix.architecture }}:${{ needs.information.outputs.version }}
+            ghcr.io/timmo001/${{ inputs.container-slug }}/${{ inputs.architecture }}:${{ needs.information.outputs.environment }}
+            ghcr.io/timmo001/${{ inputs.container-slug }}/${{ inputs.architecture }}:${{ needs.information.outputs.version }}
           # yamllint enable rule:line-length
           context: .
           file: ./Dockerfile
           cache-from: |
             type=local,src=/tmp/.docker-cache
-            ghcr.io/timmo001/${{ inputs.container-slug }}/${{ matrix.architecture }}:edge
+            ghcr.io/timmo001/${{ inputs.container-slug }}/${{ inputs.architecture }}:edge
           cache-to: type=local,mode=max,dest=/tmp/.docker-cache
           platforms: ${{ steps.flags.outputs.platform }}
           build-args: |
-            BUILD_ARCH=${{ matrix.architecture }}
+            BUILD_ARCH=${{ inputs.architecture }}
             BUILD_DATE=${{ steps.flags.outputs.date }}
             BUILD_FROM=${{ steps.flags.outputs.from }}
             BUILD_REF=${{ github.sha }}
