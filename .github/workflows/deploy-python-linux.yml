@@ -102,5 +102,5 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           twine upload dist/*
-          echo "## Deployment 🚀 - ${{ inputs.module-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deploy Application - ${{ inputs.module-name }}" >> $GITHUB_STEP_SUMMARY
           echo "Successfully deployed ${{ inputs.module-name }} version ${{ steps.get-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
