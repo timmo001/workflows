@@ -107,3 +107,6 @@ jobs:
             BUILD_REF=${{ github.sha }}
             BUILD_REPOSITORY=${{ github.repository }}
             BUILD_VERSION=${{ needs.information.outputs.version }}
+      - name: 🚀 Output message
+        run: |
+          echo "Successfully deployed ghcr.io/timmo001/${{ inputs.container-slug }}/${{ inputs.architecture }}:${{ needs.information.outputs.version }}" >> $GITHUB_STEP_SUMMARY
