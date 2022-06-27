@@ -32,7 +32,7 @@ jobs:
           name: windows-out
           path: out.zip
       - name: 🚀 Create setup file
-        uses: joncloud/makensis-action@v3.6
+        uses: joncloud/makensis-action@v3.7
         with:
           script-file: "scripts/installer.nsi"
       - name: ⬆ Upload Artifacts - Setup

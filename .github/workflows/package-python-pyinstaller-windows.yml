@@ -55,7 +55,7 @@ jobs:
           path: "dist"
       - name: 🚀 Create setup file
         if: ${{ inputs.create-setup }}
-        uses: joncloud/makensis-action@v3.6
+        uses: joncloud/makensis-action@v3.7
         with:
           script-file: installer.nsi
       - name: ⬆ Upload Artifacts - Setup
