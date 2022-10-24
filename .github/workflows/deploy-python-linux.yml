@@ -79,7 +79,7 @@ jobs:
           )
           echo ::set-output name=version::"$result"
       - name: 🖊 Commit
-        uses: stefanzweifel/git-auto-commit-action@v4.15.1
+        uses: stefanzweifel/git-auto-commit-action@v4.15.2
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
