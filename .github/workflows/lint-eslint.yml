@@ -20,7 +20,7 @@ jobs:
       - name: 🏗 Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 16.x
+          node-version: 18.x
           cache: yarn
           check-latest: true
           cache-dependency-path: "${{ inputs.code-path }}/**/yarn.lock"
