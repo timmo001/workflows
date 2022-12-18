@@ -59,6 +59,8 @@ jobs:
           keyStorePassword: ${{ secrets.STORE_KEY_PASSWORD }}
           releaseDirectory: ${{ inputs.code-path }}/app/build/outputs/bundle/release
           signingKeyBase64: ${{ secrets.SIGN_KEY }}
+        env:
+          BUILD_TOOLS_VERSION: "33.0.0"
       - name: ↗ Upload AAB - Release
         uses: actions/upload-artifact@v3
         with:
