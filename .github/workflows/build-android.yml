@@ -1,0 +1,102 @@
+---
+name: Build Android Application
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      code-path:
+        required: false
+        type: string
+        default: "."
+
+jobs:
+  build-container:
+    name: 🚀 Build Android Application
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🏗 Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          cache: gradle
+          distribution: "adopt"
+          java-version: "11"
+      - name: 🏗 Grant execute permission for gradlew
+        run: |
+          cd ${{ inputs.code-path }}
+          chmod +x gradlew
+      - name: 🏭 Run Tests
+        run: |
+          cd ${{ inputs.code-path }}
+          ./gradlew test
+      - name: 🏭 Build Project
+        run: |
+          cd ${{ inputs.code-path }}
+          ./gradlew build
+      - name: ↗ Upload APK - Debug
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-debug-apk
+          path: ${{ inputs.code-path }}/app/build/outputs/apk/debug/app-debug.apk
+      - name: 🏭 Build Release AAB
+        run: |
+          cd ${{ inputs.code-path }}
+          ./gradlew bundle
+      - name: ↗ Upload AAB - Debug
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-debug-aab
+          path: ${{ inputs.code-path }}/app/build/outputs/bundle/debug/app-debug.aab
+      - name: 🖋 Sign AAB
+        uses: r0adkll/sign-android-release@v1
+        with:
+          alias: ${{ secrets.ALIAS }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+          keyStorePassword: ${{ secrets.STORE_KEY_PASSWORD }}
+          releaseDirectory: ${{ inputs.code-path }}/app/build/outputs/bundle/release
+          signingKeyBase64: ${{ secrets.SIGN_KEY }}
+      - name: ↗ Upload AAB - Release
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release-aab
+          path: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
+      - name: ↗ Upload APK - Release Asset
+        if: ${{ github.event_name == 'release' }}
+        uses: fnkr/github-action-ghr@v1.3
+        env:
+          GHR_PATH: ${{ inputs.code-path }}/app/build/outputs/apk/debug/app-debug.apk
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: ↗ Upload AAB - Release Asset
+        if: ${{ github.event_name == 'release' }}
+        uses: fnkr/github-action-ghr@v1.3
+        env:
+          GHR_PATH: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 📢 Deploy to Play Store - Internal Sharing
+        if: ${{ github.ref == 'refs/heads/master' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          packageName: dev.timmo.systembridge
+          releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
+          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT }}
+          track: internalsharing
+      - name: 📢 Deploy to Play Store - Beta
+        if: ${{ github.event_name == 'release' && github.event.release.prerelease == true }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          packageName: dev.timmo.systembridge
+          releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
+          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT }}
+          track: beta
+      - name: 📢 Deploy to Play Store - Production
+        if: ${{ github.event_name == 'release' && github.event.release.prerelease == false }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          packageName: dev.timmo.systembridge
+          releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
+          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT }}
+          track: production
