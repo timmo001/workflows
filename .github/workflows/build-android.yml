@@ -24,7 +24,7 @@ jobs:
         with:
           cache: gradle
           distribution: "temurin"
-          java-version: "17"
+          java-version: "11"
       - name: 🏗 Grant execute permission for gradlew
         run: |
           cd ${{ inputs.code-path }}
