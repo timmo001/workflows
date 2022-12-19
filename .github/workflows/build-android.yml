@@ -24,7 +24,7 @@ jobs:
         with:
           cache: gradle
           distribution: "adopt"
-          java-version: "11"
+          java-version: "17"
       - name: 🏗 Grant execute permission for gradlew
         run: |
           cd ${{ inputs.code-path }}
