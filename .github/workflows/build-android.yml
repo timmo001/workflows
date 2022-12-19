@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           cache: gradle
-          distribution: "adopt"
+          distribution: "temurin"
           java-version: "17"
       - name: 🏗 Grant execute permission for gradlew
         run: |
