@@ -1,5 +1,5 @@
 ---
-name: Build Android Application
+name: Build and Deploy Android Application
 
 # yamllint disable-line rule:truthy
 on:
@@ -12,6 +12,17 @@ on:
       package-name:
         required: true
         type: string
+    secrets:
+      ALIAS:
+        required: true
+      KEY_PASSWORD:
+        required: true
+      SERVICE_ACCOUNT:
+        required: true
+      SIGN_KEY:
+        required: true
+      STORE_KEY_PASSWORD:
+        required: true
 
 jobs:
   build-container:
@@ -54,19 +65,19 @@ jobs:
         with:
           name: app-debug-aab
           path: ${{ inputs.code-path }}/app/build/outputs/bundle/debug/app-debug.aab
-      # - name: 🖋 Sign AAB
-      #   uses: Tlaster/android-sign@v1.2.2
-      #   with:
-      #     alias: ${{ secrets.ALIAS }}
-      #     keyPassword: ${{ secrets.KEY_PASSWORD }}
-      #     keyStorePassword: ${{ secrets.STORE_KEY_PASSWORD }}
-      #     output: ${{ inputs.code-path }}/app/build/release/signed
-      #     releaseDirectory: |
-      #       ${{ inputs.code-path }}/app/build/outputs/apk/release
-      #       ${{ inputs.code-path }}/app/build/outputs/bundle/release
-      #     signingKeyBase64: ${{ secrets.SIGN_KEY }}
-      #   env:
-      #     BUILD_TOOLS_VERSION: "33.0.0"
+      - name: 🖋 Sign AAB
+        uses: Tlaster/android-sign@v1.2.2
+        with:
+          alias: ${{ secrets.ALIAS }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+          keyStorePassword: ${{ secrets.STORE_KEY_PASSWORD }}
+          output: ${{ inputs.code-path }}/app/build/release/signed
+          releaseDirectory: |
+            ${{ inputs.code-path }}/app/build/outputs/apk/release
+            ${{ inputs.code-path }}/app/build/outputs/bundle/release
+          signingKeyBase64: ${{ secrets.SIGN_KEY }}
+        env:
+          BUILD_TOOLS_VERSION: "33.0.0"
       - name: ↗ Upload AAB - Release
         uses: actions/upload-artifact@v3
         with:
