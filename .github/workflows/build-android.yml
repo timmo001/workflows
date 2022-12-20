@@ -9,6 +9,9 @@ on:
         required: false
         type: string
         default: "."
+      package-name:
+        required: true
+        type: string
 
 jobs:
   build-container:
@@ -85,7 +88,7 @@ jobs:
         if: ${{ github.ref == 'refs/heads/master' }}
         uses: r0adkll/upload-google-play@v1
         with:
-          packageName: dev.timmo.systembridge
+          packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
           serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT }}
           track: internalsharing
@@ -93,7 +96,7 @@ jobs:
         if: ${{ github.event_name == 'release' && github.event.release.prerelease == true }}
         uses: r0adkll/upload-google-play@v1
         with:
-          packageName: dev.timmo.systembridge
+          packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
           serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT }}
           track: beta
@@ -101,7 +104,7 @@ jobs:
         if: ${{ github.event_name == 'release' && github.event.release.prerelease == false }}
         uses: r0adkll/upload-google-play@v1
         with:
-          packageName: dev.timmo.systembridge
+          packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
           serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT }}
           track: production
