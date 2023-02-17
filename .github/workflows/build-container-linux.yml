@@ -36,24 +36,25 @@ jobs:
       - name: ℹ️ Compose build flags
         id: flags
         run: |
-          echo "::set-output name=date::$(date +"%Y-%m-%dT%H:%M:%SZ")"
-          from=$(yq --no-colors eval ".build_from.${{ inputs.architecture }}" "build.json")
-          echo "::set-output name=from::${from}"
+          echo "date=$(date +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_OUTPUT"
+          from=$(yq --no-colors eval ".build_from.${{ inputs.architecture }}" "${{ needs.information.outputs.build }}")
+          echo "from=${from}" >> "$GITHUB_OUTPUT"
           if [[ "${{ inputs.architecture}}" = "amd64" ]]; then
-            echo "::set-output name=platform::linux/amd64"
+            echo "platform=linux/amd64" >> "$GITHUB_OUTPUT"
           elif [[ "${{ inputs.architecture }}" = "i386" ]]; then
-            echo "::set-output name=platform::linux/386"
+            echo "platform=linux/386" >> "$GITHUB_OUTPUT"
           elif [[ "${{ inputs.architecture }}" = "armhf" ]]; then
-            echo "::set-output name=platform::linux/arm/v6"
+            echo "platform=linux/arm/v6" >> "$GITHUB_OUTPUT"
           elif [[ "${{ inputs.architecture }}" = "armv7" ]]; then
-            echo "::set-output name=platform::linux/arm/v7"
+            echo "platform=linux/arm/v7" >> "$GITHUB_OUTPUT"
           elif [[ "${{ inputs.architecture }}" = "aarch64" ]]; then
-            echo "::set-output name=platform::linux/arm64/v8"
+            echo "platform=linux/arm64/v8" >> "$GITHUB_OUTPUT"
           else
             echo "::error ::Could not determine platform for architecture ${{ inputs.architecture }}"
             exit 1
           fi
       - name: ⤵️ Download base image
+        if: steps.flags.outputs.from != 'null'
         run: docker pull "${{ steps.flags.outputs.from }}"
       - name: 🚀 Build
         uses: docker/build-push-action@v4.0.0
@@ -63,7 +64,7 @@ jobs:
           file: Dockerfile
           cache-from: |
             type=local,src=/tmp/.docker-cache
-            ghcr.io/timmo001/${{ inputs.container-slug }}/${{ inputs.architecture }}:edge
+            ghcr.io/${{ github.repository_owner }}/${{ inputs.container-slug }}/${{ inputs.architecture }}:edge
           cache-to: type=local,mode=max,dest=/tmp/.docker-cache
           platforms: ${{ steps.flags.outputs.platform }}
           build-args: |
