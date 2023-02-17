@@ -11,6 +11,11 @@ on:
       - reopened
       - synchronize
   workflow_call:
+    inputs:
+      file-types:
+        required: false
+        type: string
+        default: "{js,json,ts,tsx,yml,yaml}"
   workflow_dispatch:
 
 jobs:
@@ -24,6 +29,6 @@ jobs:
           ref: ${{ github.head_ref }}
       - name: 🚀 Run Prettier
         run: |
-          npx prettier --check **/*.{js,json,ts,tsx,yml,yaml}
+          npx prettier --check **/*.${{ inputs.file-types }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
