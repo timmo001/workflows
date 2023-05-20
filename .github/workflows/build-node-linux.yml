@@ -47,7 +47,7 @@ jobs:
         with:
           path: |
             ~/.yarn
-            ${{ github.workspace }}/.next/cache
+            ${{ inputs.code-path }}/.next/cache
           key: ${{ runner.os }}-${{ hashFiles('${{ inputs.code-path }}/**/yarn.lock') }}-${{ hashFiles('${{ inputs.code-path }}/**.[jt]s', '${{ inputs.code-path }}/**.[jt]sx') }}
           restore-keys: |
             ${{ runner.os }}-${{ hashFiles('${{ inputs.code-path }}/**/yarn.lock') }}-
