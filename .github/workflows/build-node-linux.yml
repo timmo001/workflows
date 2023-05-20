@@ -45,15 +45,12 @@ jobs:
       - name: 🏗 Cache
         uses: actions/cache@v3
         with:
-          # See here for caching with `yarn` https://github.com/actions/cache/blob/main/examples#node---yarn or you can leverage caching with actions/setup-node https://github.com/actions/setup-node
           path: |
-            ~/.npm
+            ~/.yarn
             ${{ github.workspace }}/.next/cache
-          # Generate a new cache whenever packages or source files change.
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
-          # If source files changed but packages didn't, rebuild from a prior cache.
+          key: ${{ runner.os }}-${{ hashFiles('${{ inputs.code-path }}/**/yarn.lock') }}-${{ hashFiles('${{ inputs.code-path }}/**.[jt]s', '${{ inputs.code-path }}/**.[jt]sx') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+            ${{ runner.os }}-${{ hashFiles('${{ inputs.code-path }}/**/yarn.lock') }}-
       - name: 🏗 Install dependencies
         run: |
           cd ${{ inputs.code-path }}
