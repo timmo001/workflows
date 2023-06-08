@@ -19,8 +19,7 @@ jobs:
       - name: 🚀 Run stale_repos tool
         uses: docker://ghcr.io/github/stale_repos:v1
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORGANIZATION: ${{ github.repository_owner }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           INACTIVE_DAYS: 182
       - name: ❗ Create issue
         uses: peter-evans/create-issue-from-file@v4
