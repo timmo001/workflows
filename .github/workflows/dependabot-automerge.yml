@@ -2,14 +2,6 @@ name: Dependabot - Auto-merge
 
 # yamllint disable-line rule:truthy
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
   workflow_call:
   workflow_dispatch:
 
