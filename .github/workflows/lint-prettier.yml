@@ -17,6 +17,11 @@ on:
         type: string
         default: "{js,json,ts,tsx,yml,yaml}"
   workflow_dispatch:
+    inputs:
+      file-types:
+        required: false
+        type: string
+        default: "{js,json,ts,tsx,yml,yaml}"
 
 jobs:
   lint-prettier:
