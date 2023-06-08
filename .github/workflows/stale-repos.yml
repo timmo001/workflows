@@ -19,6 +19,7 @@ jobs:
       - name: 🚀 Run stale_repos tool
         uses: docker://ghcr.io/github/stale_repos:v1
         env:
+          EXEMPT_TOPICS: "keep,template"
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           INACTIVE_DAYS: 182
       - name: ❗ Create issue
