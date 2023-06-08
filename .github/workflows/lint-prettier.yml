@@ -34,6 +34,6 @@ jobs:
           ref: ${{ github.head_ref }}
       - name: 🚀 Run Prettier
         run: |
-          npx prettier --check **/*.${{ inputs.file-types }}
+          npx prettier --check **/*.${{ inputs.file-types || '{js,json,ts,tsx,yml,yaml}' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
