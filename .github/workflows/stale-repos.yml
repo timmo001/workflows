@@ -1,0 +1,31 @@
+name: Stale Repositories
+
+# yamllint disable-line rule:truthy
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: stale repo identifier
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🚀 Run stale_repos tool
+        uses: docker://ghcr.io/github/stale_repos:v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORGANIZATION: ${{ github.repository_owner }}
+          INACTIVE_DAYS: 182
+      - name: ❗ Create issue
+        uses: peter-evans/create-issue-from-file@v4
+        with:
+          title: Stale repository report
+          content-filepath: ./stale_repos.md
+          assignees: timmo001
