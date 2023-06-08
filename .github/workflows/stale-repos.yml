@@ -17,14 +17,27 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🚀 Run stale_repos tool
+        id: stale-repos
         uses: docker://ghcr.io/github/stale_repos:v1
         env:
           EXEMPT_TOPICS: "keep,template"
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          INACTIVE_DAYS: 182
-      - name: ❗ Create issue
-        uses: peter-evans/create-issue-from-file@v4
+          # INACTIVE_DAYS: 182
+          INACTIVE_DAYS: 100
+      - name: Print output of stale_repos tool
+        run: echo "${{ steps.stale-repos.outputs.inactiveRepos }}"
+      - uses: actions/github-script@v6
         with:
-          title: Stale repository report
-          content-filepath: ./stale_repos.md
-          assignees: timmo001
+          script: |
+            const repos = ${{ steps.stale-repos.outputs.inactiveRepos }}
+            for (const repo of repos) {
+              console.log(repo);
+              const issue = await github.rest.issues.create({
+                owner: <ORG_OWNER>,
+                repo: <REPOSITORY>,
+                title: 'Stale repo' + repo.url,
+                body: 'This repo is stale. Please contact the owner to make it active again.',
+              });
+              console.log(issue);
+            }
+          github-token: ${{ secrets.GH_TOKEN }}
