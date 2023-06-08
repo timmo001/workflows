@@ -23,7 +23,7 @@ jobs:
           EXEMPT_TOPICS: "keep,template"
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           # INACTIVE_DAYS: 182
-          INACTIVE_DAYS: 100
+          INACTIVE_DAYS: 120
       - name: Print output of stale_repos tool
         run: echo "${{ steps.stale-repos.outputs.inactiveRepos }}"
       - uses: actions/github-script@v6
@@ -33,8 +33,8 @@ jobs:
             for (const repo of repos) {
               console.log(repo);
               const issue = await github.rest.issues.create({
-                owner: <ORG_OWNER>,
-                repo: <REPOSITORY>,
+                owner: '{{ github.repository_owner }}',
+                repo: '{{ github.event.repository.name }}',
                 title: 'Stale repo' + repo.url,
                 body: 'This repo is stale. Please contact the owner to make it active again.',
               });
