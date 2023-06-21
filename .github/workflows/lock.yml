@@ -8,6 +8,10 @@ on:
   workflow_call:
   workflow_dispatch:
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   lock:
     name: 🔒 Lock closed issues and PRs
