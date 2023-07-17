@@ -75,6 +75,7 @@ jobs:
         run: |
           nfpm package --config nfpm.yaml --packager deb
       - name: ⬆ Upload Artifacts - deb
+        if: ${{ inputs.create-setup }}
         uses: actions/upload-artifact@v3
         with:
           name: linux-deb
