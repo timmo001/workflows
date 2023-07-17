@@ -59,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: linux-dist
-          path: "dist"
+          path: "dist/*"
       - name: 🚀 Create apk file
         if: ${{ inputs.create-setup }}
         run: |
