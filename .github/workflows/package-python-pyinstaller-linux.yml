@@ -8,6 +8,10 @@ on:
       additional-pyinstaller-options:
         required: false
         type: string
+      create-setup:
+        required: false
+        type: boolean
+        default: false
       entry-point-file:
         required: true
         type: string
@@ -57,14 +61,17 @@ jobs:
           name: linux-dist
           path: "dist"
       - name: 🚀 Create apk file
+        if: ${{ inputs.create-setup }}
         run: |
           nfpm package --config nfpm.yaml --packager apk
       - name: ⬆ Upload Artifacts - apk
+        if: ${{ inputs.create-setup }}
         uses: actions/upload-artifact@v3
         with:
           name: linux-apk
           path: "*.apk"
       - name: 🚀 Create deb file
+        if: ${{ inputs.create-setup }}
         run: |
           nfpm package --config nfpm.yaml --packager deb
       - name: ⬆ Upload Artifacts - deb
@@ -73,9 +80,11 @@ jobs:
           name: linux-deb
           path: "*.deb"
       - name: 🚀 Create rpm file
+        if: ${{ inputs.create-setup }}
         run: |
           nfpm package --config nfpm.yaml --packager rpm
       - name: ⬆ Upload Artifacts - rpm
+        if: ${{ inputs.create-setup }}
         uses: actions/upload-artifact@v3
         with:
           name: linux-rpm
