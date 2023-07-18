@@ -21,11 +21,12 @@ jobs:
         id: release_drafter
         uses: release-drafter/release-drafter@v5.24.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
+          token: ${{ secrets.PUSH_TOKEN }}
       - name: ✏ Set Version File
         run: |
           echo "${{ steps.release_drafter.outputs.tag_name }}"
