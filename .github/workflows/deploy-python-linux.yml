@@ -58,10 +58,6 @@ jobs:
       - name: 🏗 Install setuptools, wheel, twine, click, twisted, incremental
         run: |
           pip install --upgrade setuptools wheel twine click twisted incremental
-      - name: ⤵️ Pull latest changes from GitHub
-        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
-        run: |
-          git pull --ff
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}
         run: |
@@ -83,6 +79,10 @@ jobs:
           EOF
           )
           echo "version=$result" >> $GITHUB_OUTPUT
+      - name: ⤵️ Pull latest changes from GitHub
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+        run: |
+          git pull --ff
       - name: 🖊 Commit
         uses: stefanzweifel/git-auto-commit-action@v4.16.0
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
