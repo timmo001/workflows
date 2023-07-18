@@ -62,10 +62,11 @@ jobs:
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
           git pull --ff
-      - name: 🏗 Install package
+      - name: 🚀 Run pre-install-command
+        if: ${{ inputs.pre-install-command }}
         run: |
           cd ${{ inputs.code-path }}
-          pip install .
+          ${{ inputs.pre-install-command }}
       - name: 🔢 Increment version - Developement
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
@@ -90,11 +91,6 @@ jobs:
         with:
           commit_message: |
             Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
-      - name: 🚀 Run pre-install-command
-        if: ${{ inputs.pre-install-command }}
-        run: |
-          cd ${{ inputs.code-path }}
-          ${{ inputs.pre-install-command }}
       - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
