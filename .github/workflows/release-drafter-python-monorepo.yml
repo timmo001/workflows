@@ -27,7 +27,6 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: ✏ Set Version File
-        if: ${{ github.event_name == 'pull_request_target' }}
         run: |
           echo "${{ steps.release_drafter.outputs.tag_name }}"
           find . -type f -name "version.txt" -maxdepth 2 -exec \
@@ -44,9 +43,8 @@ jobs:
           cat package.json
       - name: 🖊 Commit
         uses: stefanzweifel/git-auto-commit-action@v4.16.0
-        if: ${{ github.event_name == 'pull_request_target' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
         with:
           commit_message: |
             Update version to ${{ steps.release_drafter.outputs.tag_name }}
