@@ -55,9 +55,10 @@ jobs:
           path: dist/
       - name: 🚀 Create setup file
         if: ${{ inputs.create-setup }}
-        uses: joncloud/makensis-action@v3.7
+        uses: joncloud/makensis-action@v4
         with:
           script-file: installer.nsi
+          # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"
       - name: ⬆ Upload Artifacts - Setup
         if: ${{ inputs.create-setup }}
         uses: actions/upload-artifact@v3
