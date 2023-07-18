@@ -22,7 +22,8 @@ on:
 jobs:
   package-python-windows:
     name: 🚀 Windows - Package Python Application
-    runs-on: ${{ inputs.create-setup && 'self-hosted' || 'windows-latest' }}
+    # runs-on: ${{ inputs.create-setup && 'self-hosted' || 'windows-latest' }}
+    runs-on: windows-latest
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v3
