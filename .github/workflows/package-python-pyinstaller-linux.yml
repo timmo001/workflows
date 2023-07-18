@@ -1,5 +1,5 @@
 ---
-name: Package Python Linux
+name: Package Python Application Linux
 
 # yamllint disable-line rule:truthy
 on:
@@ -21,7 +21,7 @@ on:
 
 jobs:
   package-python-linux:
-    name: 🚀 Package Application - Linux
+    name: 🚀 Linux - Package Python Application
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub

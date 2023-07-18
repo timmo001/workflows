@@ -1,5 +1,5 @@
 ---
-name: Deploy Python Linux
+name: Deploy Python Module Linux
 
 # yamllint disable-line rule:truthy
 on:
@@ -35,7 +35,7 @@ on:
 
 jobs:
   deploy-python-linux:
-    name: 🚀 Deploy Application - Linux
+    name: 🚀 Linux - Deploy Module
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub

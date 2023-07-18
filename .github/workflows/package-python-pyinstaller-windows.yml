@@ -1,5 +1,5 @@
 ---
-name: Package Python Windows
+name: Package Python Application Windows
 
 # yamllint disable-line rule:truthy
 on:
@@ -21,7 +21,7 @@ on:
 
 jobs:
   package-python-windows:
-    name: 🚀 Package Application - Windows
+    name: 🚀 Windows - Package Python Application
     runs-on: ${{ inputs.create-setup && 'self-hosted' || 'windows-latest' }}
     steps:
       - name: ⤵️ Check out code from GitHub

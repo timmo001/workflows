@@ -1,5 +1,5 @@
 ---
-name: Deploy Python Windows
+name: Deploy Python Module Windows
 
 # yamllint disable-line rule:truthy
 on:
@@ -35,7 +35,7 @@ on:
 
 jobs:
   deploy-python-windows:
-    name: 🚀 Deploy Application - Windows
+    name: 🚀 Windows - Deploy Module
     runs-on: windows-latest
     steps:
       - name: ⤵️ Check out code from GitHub
