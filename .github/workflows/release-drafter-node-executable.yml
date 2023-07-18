@@ -38,7 +38,7 @@ jobs:
           sudo add-apt-repository ppa:rmescandon/yq
           sudo apt update
           sudo apt install yq
-          yq eval '.version = "${{ steps.release_drafter.outputs.tag_name }}"' nfpm.yaml -i
+          yq eval '.version = "${{ steps.release_drafter.outputs.tag_name }}"' nfpm.yml -i
           cd ./frontend
           npm version ${{ steps.release_drafter.outputs.tag_name }} \
             --allow-same-version \
