@@ -40,6 +40,9 @@ jobs:
             --allow-same-version \
             --no-git-tag-version
           cat package.json
+      - name: ⤵️ Pull latest changes from GitHub
+        run: |
+          git pull --ff
       - name: 🖊 Commit
         uses: stefanzweifel/git-auto-commit-action@v4.16.0
         env:
