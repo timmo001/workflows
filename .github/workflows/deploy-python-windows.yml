@@ -1,0 +1,105 @@
+---
+name: Deploy Python Windows
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      additional-artifacts-name:
+        required: false
+        type: string
+      additional-artifacts-path:
+        required: false
+        type: string
+      code-path:
+        required: false
+        type: string
+        default: "."
+      module-name:
+        required: true
+        type: string
+      pre-install-command:
+        required: false
+        type: string
+      use-incremental:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      PUSH_TOKEN:
+        required: true
+      PYPI_USERNAME:
+        required: true
+      PYPI_PASSWORD:
+        required: true
+
+jobs:
+  deploy-python-windows:
+    name: 🚀 Deploy Application - Windows
+    runs-on: windows-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.PUSH_TOKEN }}
+      - name: ⬇️ Download additional artifacts
+        uses: actions/download-artifact@v3
+        if: ${{ inputs.additional-artifacts-name }}
+        with:
+          name: ${{ inputs.additional-artifacts-name }}
+          path: ${{ inputs.additional-artifacts-path }}
+      - name: 🏗 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+          cache: "pip"
+      - name: 🏗 Install setuptools, wheel, twine, click, twisted, incremental
+        run: |
+          pip install --upgrade setuptools wheel twine click twisted incremental
+      - name: 🚀 Run pre-install-command
+        if: ${{ inputs.pre-install-command }}
+        run: |
+          cd ${{ inputs.code-path }}
+          ${{ inputs.pre-install-command }}
+      - name: 🔢 Increment version - Developement
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+        run: |
+          cd ${{ inputs.code-path }}
+          python -m incremental.update ${{ inputs.module-name }} --dev
+      - name: 🔢 Get version
+        id: get-version
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+        run: |
+          cd ${{ inputs.code-path }}
+          result=$(python <<EOF
+          from ${{ inputs.module-name }}._version import __version__
+          print(__version__.public())
+          EOF
+          )
+          echo "version=$result" >> $GITHUB_OUTPUT
+      - name: ⤵️ Pull latest changes from GitHub
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+        run: |
+          git pull --ff
+      - name: 🖊 Commit
+        uses: stefanzweifel/git-auto-commit-action@v4.16.0
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
+        with:
+          commit_message: |
+            Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
+      - name: 🏗 Install package
+        run: |
+          cd ${{ inputs.code-path }}
+          python setup.py sdist bdist_wheel
+      - name: 🚀 Publish to PyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          cd ${{ inputs.code-path }}
+          twine upload dist/*
+          echo "Successfully deployed ${{ inputs.module-name }} ${{ steps.get-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
