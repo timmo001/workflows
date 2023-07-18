@@ -77,7 +77,7 @@ jobs:
           print(__version__.public())
           EOF
           )
-          echo ::set-output name=version::"$result"
+          echo "version=$result" >> $GITHUB_OUTPUT
       - name: 🖊 Commit
         uses: stefanzweifel/git-auto-commit-action@v4.16.0
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
