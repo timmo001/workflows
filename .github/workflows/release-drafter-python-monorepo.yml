@@ -4,6 +4,9 @@ name: Release Drafter
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
+    secrets:
+      PUSH_TOKEN:
+        required: true
 
 jobs:
   release-drafter:
