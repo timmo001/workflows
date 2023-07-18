@@ -43,10 +43,10 @@ jobs:
           ${{ inputs.pre-package-command }}
       - name: 📦 Create executable
         run: >
-          pyinstaller
-            --clean
-            --noconfirm
-            ${{ inputs.additional-pyinstaller-options }}
+          pyinstaller `
+            --clean `
+            --noconfirm `
+            ${{ inputs.additional-pyinstaller-options }} `
             ${{ inputs.entry-point-file }}
       - name: ⬆ Upload Artifacts - dist
         uses: actions/upload-artifact@v3
