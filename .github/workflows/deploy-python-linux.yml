@@ -62,6 +62,10 @@ jobs:
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
           git pull --ff
+      - name: 🏗 Install package
+        run: |
+          cd ${{ inputs.code-path }}
+          pip install .
       - name: 🔢 Increment version - Developement
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
