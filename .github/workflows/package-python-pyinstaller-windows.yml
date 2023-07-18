@@ -57,7 +57,7 @@ jobs:
         if: ${{ inputs.create-setup }}
         uses: joncloud/makensis-action@v4
         with:
-          script-file: installer.nsi
+          script-file: scripts/installer.nsi
           # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"
       - name: ⬆ Upload Artifacts - Setup
         if: ${{ inputs.create-setup }}
