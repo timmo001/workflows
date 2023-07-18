@@ -73,11 +73,9 @@ jobs:
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
           cd ${{ inputs.code-path }}
-          $result = $(python <<EOF
-          from $env:INPUT_MODULE-NAME._version import __version__
-          print(__version__.public())
-          EOF
-          )
+          $result = $(python -c "                                                                                                                                                                                                                               ─╯
+          from systembridgebackend._version import __version__
+          print(__version__.public())")
           Add-Content $env:GITHUB_OUTPUT "version=$result"
       - name: ⤵️ Pull latest changes from GitHub
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
