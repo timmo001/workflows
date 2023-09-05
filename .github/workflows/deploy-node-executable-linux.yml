@@ -22,7 +22,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: ℹ️ Gather version and environment
         id: release
         run: |
@@ -50,7 +50,7 @@ jobs:
           - amd64
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: ⤵️ Download Artifact - deb
         uses: dawidd6/action-download-artifact@v2.27.0
         with:
