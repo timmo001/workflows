@@ -82,7 +82,7 @@ jobs:
         run: |
           git pull --ff
       - name: 🖊 Commit
-        uses: stefanzweifel/git-auto-commit-action@v4.16.0
+        uses: stefanzweifel/git-auto-commit-action@v5.0.0
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
