@@ -1,5 +1,5 @@
 ---
-name: Deploy Python Module Windows
+name: "Deploy Python Module Windows"
 
 # yamllint disable-line rule:truthy
 on:

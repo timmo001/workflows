@@ -1,5 +1,5 @@
 ---
-name: Build Container Linux
+name: "Build Container Linux"
 
 # yamllint disable-line rule:truthy
 on:

@@ -1,4 +1,5 @@
-name: CodeQL - Python
+---
+name: "CodeQL - Python"
 
 # yamllint disable-line rule:truthy
 on:

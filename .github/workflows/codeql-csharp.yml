@@ -1,4 +1,5 @@
-name: CodeQL - C#
+---
+name: "CodeQL - C#"
 
 # yamllint disable-line rule:truthy
 on:

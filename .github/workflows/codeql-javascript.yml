@@ -1,4 +1,5 @@
-name: CodeQL - JavaScript
+---
+name: "CodeQL - JavaScript"
 
 # yamllint disable-line rule:truthy
 on:

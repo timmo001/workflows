@@ -1,4 +1,5 @@
-name: Lint - Black
+---
+name: "Lint - Black"
 
 # yamllint disable-line rule:truthy
 on:
