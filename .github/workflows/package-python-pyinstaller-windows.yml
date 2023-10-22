@@ -49,7 +49,7 @@ jobs:
             --noconfirm `
             ${{ inputs.additional-pyinstaller-options }} `
             ${{ inputs.entry-point-file }}
-      - name: ⬆ Upload Artifacts - dist
+      - name: ⬆️ Upload Artifacts - dist
         uses: actions/upload-artifact@v3.1.3
         with:
           name: windows-dist
@@ -60,9 +60,16 @@ jobs:
         with:
           script-file: scripts/installer.nsi
           # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"
-      - name: ⬆ Upload Artifacts - Setup
+      - name: ⬆️ Upload Artifacts - Setup
         if: ${{ inputs.create-setup }}
         uses: actions/upload-artifact@v3.1.3
         with:
           name: windows-setup
           path: "*setup.exe"
+      - name: ⬆️ Upload to Release Assets - Setup
+        if: ${{ inputs.create-setup && github.event_name == 'release' }}
+        uses: fnkr/github-action-ghr@v1.3
+        env:
+          GHR_PATH: "*setup.exe"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHR_REPLACE: true

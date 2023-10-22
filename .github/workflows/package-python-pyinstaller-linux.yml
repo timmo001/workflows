@@ -90,3 +90,24 @@ jobs:
         with:
           name: linux-rpm
           path: "*.rpm"
+      - name: ⬆️ Upload to Release Assets - apk
+        if: ${{ inputs.create-setup && github.event_name == 'release' }}
+        uses: fnkr/github-action-ghr@v1.3
+        env:
+          GHR_PATH: "*.apk"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHR_REPLACE: true
+      - name: ⬆️ Upload to Release Assets - deb
+        if: ${{ inputs.create-setup && github.event_name == 'release' }}
+        uses: fnkr/github-action-ghr@v1.3
+        env:
+          GHR_PATH: "*.deb"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHR_REPLACE: true
+      - name: ⬆️ Upload to Release Assets - rpm
+        if: ${{ inputs.create-setup && github.event_name == 'release' }}
+        uses: fnkr/github-action-ghr@v1.3
+        env:
+          GHR_PATH: "*.rpm"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHR_REPLACE: true
