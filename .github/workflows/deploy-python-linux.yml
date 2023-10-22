@@ -58,15 +58,6 @@ jobs:
       - name: 🏗 Install setuptools, wheel, twine, click, twisted, incremental
         run: |
           pip install --upgrade setuptools wheel twine click twisted incremental
-      - name: 🚀 Run pre-install-command
-        if: ${{ inputs.pre-install-command }}
-        run: |
-          cd ${{ inputs.code-path }}
-          ${{ inputs.pre-install-command }}
-      - name: 🏗 Install package
-        run: |
-          cd ${{ inputs.code-path }}
-          python setup.py sdist bdist_wheel
       - name: 🔢 Get old version
         id: get-version-old
         if: ${{ inputs.use-incremental }}
@@ -118,6 +109,15 @@ jobs:
         with:
           commit_message: |
             Bump ${{ inputs.module-name }} version to ${{ steps.get-version-current.outputs.version }}
+      - name: 🚀 Run pre-install-command
+        if: ${{ inputs.pre-install-command }}
+        run: |
+          cd ${{ inputs.code-path }}
+          ${{ inputs.pre-install-command }}
+      - name: 🏗 Install package
+        run: |
+          cd ${{ inputs.code-path }}
+          python setup.py sdist bdist_wheel
       - name: 🚀 Publish to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
