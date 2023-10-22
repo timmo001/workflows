@@ -27,7 +27,7 @@ jobs:
       - name: 📦 Archive
         run: |
           Compress-Archive -DestinationPath out.zip -Path out
-      - name: ⬆ Upload Artifacts - Output
+      - name: ⬆️ Upload Artifacts - Output
         uses: actions/upload-artifact@v3.1.3
         with:
           name: windows-out
@@ -36,7 +36,7 @@ jobs:
         uses: joncloud/makensis-action@v3.7
         with:
           script-file: "scripts/installer.nsi"
-      - name: ⬆ Upload Artifacts - Setup
+      - name: ⬆️ Upload Artifacts - Setup
         uses: actions/upload-artifact@v3.1.3
         with:
           name: windows-setup

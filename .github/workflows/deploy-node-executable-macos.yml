@@ -20,7 +20,7 @@ jobs:
       - name: 🏗 Compress directories
         run: |
           tar -czvf macos-out.tar.gz macos-out/*
-      - name: ⬆ Upload Artifacts to Release Assets
+      - name: ⬆️ Upload Artifacts to Release Assets
         uses: fnkr/github-action-ghr@v1.3
         env:
           GHR_PATH: macos-out.tar.gz
@@ -38,7 +38,7 @@ jobs:
           path: macos-dmg
           workflow: build-macos.yml
           workflow_conclusion: success
-      - name: ⬆ Upload to Release Assets
+      - name: ⬆️ Upload to Release Assets
         uses: fnkr/github-action-ghr@v1.3
         env:
           GHR_PATH: macos-dmg

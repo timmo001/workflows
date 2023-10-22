@@ -43,7 +43,7 @@ jobs:
       - name: 📦 Archive
         run: |
           tar -czvf out.tar.gz out
-      - name: ⬆ Upload Artifacts - Output
+      - name: ⬆️ Upload Artifacts - Output
         uses: actions/upload-artifact@v3.1.3
         with:
           name: linux-out
@@ -51,7 +51,7 @@ jobs:
       - name: 🚀 Create apk file
         run: |
           nfpm package --config nfpm.yml --packager apk
-      - name: ⬆ Upload Artifacts - apk
+      - name: ⬆️ Upload Artifacts - apk
         uses: actions/upload-artifact@v3.1.3
         with:
           name: linux-apk
@@ -59,7 +59,7 @@ jobs:
       - name: 🚀 Create deb file
         run: |
           nfpm package --config nfpm.yml --packager deb
-      - name: ⬆ Upload Artifacts - deb
+      - name: ⬆️ Upload Artifacts - deb
         uses: actions/upload-artifact@v3.1.3
         with:
           name: linux-deb
@@ -67,7 +67,7 @@ jobs:
       - name: 🚀 Create rpm file
         run: |
           nfpm package --config nfpm.yml --packager rpm
-      - name: ⬆ Upload Artifacts - rpm
+      - name: ⬆️ Upload Artifacts - rpm
         uses: actions/upload-artifact@v3.1.3
         with:
           name: linux-rpm

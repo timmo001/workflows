@@ -125,7 +125,7 @@ jobs:
       - name: 🏗 Compress directories
         run: |
           tar -czvf linux-out.tar.gz linux-out/*
-      - name: ⬆ Upload Artifacts to Release Assets
+      - name: ⬆️ Upload Artifacts to Release Assets
         uses: fnkr/github-action-ghr@v1.3
         env:
           GHR_PATH: linux-out.tar.gz
@@ -150,7 +150,7 @@ jobs:
           path: ${{ matrix.artifact }}
           workflow: build-linux.yml
           workflow_conclusion: success
-      - name: ⬆ Upload to Release Assets
+      - name: ⬆️ Upload to Release Assets
         uses: fnkr/github-action-ghr@v1.3
         env:
           GHR_PATH: ${{ matrix.artifact }}

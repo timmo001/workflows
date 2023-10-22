@@ -44,7 +44,7 @@ jobs:
             -t:rebuild `
             -verbosity:diag `
             -property:Configuration=Release
-      - name: ⬆ Upload Artifacts
+      - name: ⬆️ Upload Artifacts
         uses: actions/upload-artifact@v3.1.3
         with:
           name: ${{ inputs.output-name }}
