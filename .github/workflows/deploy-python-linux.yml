@@ -135,7 +135,8 @@ jobs:
         if: ${{ inputs.use-incremental && github.event_name == 'release' }}
         run: |
           cd ${{ inputs.code-path }}
-          python -m incremental.update ${{ inputs.module-name }} --patch --dev
+          python -m incremental.update ${{ inputs.module-name }} --patch
+          python -m incremental.update ${{ inputs.module-name }} --dev
       - name: 🔢 Get new version
         id: get-version-new
         if: ${{ inputs.use-incremental }}
