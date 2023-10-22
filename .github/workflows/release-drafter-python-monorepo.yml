@@ -26,7 +26,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.PUSH_TOKEN }}
