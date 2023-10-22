@@ -50,7 +50,7 @@ jobs:
             ${{ inputs.additional-pyinstaller-options }} `
             ${{ inputs.entry-point-file }}
       - name: ⬆ Upload Artifacts - dist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3.1.3
         with:
           name: windows-dist
           path: dist/
@@ -62,7 +62,7 @@ jobs:
           # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"
       - name: ⬆ Upload Artifacts - Setup
         if: ${{ inputs.create-setup }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3.1.3
         with:
           name: windows-setup
           path: "*setup.exe"
