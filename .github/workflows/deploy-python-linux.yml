@@ -67,8 +67,8 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           python setup.py sdist bdist_wheel
-      - name: 🔢 Get version
-        id: get-version
+      - name: 🔢 Get old version
+        id: get-version-old
         if: ${{ inputs.use-incremental }}
         run: |
           cd ${{ inputs.code-path }}
@@ -85,7 +85,7 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           twine upload dist/*
-          echo "Successfully deployed ${{ inputs.module-name }} ${{ steps.get-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully deployed ${{ inputs.module-name }} ${{ steps.get-version-old.outputs.version }}" >> $GITHUB_STEP_SUMMARY
       - name: 🔢 Increment version - Developement
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
@@ -96,6 +96,17 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           python -m incremental.update ${{ inputs.module-name }} --patch
+      - name: 🔢 Get new version
+        id: get-version-new
+        if: ${{ inputs.use-incremental }}
+        run: |
+          cd ${{ inputs.code-path }}
+          result=$(python <<EOF
+          from ${{ inputs.module-name }}._version import __version__
+          print(__version__.public())
+          EOF
+          )
+          echo "version=$result" >> $GITHUB_OUTPUT
       - name: ⤵️ Pull latest changes from GitHub
         if: ${{ inputs.use-incremental }}
         run: |
@@ -107,4 +118,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
         with:
           commit_message: |
-            Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
+            Bump ${{ inputs.module-name }} version to ${{ steps.get-version-new.outputs.version }}
