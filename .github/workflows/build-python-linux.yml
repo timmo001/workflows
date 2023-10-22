@@ -42,6 +42,8 @@ jobs:
           cache: "pip"
       - name: 🏗 Install setuptools, wheel
         run: |
+          python -V
+          pip -V
           pip install --upgrade setuptools wheel
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}
