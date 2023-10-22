@@ -90,9 +90,10 @@ jobs:
         if: ${{ inputs.use-incremental && github.event_name == 'release' }}
         run: |
           cd ${{ inputs.code-path }}
-          # If version contains dev, remove it
+          # If version contains dev*, remove it
           if [[ "${{ steps.get-version-old.outputs.version }}" == *"dev"* ]]; then
-            python -m incremental.update ${{ inputs.module-name }}
+            NEW_VERSION=$(echo "${{ steps.get-version-old.outputs.version }}" | sed 's/.dev.*//')
+            python -m incremental.update ${{ inputs.module-name }} --newversion $NEW_VERSION
           fi
       - name: 🚀 Publish to PyPI
         env:
