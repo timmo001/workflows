@@ -95,6 +95,17 @@ jobs:
             NEW_VERSION=$(echo "${{ steps.get-version-old.outputs.version }}" | sed 's/.dev.*//')
             python -m incremental.update ${{ inputs.module-name }} --newversion $NEW_VERSION
           fi
+      - name: 🔢 Get current version
+        id: get-version-current
+        if: ${{ inputs.use-incremental }}
+        run: |
+          cd ${{ inputs.code-path }}
+          result=$(python <<EOF
+          from ${{ inputs.module-name }}._version import __version__
+          print(__version__.public())
+          EOF
+          )
+          echo "version=$result" >> $GITHUB_OUTPUT
       - name: ⤵️ Pull latest changes from GitHub
         if: ${{ inputs.use-incremental }}
         run: |
@@ -106,7 +117,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
         with:
           commit_message: |
-            Bump ${{ inputs.module-name }} version to ${{ steps.get-version-old.outputs.version }}
+            Bump ${{ inputs.module-name }} version to ${{ steps.get-version-current.outputs.version }}
       - name: 🚀 Publish to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
