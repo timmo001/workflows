@@ -92,7 +92,7 @@ jobs:
           cd ${{ inputs.code-path }}
           # If version contains dev, remove it
           if [[ ${{ steps.get-version-old.outputs.version }} == *"dev"* ]]
-            python -m incremental.update ${{ inputs.module-name }} --dev
+            python -m incremental.update ${{ inputs.module-name }}
           fi
       - name: 🚀 Publish to PyPI
         env:
