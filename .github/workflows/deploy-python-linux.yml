@@ -41,7 +41,7 @@ jobs:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.1
         with:
-          ref: ${{ github.head_ref }}
+          ref: "master"
           token: ${{ secrets.PUSH_TOKEN }}
       - name: ⬇️ Download additional artifacts
         uses: actions/download-artifact@v3.0.2
@@ -69,7 +69,7 @@ jobs:
           python setup.py sdist bdist_wheel
       - name: 🔢 Get version
         id: get-version
-        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+        if: ${{ inputs.use-incremental }}
         run: |
           cd ${{ inputs.code-path }}
           result=$(python <<EOF
@@ -97,9 +97,11 @@ jobs:
           cd ${{ inputs.code-path }}
           python -m incremental.update ${{ inputs.module-name }} --patch
       - name: ⤵️ Pull latest changes from GitHub
+        if: ${{ inputs.use-incremental }}
         run: |
           git pull --ff
       - name: 🖊 Commit
+        if: ${{ inputs.use-incremental }}
         uses: stefanzweifel/git-auto-commit-action@v5.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
