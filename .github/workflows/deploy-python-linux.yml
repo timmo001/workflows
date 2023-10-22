@@ -63,11 +63,10 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           ${{ inputs.pre-install-command }}
-      - name: 🔢 Increment version - Developement
-        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+      - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
-          python -m incremental.update ${{ inputs.module-name }} --dev
+          python setup.py sdist bdist_wheel
       - name: 🔢 Get version
         id: get-version
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
@@ -79,22 +78,6 @@ jobs:
           EOF
           )
           echo "version=$result" >> $GITHUB_OUTPUT
-      - name: ⤵️ Pull latest changes from GitHub
-        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
-        run: |
-          git pull --ff
-      - name: 🖊 Commit
-        uses: stefanzweifel/git-auto-commit-action@v5.0.0
-        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
-        with:
-          commit_message: |
-            Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
-      - name: 🏗 Install package
-        run: |
-          cd ${{ inputs.code-path }}
-          python setup.py sdist bdist_wheel
       - name: 🚀 Publish to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
@@ -103,3 +86,23 @@ jobs:
           cd ${{ inputs.code-path }}
           twine upload dist/*
           echo "Successfully deployed ${{ inputs.module-name }} ${{ steps.get-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+      - name: 🔢 Increment version - Developement
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
+        run: |
+          cd ${{ inputs.code-path }}
+          python -m incremental.update ${{ inputs.module-name }} --dev
+      - name: 🔢 Increment version - Release
+        if: ${{ inputs.use-incremental && github.event_name == 'release' }}
+        run: |
+          cd ${{ inputs.code-path }}
+          python -m incremental.update ${{ inputs.module-name }} --patch
+      - name: ⤵️ Pull latest changes from GitHub
+        run: |
+          git pull --ff
+      - name: 🖊 Commit
+        uses: stefanzweifel/git-auto-commit-action@v5.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
+        with:
+          commit_message: |
+            Bump ${{ inputs.module-name }} version to ${{ steps.get-version.outputs.version }}
