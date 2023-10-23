@@ -90,7 +90,7 @@ jobs:
         with:
           name: linux-rpm
           path: "*.rpm"
-      - name: ⬆️ Upload to Release Assets - apk
+      - name: ⬆️ Upload to Release Assets - apk, deb, rpm
         if: ${{ inputs.create-setup && github.event_name == 'release' }}
         uses: softprops/action-gh-release@v1
         with:
