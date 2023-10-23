@@ -68,8 +68,7 @@ jobs:
           path: "*setup.exe"
       - name: ⬆️ Upload to Release Assets - Setup
         if: ${{ inputs.create-setup && github.event_name == 'release' }}
-        uses: fnkr/github-action-ghr@v1.3
-        env:
-          GHR_PATH: "*setup.exe"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GHR_REPLACE: true
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            *setup.exe
