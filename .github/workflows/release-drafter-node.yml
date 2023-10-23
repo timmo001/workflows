@@ -21,7 +21,7 @@ jobs:
           echo ${{ github.base_ref }}
           echo ${{ github.actor }}
       - name: 🚀 Run Release Drafter
-        id: release_drafter
+        id: release-drafter
         uses: release-drafter/release-drafter@v5.25.0
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
@@ -32,8 +32,8 @@ jobs:
           token: ${{ secrets.PUSH_TOKEN }}
       - name: ✏ Set Version File
         run: |
-          echo "${{ steps.release_drafter.outputs.tag_name }}"
-          npm version ${{ steps.release_drafter.outputs.tag_name }} \
+          echo "${{ steps.release-drafter.outputs.tag_name }}"
+          npm version ${{ steps.release-drafter.outputs.tag_name }} \
             --allow-same-version \
             --no-git-tag-version
           cat package.json
@@ -46,5 +46,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
         with:
           commit_message: |
-            Update version to ${{ steps.release_drafter.outputs.tag_name }}
+            Update version to ${{ steps.release-drafter.outputs.tag_name }}
           push_options: "--force"

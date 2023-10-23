@@ -21,7 +21,7 @@ jobs:
           echo ${{ github.base_ref }}
           echo ${{ github.actor }}
       - name: 🚀 Run Release Drafter
-        id: release_drafter
+        id: release-drafter
         uses: release-drafter/release-drafter@v5.25.0
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
@@ -32,12 +32,12 @@ jobs:
           token: ${{ secrets.PUSH_TOKEN }}
       - name: ✏ Set Version File
         run: |
-          echo "${{ steps.release_drafter.outputs.tag_name }}"
+          echo "${{ steps.release-drafter.outputs.tag_name }}"
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys CC86BB64
           sudo add-apt-repository ppa:rmescandon/yq
           sudo apt update
           sudo apt install yq
-          yq eval '.version = "${{ steps.release_drafter.outputs.tag_name }}"' nfpm.yml -i
+          yq eval '.version = "${{ steps.release-drafter.outputs.tag_name }}"' nfpm.yml -i
       - name: ⤵️ Pull latest changes from GitHub
         run: |
           git pull --ff
@@ -47,5 +47,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
         with:
           commit_message: |
-            Update version to ${{ steps.release_drafter.outputs.tag_name }}
+            Update version to ${{ steps.release-drafter.outputs.tag_name }}
           push_options: "--force"
