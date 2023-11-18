@@ -124,6 +124,9 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           cd ${{ inputs.code-path }}
+          python --version
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel twine
           twine upload dist/*
           echo "Successfully deployed ${{ inputs.module-name }} ${{ steps.get-version-old.outputs.version }}" >> $GITHUB_STEP_SUMMARY
       - name: 🔢 Increment version - Developement
