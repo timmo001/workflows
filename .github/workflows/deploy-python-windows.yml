@@ -50,7 +50,7 @@ jobs:
           name: ${{ inputs.additional-artifacts-name }}
           path: ${{ inputs.additional-artifacts-path }}
       - name: 🏗 Set up Python
-        uses: actions/setup-python@v4.8.0
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
           architecture: "x64"
