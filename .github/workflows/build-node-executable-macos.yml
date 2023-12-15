@@ -41,7 +41,7 @@ jobs:
         run: |
           zip -r out.zip out
       - name: ⬆️ Upload Artifacts - Output
-        uses: actions/upload-artifact@v3.1.3
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: macos-out
           path: out.zip
@@ -57,7 +57,7 @@ jobs:
           cp out/package.json ${{ secrets.APP_NAME }}.app/Contents/MacOS
           npx appdmg appdmg.json ${{ secrets.APP_NAME }}.dmg
       - name: ⬆️ Upload Artifacts - dmg
-        uses: actions/upload-artifact@v3.1.3
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: macos-dmg
           path: "*.dmg"
