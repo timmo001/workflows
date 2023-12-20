@@ -5,10 +5,16 @@ name: Package Python Application Linux
 on:
   workflow_call:
     inputs:
-      additional-artifacts-name:
+      additional-artifact-1-name:
         required: false
         type: string
-      additional-artifacts-path:
+      additional-artifact-1-path:
+        required: false
+        type: string
+      additional-artifact-2-name:
+        required: false
+        type: string
+      additional-artifact-2-path:
         required: false
         type: string
       additional-pyinstaller-options:
@@ -54,12 +60,18 @@ jobs:
       - name: 🏗 Install setuptools, wheel, pyinstaller
         run: |
           pip install --upgrade setuptools wheel pyinstaller
-      - name: ⬇️ Download additional artifacts
+      - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-1-name }}
         uses: actions/download-artifact@v4.1.0
-        if: ${{ inputs.additional-artifacts-name }}
+        if: ${{ inputs.additional-artifact-1-name }}
         with:
-          name: ${{ inputs.additional-artifacts-name }}
-          path: ${{ inputs.additional-artifacts-path }}
+          name: ${{ inputs.additional-artifact-1-name }}
+          path: ${{ inputs.additional-artifact-1-path }}
+      - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-2-name }}
+        uses: actions/download-artifact@v4.1.0
+        if: ${{ inputs.additional-artifact-2-name }}
+        with:
+          name: ${{ inputs.additional-artifact-2-name }}
+          path: ${{ inputs.additional-artifact-2-path }}
       - name: 🚀 Run pre-package-command
         if: ${{ inputs.pre-package-command }}
         run: |
@@ -75,7 +87,7 @@ jobs:
         uses: actions/upload-artifact@v4.0.0
         if: ${{ inputs.upload-executable }}
         with:
-          name: linux-executable
+          name: linux-executable-${{ inputs.entry-point-file }}
           path: dist
       - name: 🚀 Create apk file
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
