@@ -21,10 +21,6 @@ on:
       pre-install-command:
         required: false
         type: string
-      skip-version-check:
-        required: false
-        type: boolean
-        default: false
       use-incremental:
         required: false
         type: boolean
@@ -69,7 +65,7 @@ jobs:
           ${{ inputs.pre-install-command }}
       - name: 🔢 Get old version
         id: get-version-old
-        if: ${{ inputs.use-incremental }} && !${{ inputs.skip-version-check }}
+        if: ${{ inputs.use-incremental }}
         run: |
           cd ${{ inputs.code-path }}
 
@@ -84,7 +80,7 @@ jobs:
 
           echo "version=$result" >> $GITHUB_OUTPUT
       - name: 🔢 Set correct vertion - Developement
-        if: ${{ inputs.use-incremental && github.event_name != 'release' }} && !${{ inputs.skip-version-check }}
+        if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
           cd ${{ inputs.code-path }}
           # If version does not contain dev, add it
@@ -92,7 +88,7 @@ jobs:
             python -m incremental.update ${{ inputs.module-name }} --dev
           fi
       - name: 🔢 Set correct vertion - Release
-        if: ${{ inputs.use-incremental && github.event_name == 'release' }} && !${{ inputs.skip-version-check }}
+        if: ${{ inputs.use-incremental && github.event_name == 'release' }}
         run: |
           cd ${{ inputs.code-path }}
           # If version contains dev*, remove it
@@ -102,7 +98,7 @@ jobs:
           fi
       - name: 🔢 Get current version
         id: get-version-current
-        if: ${{ inputs.use-incremental }} && !${{ inputs.skip-version-check }}
+        if: ${{ inputs.use-incremental }}
         run: |
           cd ${{ inputs.code-path }}
           result=$(python <<EOF
@@ -112,11 +108,11 @@ jobs:
           )
           echo "version=$result" >> $GITHUB_OUTPUT
       - name: ⤵️ Pull latest changes from GitHub
-        if: ${{ inputs.use-incremental }} && !${{ inputs.skip-version-check }}
+        if: ${{ inputs.use-incremental }}
         run: |
           git pull --ff
       - name: 🖊 Commit
-        if: ${{ inputs.use-incremental }} && !${{ inputs.skip-version-check }}
+        if: ${{ inputs.use-incremental }}
         uses: stefanzweifel/git-auto-commit-action@v5.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
