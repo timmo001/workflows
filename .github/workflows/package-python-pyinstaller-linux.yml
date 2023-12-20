@@ -5,6 +5,12 @@ name: Package Python Application Linux
 on:
   workflow_call:
     inputs:
+      additional-artifacts-name:
+        required: false
+        type: string
+      additional-artifacts-path:
+        required: false
+        type: string
       additional-pyinstaller-options:
         required: false
         type: string
@@ -44,6 +50,12 @@ jobs:
       - name: 🏗 Install setuptools, wheel, pyinstaller
         run: |
           pip install --upgrade setuptools wheel pyinstaller
+      - name: ⬇️ Download additional artifacts
+        uses: actions/download-artifact@v4.1.0
+        if: ${{ inputs.additional-artifacts-name }}
+        with:
+          name: ${{ inputs.additional-artifacts-name }}
+          path: ${{ inputs.additional-artifacts-path }}
       - name: 🚀 Run pre-package-command
         if: ${{ inputs.pre-package-command }}
         run: |
