@@ -17,12 +17,12 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18.x
           cache: yarn
       - name: 🏗 Set up Python
-        uses: actions/setup-python@v4.7.1
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
           architecture: "x64"
@@ -43,32 +43,32 @@ jobs:
       - name: 📦 Archive
         run: |
           tar -czvf out.tar.gz out
-      - name: ⬆ Upload Artifacts - Output
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - Output
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-out
           path: out.tar.gz
       - name: 🚀 Create apk file
         run: |
           nfpm package --config nfpm.yml --packager apk
-      - name: ⬆ Upload Artifacts - apk
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - apk
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-apk
           path: "*.apk"
       - name: 🚀 Create deb file
         run: |
           nfpm package --config nfpm.yml --packager deb
-      - name: ⬆ Upload Artifacts - deb
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - deb
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-deb
           path: "*.deb"
       - name: 🚀 Create rpm file
         run: |
           nfpm package --config nfpm.yml --packager rpm
-      - name: ⬆ Upload Artifacts - rpm
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - rpm
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-rpm
           path: "*.rpm"
@@ -88,7 +88,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: ⤵️ Download Artifact - deb
-        uses: actions/download-artifact@v3.0.2
+        uses: actions/download-artifact@v4.1.0
         with:
           name: linux-deb
       - name: 🏗 Set up build cache
@@ -116,7 +116,7 @@ jobs:
             exit 1
           fi
       - name: 🚀 Build
-        uses: docker/build-push-action@v5.0.0
+        uses: docker/build-push-action@v5.1.0
         with:
           push: false
           context: .

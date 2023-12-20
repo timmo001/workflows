@@ -44,13 +44,13 @@ jobs:
           ref: "master"
           token: ${{ secrets.PUSH_TOKEN }}
       - name: ⬇️ Download additional artifacts
-        uses: actions/download-artifact@v3.0.2
+        uses: actions/download-artifact@v4.1.0
         if: ${{ inputs.additional-artifacts-name }}
         with:
           name: ${{ inputs.additional-artifacts-name }}
           path: ${{ inputs.additional-artifacts-path }}
       - name: 🏗 Set up Python
-        uses: actions/setup-python@v4.7.1
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
           architecture: "x64"
@@ -127,6 +127,9 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           cd ${{ inputs.code-path }}
+          python --version
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel twine
           twine upload dist/*
           echo "Successfully deployed ${{ inputs.module-name }} ${{ steps.get-version-old.outputs.version }}" >> $GITHUB_STEP_SUMMARY
       - name: 🔢 Increment version - Developement

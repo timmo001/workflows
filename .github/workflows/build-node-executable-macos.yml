@@ -21,12 +21,12 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18.x
           cache: yarn
       - name: 🏗 Set up Python
-        uses: actions/setup-python@v4.7.1
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
           architecture: "x64"
@@ -40,8 +40,8 @@ jobs:
       - name: 📦 Archive
         run: |
           zip -r out.zip out
-      - name: ⬆ Upload Artifacts - Output
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - Output
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: macos-out
           path: out.zip
@@ -56,8 +56,8 @@ jobs:
           cp -R out/${{ secrets.ICON_NAME }}.* ${{ secrets.APP_NAME }}.app/Contents/MacOS
           cp out/package.json ${{ secrets.APP_NAME }}.app/Contents/MacOS
           npx appdmg appdmg.json ${{ secrets.APP_NAME }}.dmg
-      - name: ⬆ Upload Artifacts - dmg
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - dmg
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: macos-dmg
           path: "*.dmg"

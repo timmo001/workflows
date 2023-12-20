@@ -29,7 +29,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Python
-        uses: actions/setup-python@v4.7.1
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
           architecture: "x64"
@@ -55,38 +55,41 @@ jobs:
             --noconfirm \
             ${{ inputs.additional-pyinstaller-options }} \
             ${{ inputs.entry-point-file }}
-      - name: ⬆ Upload Artifacts - dist
-        uses: actions/upload-artifact@v3
-        with:
-          name: linux-dist
-          path: dist/
       - name: 🚀 Create apk file
-        if: ${{ inputs.create-setup }}
+        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
         run: |
           nfpm package --config nfpm.yml --packager apk
-      - name: ⬆ Upload Artifacts - apk
-        if: ${{ inputs.create-setup }}
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - apk
+        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-apk
           path: "*.apk"
       - name: 🚀 Create deb file
-        if: ${{ inputs.create-setup }}
+        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
         run: |
           nfpm package --config nfpm.yml --packager deb
-      - name: ⬆ Upload Artifacts - deb
-        if: ${{ inputs.create-setup }}
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - deb
+        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-deb
           path: "*.deb"
       - name: 🚀 Create rpm file
-        if: ${{ inputs.create-setup }}
+        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
         run: |
           nfpm package --config nfpm.yml --packager rpm
-      - name: ⬆ Upload Artifacts - rpm
-        if: ${{ inputs.create-setup }}
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts - rpm
+        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-rpm
           path: "*.rpm"
+      - name: ⬆️ Upload to Release Assets - apk, deb, rpm
+        if: ${{ inputs.create-setup && github.event_name == 'release' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            *.apk
+            *.deb
+            *.rpm

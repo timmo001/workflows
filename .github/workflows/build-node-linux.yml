@@ -37,7 +37,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18.x
           cache: yarn
@@ -60,8 +60,8 @@ jobs:
           cd ${{ inputs.code-path }}
           yarn build
           ${{ inputs.additional-build-commands }}
-      - name: ⬆ Upload Artifacts
-        uses: actions/upload-artifact@v3
+      - name: ⬆️ Upload Artifacts
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: ${{ inputs.artifact-name }}
           path: ${{ inputs.artifact-path }}
