@@ -48,7 +48,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libavahi-compat-libdnssd-dev libegl-dev libpulse0
-          wget https://github.com/goreleaser/nfpm/releases/download/v2.34.0/nfpm_amd64.deb
+          wget https://github.com/goreleaser/nfpm/releases/download/v2.34.0/nfpm_2.34.0_amd64.deb
           sudo apt install ./nfpm_amd64.deb
           rm ./nfpm_amd64.deb
       - name: 🏗 Install setuptools, wheel, pyinstaller
