@@ -24,6 +24,10 @@ on:
       pre-package-command:
         required: false
         type: string
+      upload-executable:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   package-python-windows:
@@ -62,6 +66,12 @@ jobs:
             --noconfirm `
             ${{ inputs.additional-pyinstaller-options }} `
             ${{ inputs.entry-point-file }}
+      - name: ⬆️ Upload Artifacts - Executable
+        uses: actions/upload-artifact@v4.0.0
+        if: ${{ inputs.upload-executable }}
+        with:
+          name: linux-executable
+          path: dist
       - name: 🚀 Create setup file
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
         uses: joncloud/makensis-action@v4
