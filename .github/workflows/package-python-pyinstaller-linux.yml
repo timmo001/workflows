@@ -27,6 +27,9 @@ on:
       entry-point-file:
         required: true
         type: string
+      name:
+        required: true
+        type: string
       pre-package-command:
         required: false
         type: string
@@ -87,7 +90,7 @@ jobs:
         uses: actions/upload-artifact@v4.0.0
         if: ${{ inputs.upload-executable }}
         with:
-          name: linux-executable-${{ inputs.entry-point-file }}
+          name: linux-executable-${{ inputs.name }}
           path: dist
       - name: 🚀 Create apk file
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
