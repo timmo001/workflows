@@ -57,7 +57,7 @@ jobs:
           cache: "pip"
       - name: 🏗 Install setuptools, wheel, twine, click, twisted, incremental
         run: |
-          pip install --upgrade setuptools wheel twine click twisted incremental
+          python -m pip install --upgrade setuptools wheel twine click twisted incremental
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}
         run: |
@@ -68,6 +68,8 @@ jobs:
         if: ${{ inputs.use-incremental }}
         run: |
           cd ${{ inputs.code-path }}
+
+          python -m pip install .
 
           # Read version from _version.py
           result=$(python <<EOF
