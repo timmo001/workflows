@@ -40,7 +40,7 @@ on:
 
 jobs:
   package-python-linux:
-    name: 🚀 Linux - Package Python Application
+    name: 🚀 Linux - Package Python Application - ${{ inputs.name }}
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub

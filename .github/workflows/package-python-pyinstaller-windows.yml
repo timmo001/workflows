@@ -40,7 +40,7 @@ on:
 
 jobs:
   package-python-windows:
-    name: 🚀 Windows - Package Python Application
+    name: 🚀 Windows - Package Python Application - ${{ inputs.name }}
     # runs-on: ${{ inputs.create-setup && 'self-hosted' || 'windows-latest' }}
     runs-on: windows-latest
     steps:
