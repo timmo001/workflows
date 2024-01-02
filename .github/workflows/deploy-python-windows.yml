@@ -38,7 +38,6 @@ jobs:
     name: 🚀 Windows - Deploy Module
     runs-on: windows-latest
     permissions:
-      # IMPORTANT: this permission is mandatory for trusted publishing
       id-token: write
     steps:
       - name: ⤵️ Check out code from GitHub
