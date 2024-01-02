@@ -28,10 +28,6 @@ on:
     secrets:
       PUSH_TOKEN:
         required: true
-      PYPI_USERNAME:
-        required: true
-      PYPI_PASSWORD:
-        required: true
 
 jobs:
   deploy-python-linux:
