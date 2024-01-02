@@ -37,6 +37,9 @@ jobs:
   deploy-python-linux:
     name: 🚀 Linux - Deploy Module
     runs-on: ubuntu-latest
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.1
@@ -118,17 +121,11 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           python setup.py sdist bdist_wheel
-      - name: 🚀 Publish to PyPI
-        env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: |
-          cd ${{ inputs.code-path }}
-          python --version
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel twine
-          twine upload dist/*
-          echo "Successfully deployed ${{ inputs.module-name }} ${{ steps.get-version-old.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ inputs.code-path }}/dist
+          verbose: true
       - name: 🔢 Increment version - Developement
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}
         run: |
