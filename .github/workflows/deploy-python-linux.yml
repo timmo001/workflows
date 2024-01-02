@@ -47,20 +47,20 @@ jobs:
           ref: "master"
           token: ${{ secrets.PUSH_TOKEN }}
       - name: ⬇️ Download additional artifacts
-        uses: actions/download-artifact@v3.0.2
+        uses: actions/download-artifact@v4.1.0
         if: ${{ inputs.additional-artifacts-name }}
         with:
           name: ${{ inputs.additional-artifacts-name }}
           path: ${{ inputs.additional-artifacts-path }}
       - name: 🏗 Set up Python
-        uses: actions/setup-python@v4.7.1
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
           architecture: "x64"
           cache: "pip"
       - name: 🏗 Install setuptools, wheel, twine, click, twisted, incremental
         run: |
-          pip install --upgrade setuptools wheel twine click twisted incremental
+          python -m pip install --upgrade setuptools wheel twine click twisted incremental
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}
         run: |
@@ -71,11 +71,16 @@ jobs:
         if: ${{ inputs.use-incremental }}
         run: |
           cd ${{ inputs.code-path }}
+
+          python -m pip install .
+
+          # Read version from _version.py
           result=$(python <<EOF
           from ${{ inputs.module-name }}._version import __version__
           print(__version__.public())
           EOF
           )
+
           echo "version=$result" >> $GITHUB_OUTPUT
       - name: 🔢 Set correct vertion - Developement
         if: ${{ inputs.use-incremental && github.event_name != 'release' }}

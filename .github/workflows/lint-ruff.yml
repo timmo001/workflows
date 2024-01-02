@@ -1,0 +1,34 @@
+---
+name: "Lint - Ruff"
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      code-path:
+        required: false
+        type: string
+        default: "."
+      pre-run-command:
+        required: false
+        type: string
+
+jobs:
+  lint-ruff:
+    name: 👕 Run Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v4.1.1
+      - name: 📦 Install Ruff
+        run: |
+          python -m pip install --upgrade ruff
+        working-directory: ${{ inputs.code-path }}
+      - name: 🚀 Run pre-run-command
+        if: ${{ inputs.pre-run-command }}
+        run: ${{ inputs.pre-run-command }}
+        working-directory: ${{ inputs.code-path }}
+      - name: 🚀 Run ruff check
+        run: |
+          ruff check
+        working-directory: ${{ inputs.code-path }}

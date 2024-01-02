@@ -5,6 +5,18 @@ name: Package Python Application Linux
 on:
   workflow_call:
     inputs:
+      additional-artifact-1-name:
+        required: false
+        type: string
+      additional-artifact-1-path:
+        required: false
+        type: string
+      additional-artifact-2-name:
+        required: false
+        type: string
+      additional-artifact-2-path:
+        required: false
+        type: string
       additional-pyinstaller-options:
         required: false
         type: string
@@ -15,13 +27,20 @@ on:
       entry-point-file:
         required: true
         type: string
+      name:
+        required: true
+        type: string
       pre-package-command:
         required: false
         type: string
+      upload-executable:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   package-python-linux:
-    name: 🚀 Linux - Package Python Application
+    name: 🚀 Linux - Package Python Application - ${{ inputs.name }}
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub
@@ -29,7 +48,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Python
-        uses: actions/setup-python@v4.7.1
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
           architecture: "x64"
@@ -38,12 +57,24 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libavahi-compat-libdnssd-dev libegl-dev libpulse0
-          wget https://github.com/goreleaser/nfpm/releases/download/v2.15.1/nfpm_amd64.deb
-          sudo apt install ./nfpm_amd64.deb
-          rm ./nfpm_amd64.deb
+          wget https://github.com/goreleaser/nfpm/releases/download/v2.34.0/nfpm_2.34.0_amd64.deb
+          sudo apt install ./nfpm_2.34.0_amd64.deb
+          rm ./nfpm_2.34.0_amd64.deb
       - name: 🏗 Install setuptools, wheel, pyinstaller
         run: |
           pip install --upgrade setuptools wheel pyinstaller
+      - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-1-name }}
+        uses: actions/download-artifact@v4.1.0
+        if: ${{ inputs.additional-artifact-1-name }}
+        with:
+          name: ${{ inputs.additional-artifact-1-name }}
+          path: ${{ inputs.additional-artifact-1-path }}
+      - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-2-name }}
+        uses: actions/download-artifact@v4.1.0
+        if: ${{ inputs.additional-artifact-2-name }}
+        with:
+          name: ${{ inputs.additional-artifact-2-name }}
+          path: ${{ inputs.additional-artifact-2-path }}
       - name: 🚀 Run pre-package-command
         if: ${{ inputs.pre-package-command }}
         run: |
@@ -55,13 +86,19 @@ jobs:
             --noconfirm \
             ${{ inputs.additional-pyinstaller-options }} \
             ${{ inputs.entry-point-file }}
+      - name: ⬆️ Upload Artifacts - Executable
+        uses: actions/upload-artifact@v4.0.0
+        if: ${{ inputs.upload-executable }}
+        with:
+          name: linux-executable-${{ inputs.name }}
+          path: dist
       - name: 🚀 Create apk file
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
         run: |
           nfpm package --config nfpm.yml --packager apk
       - name: ⬆️ Upload Artifacts - apk
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v3.1.3
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-apk
           path: "*.apk"
@@ -71,7 +108,7 @@ jobs:
           nfpm package --config nfpm.yml --packager deb
       - name: ⬆️ Upload Artifacts - deb
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v3.1.3
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-deb
           path: "*.deb"
@@ -81,7 +118,7 @@ jobs:
           nfpm package --config nfpm.yml --packager rpm
       - name: ⬆️ Upload Artifacts - rpm
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v3.1.3
+        uses: actions/upload-artifact@v4.0.0
         with:
           name: linux-rpm
           path: "*.rpm"

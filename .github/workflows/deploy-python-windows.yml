@@ -44,13 +44,13 @@ jobs:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.PUSH_TOKEN }}
       - name: ⬇️ Download additional artifacts
-        uses: actions/download-artifact@v3.0.2
+        uses: actions/download-artifact@v4.1.0
         if: ${{ inputs.additional-artifacts-name }}
         with:
           name: ${{ inputs.additional-artifacts-name }}
           path: ${{ inputs.additional-artifacts-path }}
       - name: 🏗 Set up Python
-        uses: actions/setup-python@v4.7.1
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
           architecture: "x64"
