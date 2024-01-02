@@ -37,6 +37,9 @@ jobs:
   deploy-python-windows:
     name: 🚀 Windows - Deploy Module
     runs-on: windows-latest
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.1
@@ -93,11 +96,8 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           python setup.py sdist bdist_wheel
-      - name: 🚀 Publish to PyPI
-        env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: |
-          cd ${{ inputs.code-path }}
-          twine upload dist/*
-          echo "Successfully deployed ${{ inputs.module-name }} ${{ steps.get-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ inputs.code-path }}/dist
+          verbose: true
