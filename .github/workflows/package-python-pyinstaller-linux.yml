@@ -64,13 +64,13 @@ jobs:
         run: |
           pip install --upgrade setuptools wheel pyinstaller
       - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-1-name }}
-        uses: actions/download-artifact@v4.1.0
+        uses: actions/download-artifact@v4.1.1
         if: ${{ inputs.additional-artifact-1-name }}
         with:
           name: ${{ inputs.additional-artifact-1-name }}
           path: ${{ inputs.additional-artifact-1-path }}
       - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-2-name }}
-        uses: actions/download-artifact@v4.1.0
+        uses: actions/download-artifact@v4.1.1
         if: ${{ inputs.additional-artifact-2-name }}
         with:
           name: ${{ inputs.additional-artifact-2-name }}
