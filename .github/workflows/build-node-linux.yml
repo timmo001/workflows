@@ -43,7 +43,7 @@ jobs:
           cache: yarn
           cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
       - name: 🏗 Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.yarn
