@@ -87,7 +87,7 @@ jobs:
             ${{ inputs.additional-pyinstaller-options }} \
             ${{ inputs.entry-point-file }}
       - name: ⬆️ Upload Artifacts - Executable
-        uses: actions/upload-artifact@v4.1.0
+        uses: actions/upload-artifact@v4.2.0
         if: ${{ inputs.upload-executable }}
         with:
           name: linux-executable-${{ inputs.name }}
@@ -98,7 +98,7 @@ jobs:
           nfpm package --config nfpm.yml --packager apk
       - name: ⬆️ Upload Artifacts - apk
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v4.1.0
+        uses: actions/upload-artifact@v4.2.0
         with:
           name: linux-apk
           path: "*.apk"
@@ -108,7 +108,7 @@ jobs:
           nfpm package --config nfpm.yml --packager deb
       - name: ⬆️ Upload Artifacts - deb
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v4.1.0
+        uses: actions/upload-artifact@v4.2.0
         with:
           name: linux-deb
           path: "*.deb"
@@ -118,7 +118,7 @@ jobs:
           nfpm package --config nfpm.yml --packager rpm
       - name: ⬆️ Upload Artifacts - rpm
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v4.1.0
+        uses: actions/upload-artifact@v4.2.0
         with:
           name: linux-rpm
           path: "*.rpm"
