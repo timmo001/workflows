@@ -44,7 +44,7 @@ jobs:
         run: |
           tar -czvf out.tar.gz out
       - name: ⬆️ Upload Artifacts - Output
-        uses: actions/upload-artifact@v4.3.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: linux-out
           path: out.tar.gz
@@ -52,7 +52,7 @@ jobs:
         run: |
           nfpm package --config nfpm.yml --packager apk
       - name: ⬆️ Upload Artifacts - apk
-        uses: actions/upload-artifact@v4.3.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: linux-apk
           path: "*.apk"
@@ -60,7 +60,7 @@ jobs:
         run: |
           nfpm package --config nfpm.yml --packager deb
       - name: ⬆️ Upload Artifacts - deb
-        uses: actions/upload-artifact@v4.3.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: linux-deb
           path: "*.deb"
@@ -68,7 +68,7 @@ jobs:
         run: |
           nfpm package --config nfpm.yml --packager rpm
       - name: ⬆️ Upload Artifacts - rpm
-        uses: actions/upload-artifact@v4.3.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: linux-rpm
           path: "*.rpm"

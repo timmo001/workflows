@@ -81,7 +81,7 @@ jobs:
             ${{ inputs.additional-pyinstaller-options }} `
             ${{ inputs.entry-point-file }}
       - name: ⬆️ Upload Artifacts - Executable
-        uses: actions/upload-artifact@v4.3.0
+        uses: actions/upload-artifact@v4.3.1
         if: ${{ inputs.upload-executable }}
         with:
           name: windows-executable-${{ inputs.name }}
@@ -94,7 +94,7 @@ jobs:
           # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"
       - name: ⬆️ Upload Artifacts - Setup
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v4.3.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: windows-setup
           path: "*setup.exe"
