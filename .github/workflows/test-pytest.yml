@@ -60,7 +60,6 @@ jobs:
           python --version
           python -m pytest \
             -qq \
-            --timeout=9 \
             --cov="${{ inputs.module-name }}" \
             --cov-report=xml \
             --cov-report=term-missing \
@@ -81,7 +80,6 @@ jobs:
           name: coverage-${{ inputs.module-name}}
           path: coverage.xml
           overwrite: true
-
   test-coverage:
     name: "↗️ Upload test coverage to Codecov"
     runs-on: ubuntu-latest
