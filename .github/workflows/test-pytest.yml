@@ -68,7 +68,7 @@ jobs:
             tests \
               2>&1 | tee pytest-${{ inputs.module-name }}.txt
         working-directory: ${{ inputs.code-path }}
-      - name: Upload pytest output
+      - name: "Upload pytest output"
         if: success() || failure() && steps.pytest-full.conclusion == 'failure'
         uses: actions/upload-artifact@v3.1.2
         with:
@@ -87,13 +87,15 @@ jobs:
       - test-pytest
     timeout-minutes: 10
     steps:
-      - name: "Check out code from GitHub"
+      - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.1
-      - name: "Download all coverage artifacts"
+        with:
+          ref: ${{ github.head_ref }}
+      - name: ⬇️ Download all coverage artifacts
         uses: actions/download-artifact@v4.1.4
         with:
           pattern: coverage-*
-      - name: "Upload coverage to Codecov"
+      - name: Upload coverage to Codecov
         uses: Wandalen/wretry.action@v1.4.4
         with:
           action: codecov/codecov-action@v3.1.3
