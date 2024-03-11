@@ -124,7 +124,7 @@ jobs:
           path: "*.rpm"
       - name: ⬆️ Upload to Release Assets - apk, deb, rpm
         if: ${{ inputs.create-setup && github.event_name == 'release' }}
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             *.apk
