@@ -95,13 +95,13 @@ jobs:
           name: windows-executable-${{ inputs.name }}
           path: dist
       - name: 🚀 Create setup file
-        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: joncloud/makensis-action@v4.1
         with:
           script-file: scripts/installer.nsi
           # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"
       - name: ⬆️ Upload Artifacts - Setup
-        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: actions/upload-artifact@v4.3.1
         with:
           name: windows-setup

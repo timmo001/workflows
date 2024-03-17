@@ -100,31 +100,31 @@ jobs:
           name: linux-executable-${{ inputs.name }}
           path: dist
       - name: 🚀 Create apk file
-        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        if: ${{ inputs.create-setup || github.event_name == 'release' }}
         run: |
           nfpm package --config nfpm.yml --packager apk
       - name: ⬆️ Upload Artifacts - apk
-        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: actions/upload-artifact@v4.3.1
         with:
           name: linux-apk
           path: "*.apk"
       - name: 🚀 Create deb file
-        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        if: ${{ inputs.create-setup || github.event_name == 'release' }}
         run: |
           nfpm package --config nfpm.yml --packager deb
       - name: ⬆️ Upload Artifacts - deb
-        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: actions/upload-artifact@v4.3.1
         with:
           name: linux-deb
           path: "*.deb"
       - name: 🚀 Create rpm file
-        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        if: ${{ inputs.create-setup || github.event_name == 'release' }}
         run: |
           nfpm package --config nfpm.yml --packager rpm
       - name: ⬆️ Upload Artifacts - rpm
-        if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
+        if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: actions/upload-artifact@v4.3.1
         with:
           name: linux-rpm
