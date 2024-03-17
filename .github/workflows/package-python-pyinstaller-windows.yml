@@ -98,7 +98,7 @@ jobs:
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: joncloud/makensis-action@v4.1
         with:
-          script-file: scripts/installer-${{ inputs.name }}.nsi
+          script-file: installer-${{ inputs.name }}.nsi
           # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"
       - name: ⬆️ Upload Artifacts - Setup
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
