@@ -11,7 +11,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.2
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Install packages
@@ -28,16 +28,16 @@ jobs:
         run: |
           Compress-Archive -DestinationPath out.zip -Path out
       - name: ⬆️ Upload Artifacts - Output
-        uses: actions/upload-artifact@v4.0.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: windows-out
           path: out.zip
       - name: 🚀 Create setup file
-        uses: joncloud/makensis-action@v3.7
+        uses: joncloud/makensis-action@v4.1
         with:
           script-file: "scripts/installer.nsi"
       - name: ⬆️ Upload Artifacts - Setup
-        uses: actions/upload-artifact@v4.0.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: windows-setup
           path: "*setup.exe"

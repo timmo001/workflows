@@ -33,7 +33,7 @@ jobs:
           wget https://github.com/goreleaser/nfpm/releases/download/v2.8.0/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.2
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
@@ -43,7 +43,7 @@ jobs:
           cache: yarn
           cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
       - name: 🏗 Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.yarn
@@ -61,7 +61,7 @@ jobs:
           yarn build
           ${{ inputs.additional-build-commands }}
       - name: ⬆️ Upload Artifacts
-        uses: actions/upload-artifact@v4.0.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: ${{ inputs.artifact-name }}
           path: ${{ inputs.artifact-path }}

@@ -22,11 +22,11 @@ jobs:
           echo ${{ github.actor }}
       - name: 🚀 Run Release Drafter
         id: release-drafter
-        uses: release-drafter/release-drafter@v5.25.0
+        uses: release-drafter/release-drafter@v6.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.2
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.PUSH_TOKEN }}

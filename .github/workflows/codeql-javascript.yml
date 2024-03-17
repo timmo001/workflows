@@ -16,16 +16,16 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.2
         with:
           fetch-depth: 2
       - run: git checkout HEAD^2
         if: ${{ github.event_name == 'pull_request' }}
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3.22.12
+        uses: github/codeql-action/init@v3.24.7
         with:
           languages: javascript
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3.22.12
+        uses: github/codeql-action/analyze@v3.24.7
         with:
           category: "/language:javascript"

@@ -45,7 +45,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.2
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Python
@@ -58,13 +58,13 @@ jobs:
         run: |
           pip install --upgrade setuptools wheel pyinstaller
       - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-1-name }}
-        uses: actions/download-artifact@v4.1.0
+        uses: actions/download-artifact@v4.1.4
         if: ${{ inputs.additional-artifact-1-name }}
         with:
           name: ${{ inputs.additional-artifact-1-name }}
           path: ${{ inputs.additional-artifact-1-path }}
       - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-2-name }}
-        uses: actions/download-artifact@v4.1.0
+        uses: actions/download-artifact@v4.1.4
         if: ${{ inputs.additional-artifact-2-name }}
         with:
           name: ${{ inputs.additional-artifact-2-name }}
@@ -81,26 +81,26 @@ jobs:
             ${{ inputs.additional-pyinstaller-options }} `
             ${{ inputs.entry-point-file }}
       - name: ⬆️ Upload Artifacts - Executable
-        uses: actions/upload-artifact@v4.0.0
+        uses: actions/upload-artifact@v4.3.1
         if: ${{ inputs.upload-executable }}
         with:
           name: windows-executable-${{ inputs.name }}
           path: dist
       - name: 🚀 Create setup file
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: joncloud/makensis-action@v4
+        uses: joncloud/makensis-action@v4.1
         with:
           script-file: scripts/installer.nsi
           # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"
       - name: ⬆️ Upload Artifacts - Setup
         if: ${{ inputs.create-setup && github.ref == 'refs/heads/master' || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v4.0.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: windows-setup
           path: "*setup.exe"
       - name: ⬆️ Upload to Release Assets - Setup
         if: ${{ inputs.create-setup && github.event_name == 'release' }}
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             *setup.exe

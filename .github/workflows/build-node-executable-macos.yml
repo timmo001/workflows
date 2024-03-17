@@ -17,7 +17,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.2
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
@@ -41,7 +41,7 @@ jobs:
         run: |
           zip -r out.zip out
       - name: ⬆️ Upload Artifacts - Output
-        uses: actions/upload-artifact@v4.0.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: macos-out
           path: out.zip
@@ -57,7 +57,7 @@ jobs:
           cp out/package.json ${{ secrets.APP_NAME }}.app/Contents/MacOS
           npx appdmg appdmg.json ${{ secrets.APP_NAME }}.dmg
       - name: ⬆️ Upload Artifacts - dmg
-        uses: actions/upload-artifact@v4.0.0
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: macos-dmg
           path: "*.dmg"
