@@ -81,7 +81,7 @@ jobs:
           ${{ inputs.pre-package-command }}
       - name: 📦 Create executable
         run: >
-          filename=${{ inputs.entry-point-file }}
+          filename="${{ inputs.entry-point-file }}"
 
           # If the entry-point-file is a URL, download it
           if [[ ${{ inputs.entry-point-file }} == http* ]]; then
