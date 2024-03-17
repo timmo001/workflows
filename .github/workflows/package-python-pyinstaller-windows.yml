@@ -79,8 +79,8 @@ jobs:
 
           if ($filename -match '^https?://')
           {
-              $filename = "entry-point-file"
-              Invoke-WebRequest -Uri ${{ inputs.entry-point-file }} -OutFile "${{ inputs.name }}.py"
+              Invoke-WebRequest -Uri ${{ inputs.entry-point-file }} -OutFile ${{ inputs.name }}.py
+              $filename = "${{ inputs.name }}.py"
           }
 
           pyinstaller `
