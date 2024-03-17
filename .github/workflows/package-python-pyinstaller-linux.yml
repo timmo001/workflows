@@ -84,7 +84,7 @@ jobs:
           filename="${{ inputs.entry-point-file }}"
 
           # If the entry-point-file is a URL, download it
-          if [[ ${{ inputs.entry-point-file }} == http* ]]; then
+          if [[ $filename == http* ]]; then
             wget -O ${{ inputs.name }} ${{ inputs.entry-point-file }}
             filename="${{ inputs.name }}.py"
           fi
