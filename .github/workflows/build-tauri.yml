@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-tauri:
-    name: 🚀 Build Tauri Application
+    name: 🏗️ Build Tauri Application
     strategy:
       fail-fast: false
       matrix:
