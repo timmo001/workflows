@@ -102,32 +102,32 @@ jobs:
       - name: 🚀 Create apk file
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
         run: |
-          nfpm package --config nfpm.yml --packager apk
+          nfpm package --config nfpm-${{ inputs.name }}.yml --packager apk
       - name: ⬆️ Upload Artifacts - apk
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: actions/upload-artifact@v4.3.1
         with:
-          name: linux-apk
+          name: linux-apk-${{ inputs.name }}
           path: "*.apk"
       - name: 🚀 Create deb file
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
         run: |
-          nfpm package --config nfpm.yml --packager deb
+          nfpm package --config nfpm-${{ inputs.name }}.yml --packager deb
       - name: ⬆️ Upload Artifacts - deb
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: actions/upload-artifact@v4.3.1
         with:
-          name: linux-deb
+          name: linux-deb-${{ inputs.name }}
           path: "*.deb"
       - name: 🚀 Create rpm file
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
         run: |
-          nfpm package --config nfpm.yml --packager rpm
+          nfpm package --config nfpm-${{ inputs.name }}.yml --packager rpm
       - name: ⬆️ Upload Artifacts - rpm
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
         uses: actions/upload-artifact@v4.3.1
         with:
-          name: linux-rpm
+          name: linux-rpm-${{ inputs.name }}
           path: "*.rpm"
       - name: ⬆️ Upload to Release Assets - apk, deb, rpm
         if: ${{ inputs.create-setup && github.event_name == 'release' }}
