@@ -77,7 +77,6 @@ jobs:
         run: >
           $filename = "${{ inputs.entry-point-file }}"
 
-          # If the entry-point-file is a URL, download it
           if ($filename -match '^https?://')
           {
               $filename = "entry-point-file"
