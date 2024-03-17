@@ -4,6 +4,10 @@ name: Build Windows
 # yamllint disable-line rule:truthy
 on:
   workflow_call:
+    inputs:
+      name:
+        type: string
+        required: true
 
 jobs:
   build-app-windows:
@@ -35,7 +39,7 @@ jobs:
       - name: 🚀 Create setup file
         uses: joncloud/makensis-action@v4.1
         with:
-          script-file: "scripts/installer.nsi"
+          script-file: "installer-${{ inputs.name }}.nsi"
       - name: ⬆️ Upload Artifacts - Setup
         uses: actions/upload-artifact@v4.3.1
         with:
