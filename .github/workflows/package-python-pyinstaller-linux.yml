@@ -81,11 +81,19 @@ jobs:
           ${{ inputs.pre-package-command }}
       - name: 📦 Create executable
         run: >
+          filename=${{ inputs.entry-point-file }}
+
+          # If the entry-point-file is a URL, download it
+          if [[ ${{ inputs.entry-point-file }} == http* ]]; then
+            wget -O ${{ inputs.name }} ${{ inputs.entry-point-file }}
+            filename="${{ inputs.name }}.py"
+          fi
+
           pyinstaller \
             --clean \
             --noconfirm \
             ${{ inputs.additional-pyinstaller-options }} \
-            ${{ inputs.entry-point-file }}
+            $filename
       - name: ⬆️ Upload Artifacts - Executable
         uses: actions/upload-artifact@v4.3.1
         if: ${{ inputs.upload-executable }}
