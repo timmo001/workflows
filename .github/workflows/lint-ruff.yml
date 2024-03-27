@@ -31,5 +31,5 @@ jobs:
           pip install --upgrade uv
           uv venv
           uv pip install --upgrade ruff
-          ruff check
+          python -m ruff check
         working-directory: ${{ inputs.code-path }}
