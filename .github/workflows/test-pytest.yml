@@ -31,10 +31,10 @@ jobs:
       - name: 🏗 Set up Python
         uses: actions/setup-python@v5.1.0
         with:
-          check-latest: true
-          python-version: "3.12"
           architecture: "x64"
           cache: "pip"
+          check-latest: true
+          python-version: "3.12"
       - name: 📦 Install test requirements
         run: |
           python -m pip install -r requirements_test.txt

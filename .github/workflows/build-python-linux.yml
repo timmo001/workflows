@@ -37,9 +37,10 @@ jobs:
       - name: 🏗 Set up Python
         uses: actions/setup-python@v5.1.0
         with:
-          python-version: "3.12"
           architecture: "x64"
           cache: "pip"
+          check-latest: true
+          python-version: "3.12"
       - name: 🏗 Install setuptools, wheel
         run: |
           python -V
