@@ -20,20 +20,16 @@ jobs:
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.2
-      - name: 📦 Install Ruff
-        run: |
-          python -V
-          pip -V
-          pip install --upgrade uv
-          uv venv
-          uv pip install --upgrade ruff
-        working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run pre-run-command
         if: ${{ inputs.pre-run-command }}
         run: ${{ inputs.pre-run-command }}
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run ruff check
         run: |
+          python -V
+          pip -V
+          pip install --upgrade uv
           uv venv
+          uv pip install --upgrade ruff
           ruff check
         working-directory: ${{ inputs.code-path }}

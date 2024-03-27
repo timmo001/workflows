@@ -16,9 +16,6 @@ on:
       pre-run-command:
         required: false
         type: string
-      pre-install-command:
-        required: false
-        type: string
 
 jobs:
   lint-pylint:
@@ -36,22 +33,6 @@ jobs:
           cache: "pip"
           check-latest: true
           python-version: "3.12"
-      - name: 🏗 Install setuptools, wheel, pylint
-        run: |
-          python -V
-          pip -V
-          pip install --upgrade uv
-          uv venv
-          uv pip install --upgrade setuptools wheel pylint
-      - name: 🚀 Run pre-install-command
-        if: ${{ inputs.pre-install-command }}
-        run: |
-          cd ${{ inputs.code-path }}
-          ${{ inputs.pre-install-command }}
-      - name: 📦 Install
-        run: |
-          cd ${{ inputs.code-path }}
-          pip install .
       - name: 🚀 Run pre-run-command
         if: ${{ inputs.pre-run-command }}
         run: |
@@ -60,5 +41,10 @@ jobs:
       - name: 🚀 Run Pylint
         run: |
           cd ${{ inputs.code-path }}
+          python -V
+          pip -V
+          pip install --upgrade uv
           uv venv
+          uv pip install --upgrade setuptools wheel pylint
+          uv pip install .
           pylint ${{ inputs.module-name }}
