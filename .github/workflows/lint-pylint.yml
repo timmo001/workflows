@@ -38,7 +38,10 @@ jobs:
           python-version: "3.12"
       - name: 🏗 Install setuptools, wheel, pylint
         run: |
-          pip install --upgrade setuptools wheel pylint
+          python -V
+          pip -V
+          pip install --upgrade uv
+          uv pip install --upgrade setuptools wheel pylint
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}
         run: |

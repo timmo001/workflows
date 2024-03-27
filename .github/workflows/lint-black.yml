@@ -22,7 +22,10 @@ jobs:
         uses: actions/checkout@v4.1.2
       - name: 📦 Install Black
         run: |
-          pip install --upgrade black
+          python -V
+          pip -V
+          pip install --upgrade uv
+          uv pip install --upgrade black
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run pre-run-command
         if: ${{ inputs.pre-run-command }}

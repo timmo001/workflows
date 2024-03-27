@@ -63,7 +63,10 @@ jobs:
           rm ./nfpm_2.34.0_amd64.deb
       - name: 🏗 Install setuptools, wheel, pyinstaller
         run: |
-          pip install --upgrade setuptools wheel pyinstaller
+          python -V
+          pip -V
+          pip install --upgrade uv
+          uv pip install --upgrade setuptools wheel pyinstaller
       - name: ⬇️ Download additional artifacts - ${{ inputs.additional-artifact-1-name }}
         uses: actions/download-artifact@v4.1.4
         if: ${{ inputs.additional-artifact-1-name }}
