@@ -60,4 +60,5 @@ jobs:
       - name: 🚀 Run Pylint
         run: |
           cd ${{ inputs.code-path }}
+          uv venv
           pylint ${{ inputs.module-name }}

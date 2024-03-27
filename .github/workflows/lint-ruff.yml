@@ -34,5 +34,6 @@ jobs:
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run ruff check
         run: |
+          uv venv
           ruff check
         working-directory: ${{ inputs.code-path }}
