@@ -25,6 +25,7 @@ jobs:
           python -V
           pip -V
           pip install --upgrade uv
+          uv venv
           uv pip install --upgrade black
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run pre-run-command

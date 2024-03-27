@@ -46,6 +46,7 @@ jobs:
           python -V
           pip -V
           pip install --upgrade uv
+          uv venv
           uv pip install --upgrade setuptools wheel
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}
@@ -55,4 +56,5 @@ jobs:
       - name: 🏗 Install package
         run: |
           cd ${{ inputs.code-path }}
+          uv venv
           uv pip install .

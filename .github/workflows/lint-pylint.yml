@@ -41,6 +41,7 @@ jobs:
           python -V
           pip -V
           pip install --upgrade uv
+          uv venv
           uv pip install --upgrade setuptools wheel pylint
       - name: 🚀 Run pre-install-command
         if: ${{ inputs.pre-install-command }}

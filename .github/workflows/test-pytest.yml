@@ -40,6 +40,7 @@ jobs:
           python -V
           pip -V
           pip install --upgrade uv
+          uv venv
           uv pip install -r requirements_test.txt
           # Ideally this should be part of our dependencies
           # However this plugin is fairly new and doesn't run correctly
@@ -52,6 +53,7 @@ jobs:
         working-directory: ${{ inputs.code-path }}
       - name: 📦 Install package
         run: |
+          uv venv
           uv pip install .
         working-directory: ${{ inputs.code-path }}
       - name: 🧪 Run pytest
