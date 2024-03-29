@@ -43,8 +43,8 @@ jobs:
           cd ${{ inputs.code-path }}
           python -V
           pip -V
-          pip install --upgrade uv
+          pip install --upgrade uv pylint
           uv venv
-          uv pip install --upgrade setuptools wheel pylint
+          uv pip install --upgrade setuptools wheel
           uv pip install .
-          python -m pylint ${{ inputs.module-name }}
+          pylint ${{ inputs.module-name }}

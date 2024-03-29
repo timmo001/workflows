@@ -28,8 +28,6 @@ jobs:
         run: |
           python -V
           pip -V
-          pip install --upgrade uv
-          uv venv
-          uv pip install --upgrade ruff
-          python -m ruff check
+          pip install --upgrade ruff
+          ruff check
         working-directory: ${{ inputs.code-path }}
