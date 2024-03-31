@@ -39,13 +39,11 @@ jobs:
         run: |
           python -V
           pip -V
-          pip install --upgrade uv
-          uv venv
-          uv pip install -r requirements_test.txt
+          pip install -r requirements_test.txt
           # Ideally this should be part of our dependencies
           # However this plugin is fairly new and doesn't run correctly
           # on a non-GitHub environment.
-          uv pip install --upgrade pytest-github-actions-annotate-failures
+          pip install --upgrade pytest-github-actions-annotate-failures
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run pre-run-command
         if: ${{ inputs.pre-run-command }}
@@ -53,8 +51,7 @@ jobs:
         working-directory: ${{ inputs.code-path }}
       - name: 📦 Install package
         run: |
-          uv venv
-          uv pip install .
+          pip install .
         working-directory: ${{ inputs.code-path }}
       - name: 🧪 Run pytest
         timeout-minutes: 60
