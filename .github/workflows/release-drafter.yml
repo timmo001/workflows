@@ -5,10 +5,16 @@ name: Release Drafter
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   release-drafter:
     name: ✏️ Draft release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: 🏗 Show event name
         run: |
@@ -17,7 +23,7 @@ jobs:
           echo ${{ github.event_path }}
           echo ${{ github.base_ref }}
           echo ${{ github.actor }}
-      - name: 🚀 Run Release Drafter
+      - name: 🖊️ Create draft release for ${{ steps.get-version.outputs.version }}
         id: release_drafter
         uses: release-drafter/release-drafter@v6.0.0
         env:
