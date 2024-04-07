@@ -37,5 +37,11 @@ jobs:
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run ESLint
         run: |
-          yarn eslint
+          if grep -q "next lint" "package.json"; then
+              echo "next lint is present in package.json"
+              yarn lint
+          else
+              echo "next lint is not found in package.json"
+              yarn eslint
+          fi
         working-directory: ${{ inputs.code-path }}
