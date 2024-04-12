@@ -53,14 +53,14 @@ jobs:
           if grep -q "next lint" "package.json"; then
               echo "next lint is present in package.json"
               if [ ${{ inputs.use-bun }} ]; then
-                  bun lint
+                  bun run lint
               else
                   yarn lint
               fi
           else
               echo "next lint is not found in package.json"
               if [ ${{ inputs.use-bun }} ]; then
-                  bun eslint
+                  bun run eslint
               else
                   yarn eslint
               fi

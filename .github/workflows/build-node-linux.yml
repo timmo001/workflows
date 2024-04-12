@@ -79,7 +79,7 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           if [ ${{ inputs.use-bun }} ]; then
-              bun build
+              bun run build
           else
               yarn build
           fi
