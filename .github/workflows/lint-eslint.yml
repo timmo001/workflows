@@ -9,19 +9,30 @@ on:
         required: false
         type: string
         default: "."
+      use-bun:
+        required: false
+        type: boolean
+        default: false
+
 jobs:
   lint-eslint:
     name: 👕 ESLint
     runs-on: ubuntu-latest
     steps:
+      - name: 🥖 Install Bun
+        if: ${{ inputs.use-bun }}
+        uses: oven-sh/setup-bun@v1.2.1
+        with:
+          bun-version: latest
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.2
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
-        uses: actions/setup-node@v4
+        if: ${{ !inputs.use-bun }}
+        uses: actions/setup-node@v4.0.2
         with:
-          cache-dependency-path: "${{ inputs.code-path }}/**/yarn.lock"
+          cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
           cache: yarn
           check-latest: true
           node-version: 20.x
@@ -31,17 +42,27 @@ jobs:
           sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev
       - name: ⤵️ Install dependencies
         run: |
-          yarn install
-        env:
-          CI: true
+          if [ ${{ inputs.use-bun }} ]; then
+              bun install
+          else
+              yarn install
+          fi
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run ESLint
         run: |
           if grep -q "next lint" "package.json"; then
               echo "next lint is present in package.json"
-              yarn lint
+              if [ ${{ inputs.use-bun }} ]; then
+                  bun lint
+              else
+                  yarn lint
+              fi
           else
               echo "next lint is not found in package.json"
-              yarn eslint
+              if [ ${{ inputs.use-bun }} ]; then
+                  bun eslint
+              else
+                  yarn eslint
+              fi
           fi
         working-directory: ${{ inputs.code-path }}

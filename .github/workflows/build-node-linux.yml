@@ -20,6 +20,14 @@ on:
         required: false
         type: string
         default: "."
+      use-cache-next:
+        required: false
+        type: boolean
+        default: false
+      use-bun:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-node-linux:
@@ -32,19 +40,26 @@ jobs:
           sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev libopengl0
           wget https://github.com/goreleaser/nfpm/releases/download/v2.8.0/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
+      - name: 🥖 Install Bun
+        if: ${{ inputs.use-bun }}
+        uses: oven-sh/setup-bun@v1.2.1
+        with:
+          bun-version: latest
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.2
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
-        uses: actions/setup-node@v4
+        if: ${{ !inputs.use-bun }}
+        uses: actions/setup-node@v4.0.2
         with:
           cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
           cache: yarn
           check-latest: true
           node-version: 20.x
-      - name: 🏗 Cache
-        uses: actions/cache@v4
+      - name: 🏗 Cache Next.js (yarn)
+        if: ${{ inputs.use-cache-next && !inputs.use-bun }}
+        uses: actions/cache@v4.0.2
         with:
           path: |
             ~/.yarn
@@ -54,12 +69,20 @@ jobs:
             ${{ runner.os }}-${{ hashFiles('${{ inputs.code-path }}/**/yarn.lock') }}-
       - name: 🏗 Install dependencies
         run: |
-          cd ${{ inputs.code-path }}
-          yarn install
+          if [ ${{ inputs.use-bun }} ]; then
+              bun install
+          else
+              yarn install
+          fi
+        working-directory: ${{ inputs.code-path }}
       - name: 🏗️ Build
         run: |
           cd ${{ inputs.code-path }}
-          yarn build
+          if [ ${{ inputs.use-bun }} ]; then
+              bun build
+          else
+              yarn build
+          fi
           ${{ inputs.additional-build-commands }}
       - name: ⬆️ Upload Artifacts
         uses: actions/upload-artifact@v4.3.1
