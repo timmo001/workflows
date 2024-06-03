@@ -42,7 +42,7 @@ jobs:
           sudo apt install ./nfpm_amd64.deb
       - name: 🥖 Install Bun
         if: ${{ inputs.use-bun }}
-        uses: oven-sh/setup-bun@v1.2.1
+        uses: oven-sh/setup-bun@v1.2.2
         with:
           bun-version: latest
       - name: ⤵️ Check out code from GitHub
