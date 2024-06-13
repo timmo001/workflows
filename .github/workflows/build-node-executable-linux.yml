@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4.1.6
+        uses: actions/checkout@v4.1.7
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
@@ -87,7 +87,7 @@ jobs:
           - amd64
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4.1.6
+        uses: actions/checkout@v4.1.7
         with:
           ref: ${{ github.head_ref }}
       - name: ⤵️ Download Artifact - deb
