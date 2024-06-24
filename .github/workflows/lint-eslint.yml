@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: 🥖 Install Bun
         if: ${{ inputs.use-bun }}
-        uses: oven-sh/setup-bun@v1.2.2
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
       - name: ⤵️ Check out code from GitHub
