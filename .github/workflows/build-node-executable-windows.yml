@@ -32,7 +32,7 @@ jobs:
         run: |
           Compress-Archive -DestinationPath out.zip -Path out
       - name: ⬆️ Upload Artifacts - Output
-        uses: actions/upload-artifact@v4.3.4
+        uses: actions/upload-artifact@v4.3.5
         with:
           name: windows-out
           path: out.zip
@@ -41,7 +41,7 @@ jobs:
         with:
           script-file: "installer-${{ inputs.name }}.nsi"
       - name: ⬆️ Upload Artifacts - Setup
-        uses: actions/upload-artifact@v4.3.4
+        uses: actions/upload-artifact@v4.3.5
         with:
           name: windows-setup
           path: "*setup.exe"
