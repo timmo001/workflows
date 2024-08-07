@@ -52,7 +52,7 @@ jobs:
           cd ${{ inputs.code-path }}
           ./gradlew build
       - name: ↗ Upload APK - Debug
-        uses: actions/upload-artifact@v4.3.5
+        uses: actions/upload-artifact@v4.3.6
         with:
           name: app-debug-apk
           path: ${{ inputs.code-path }}/app/build/outputs/apk/debug/app-debug.apk
@@ -61,7 +61,7 @@ jobs:
           cd ${{ inputs.code-path }}
           ./gradlew bundle
       - name: ↗ Upload AAB - Debug
-        uses: actions/upload-artifact@v4.3.5
+        uses: actions/upload-artifact@v4.3.6
         with:
           name: app-debug-aab
           path: ${{ inputs.code-path }}/app/build/outputs/bundle/debug/app-debug.aab
@@ -76,7 +76,7 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "33.0.0"
       - name: ↗ Upload AAB - Release
-        uses: actions/upload-artifact@v4.3.5
+        uses: actions/upload-artifact@v4.3.6
         with:
           name: app-release-aab
           path: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
