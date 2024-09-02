@@ -43,7 +43,7 @@ jobs:
       - name: Build the app
         uses: tauri-apps/tauri-action@v0.5.12
       - name: Publish artifacts
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v4.4.0
         with:
           name: tauri-app-${{ matrix.platform }}
           path: |

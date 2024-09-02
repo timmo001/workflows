@@ -99,7 +99,7 @@ jobs:
             ${{ inputs.additional-pyinstaller-options }} \
             $filename
       - name: ⬆️ Upload Artifacts - Executable
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v4.4.0
         if: ${{ inputs.upload-executable }}
         with:
           name: linux-executable-${{ inputs.name }}
@@ -110,7 +110,7 @@ jobs:
           nfpm package --config nfpm-${{ inputs.name }}.yml --packager apk
       - name: ⬆️ Upload Artifacts - apk
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v4.4.0
         with:
           name: linux-apk-${{ inputs.name }}
           path: "*.apk"
@@ -120,7 +120,7 @@ jobs:
           nfpm package --config nfpm-${{ inputs.name }}.yml --packager deb
       - name: ⬆️ Upload Artifacts - deb
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v4.4.0
         with:
           name: linux-deb-${{ inputs.name }}
           path: "*.deb"
@@ -130,7 +130,7 @@ jobs:
           nfpm package --config nfpm-${{ inputs.name }}.yml --packager rpm
       - name: ⬆️ Upload Artifacts - rpm
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v4.4.0
         with:
           name: linux-rpm-${{ inputs.name }}
           path: "*.rpm"
