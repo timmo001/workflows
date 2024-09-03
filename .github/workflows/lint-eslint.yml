@@ -47,6 +47,8 @@ jobs:
           else
               yarn install
           fi
+        env:
+          SKIP_ENV_VALIDATION: true
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run ESLint
         run: |
@@ -65,4 +67,6 @@ jobs:
                   yarn eslint
               fi
           fi
+        env:
+          SKIP_ENV_VALIDATION: true
         working-directory: ${{ inputs.code-path }}
