@@ -16,6 +16,14 @@ on:
         required: false
         type: string
         default: "{js,json,ts,tsx,yml,yaml}"
+      code-path:
+        required: false
+        type: string
+        default: "."
+      use-bun:
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       file-types:
@@ -28,15 +36,38 @@ jobs:
     name: 👕 Prettier
     runs-on: ubuntu-latest
     steps:
+      - name: 🥖 Install Bun
+        if: ${{ inputs.use-bun }}
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: 🏗 Set up Node.js
+        if: ${{ !inputs.use-bun }}
+        uses: actions/setup-node@v4.0.2
+        with:
+          cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
+          cache: yarn
+          check-latest: true
+          node-version: 20.x
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.7
         with:
           ref: ${{ github.head_ref }}
       - name: ⤵️ Install dependencies
         run: |
-          yarn install
+          if [ ${{ inputs.use-bun }} ]; then
+              bun install
+          else
+              yarn install
+          fi
+        working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run Prettier
         run: |
-          npx prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}
+          if [ ${{ inputs.use-bun }} ]; then
+              bun run prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}
+          else
+              npx prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: ${{ inputs.code-path }}
