@@ -13,6 +13,10 @@ on:
         required: false
         type: boolean
         default: false
+      use-pnpm:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   lint-eslint:
@@ -42,7 +46,9 @@ jobs:
           sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev
       - name: ⤵️ Install dependencies
         run: |
-          if [ ${{ inputs.use-bun }} ]; then
+          if [ ${{ inputs.use-pnpm }} ]; then
+              pnpm install
+          elif [ ${{ inputs.use-bun }} ]; then
               bun install
           else
               yarn install
@@ -54,14 +60,18 @@ jobs:
         run: |
           if grep -q "next lint" "package.json"; then
               echo "next lint is present in package.json"
-              if [ ${{ inputs.use-bun }} ]; then
+              if [ ${{ inputs.use-pnpm }} ]; then
+                  pnpm run lint
+              elif [ ${{ inputs.use-bun }} ]; then
                   bun run lint
               else
                   yarn lint
               fi
           else
               echo "next lint is not found in package.json"
-              if [ ${{ inputs.use-bun }} ]; then
+              if [ ${{ inputs.use-pnpm }} ]; then
+                  pnpm run eslint
+              elif [ ${{ inputs.use-bun }} ]; then
                   bun run eslint
               else
                   yarn eslint
