@@ -33,13 +33,13 @@ jobs:
         uses: actions/checkout@v4.1.7
         with:
           ref: ${{ github.head_ref }}
-      - name: 🏗 Set up JDK
+      - name: 🏗️ Set up JDK
         uses: actions/setup-java@v4
         with:
           cache: gradle
           distribution: "temurin"
           java-version: "11"
-      - name: 🏗 Grant execute permission for gradlew
+      - name: 🏗️ Grant execute permission for gradlew
         run: |
           cd ${{ inputs.code-path }}
           chmod +x gradlew

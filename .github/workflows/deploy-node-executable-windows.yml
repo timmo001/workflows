@@ -17,7 +17,7 @@ jobs:
           path: windows-out
           workflow: build-windows.yml
           workflow_conclusion: success
-      - name: 🏗 Compress directories
+      - name: 🏗️ Compress directories
         run: |
           tar -czvf windows-out.tar.gz windows-out/*
       - name: ⬆️ Upload Artifacts to Release Assets

@@ -34,14 +34,14 @@ jobs:
         with:
           name: ${{ inputs.additional-artifacts-name }}
           path: ${{ inputs.additional-artifacts-path }}
-      - name: 🏗 Set up Python
+      - name: 🏗️ Set up Python
         uses: actions/setup-python@v5.1.1
         with:
           architecture: "x64"
           cache: "pip"
           check-latest: true
           python-version: "3.12"
-      - name: 🏗 Install setuptools, wheel
+      - name: 🏗️ Install setuptools, wheel
         run: |
           python -V
           pip -V
@@ -53,7 +53,7 @@ jobs:
         run: |
           cd ${{ inputs.code-path }}
           ${{ inputs.pre-install-command }}
-      - name: 🏗 Install package
+      - name: 🏗️ Install package
         run: |
           cd ${{ inputs.code-path }}
           uv venv

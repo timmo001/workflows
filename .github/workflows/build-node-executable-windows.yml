@@ -18,11 +18,11 @@ jobs:
         uses: actions/checkout@v4.1.7
         with:
           ref: ${{ github.head_ref }}
-      - name: 🏗 Install packages
+      - name: 🏗️ Install packages
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           yarn install:all:ci
-      - name: 🏗 Add console hide command
+      - name: 🏗️ Add console hide command
         run: |
           Add-Content -Path .\src\index.ts -Value $(Get-Content -Path .\scripts\windowsConsoleHide.js)
       - name: 📦 Package

@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4.1.7
         with:
           ref: ${{ github.head_ref }}
-      - name: 🏗 Set up Node.js
+      - name: 🏗️ Set up Node.js
         if: ${{ !inputs.use-bun }}
         uses: actions/setup-node@v4.0.2
         with:
@@ -45,7 +45,7 @@ jobs:
           cache: yarn
           check-latest: true
           node-version: 20.x
-      - name: 🏗 Install linux dependencies
+      - name: 🏗️ Install linux dependencies
         run: |
           sudo apt update
           sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev

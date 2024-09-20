@@ -13,7 +13,7 @@ jobs:
     name: ✏️ Draft release
     runs-on: ubuntu-latest
     steps:
-      - name: 🏗 Show event name
+      - name: 🏗️ Show event name
         run: |
           echo ${{ github.event }}
           echo ${{ github.event_name }}

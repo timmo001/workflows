@@ -29,14 +29,14 @@ jobs:
         uses: actions/checkout@v4.1.7
         with:
           ref: ${{ github.head_ref }}
-      - name: 🏗 Set up Python
+      - name: 🏗️ Set up Python
         uses: actions/setup-python@v5.1.1
         with:
           architecture: "x64"
           cache: "pip"
           check-latest: true
           python-version: "3.12"
-      - name: 🏗 Install setuptools, wheel, pylint
+      - name: 🏗️ Install setuptools, wheel, pylint
         run: |
           pip install --upgrade setuptools wheel pylint
       - name: 🚀 Run pre-install-command
