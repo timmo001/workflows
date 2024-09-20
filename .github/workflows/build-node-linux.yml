@@ -28,6 +28,10 @@ on:
         required: false
         type: boolean
         default: false
+      use-pnpm:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-node-linux:
@@ -45,20 +49,33 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - name: 🍎 Install pnpm
+        if: ${{ inputs.use-pnpm }}
+        uses: pnpm/action-setup@v4
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.7
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗 Set up Node.js
-        if: ${{ !inputs.use-bun }}
+        if: ${{ !inputs.use-bun && !inputs.use-pnpm }}
         uses: actions/setup-node@v4.0.2
         with:
           cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
           cache: yarn
           check-latest: true
           node-version: 20.x
+      - name: 🏗 Cache Next.js (pnpm)
+        if: ${{ inputs.use-cache-next && inputs.use-pnpm }}
+        uses: actions/cache@v4.0.2
+        with:
+          path: |
+            ~/.pnpm-store
+            ${{ inputs.code-path }}/.next/cache
+          key: ${{ runner.os }}-${{ hashFiles('${{ inputs.code-path }}/**/pnpm-lock.yaml') }}-${{ hashFiles('${{ inputs.code-path }}/**.[jt]s', '${{ inputs.code-path }}/**.[jt]sx') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ hashFiles('${{ inputs.code-path }}/**/pnpm-lock.yaml') }}-
       - name: 🏗 Cache Next.js (yarn)
-        if: ${{ inputs.use-cache-next && !inputs.use-bun }}
+        if: ${{ inputs.use-cache-next && !inputs.use-bun && !inputs.use-pnpm }}
         uses: actions/cache@v4.0.2
         with:
           path: |
@@ -69,7 +86,9 @@ jobs:
             ${{ runner.os }}-${{ hashFiles('${{ inputs.code-path }}/**/yarn.lock') }}-
       - name: 🏗 Install dependencies
         run: |
-          if [ ${{ inputs.use-bun }} ]; then
+          if [ ${{ inputs.use-pnpm }} ]; then
+              pnpm install
+          elif [ ${{ inputs.use-bun }} ]; then
               bun install
           else
               yarn install
@@ -78,7 +97,9 @@ jobs:
       - name: 🏗️ Build
         run: |
           cd ${{ inputs.code-path }}
-          if [ ${{ inputs.use-bun }} ]; then
+          if [ ${{ inputs.use-pnpm }} ]; then
+              pnpm build
+          elif [ ${{ inputs.use-bun }} ]; then
               bun run build
           else
               yarn build

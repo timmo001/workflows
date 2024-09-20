@@ -24,6 +24,10 @@ on:
         required: false
         type: boolean
         default: false
+      use-pnpm:
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       file-types:
@@ -41,7 +45,10 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: 🏗 Set up Node.js
+      - name: 🍎 Install pnpm
+        if: ${{ inputs.use-pnpm }}
+        uses: pnpm/action-setup@v4
+      - name: 🏗️ Set up Node.js
         if: ${{ !inputs.use-bun }}
         uses: actions/setup-node@v4.0.2
         with:
@@ -55,7 +62,9 @@ jobs:
           ref: ${{ github.head_ref }}
       - name: ⤵️ Install dependencies
         run: |
-          if [ ${{ inputs.use-bun }} ]; then
+          if [ ${{ inputs.use-pnpm }} ]; then
+              pnpm install
+          elif [ ${{ inputs.use-bun }} ]; then
               bun install
           else
               yarn install
@@ -63,7 +72,9 @@ jobs:
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run Prettier
         run: |
-          if [ ${{ inputs.use-bun }} ]; then
+          if [ ${{ inputs.use-pnpm }} ]; then
+              pnpx prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}
+          elif [ ${{ inputs.use-bun }} ]; then
               bun run prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}
           else
               npx prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}

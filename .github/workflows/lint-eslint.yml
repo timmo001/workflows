@@ -28,6 +28,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - name: 🍎 Install pnpm
+        if: ${{ inputs.use-pnpm }}
+        uses: pnpm/action-setup@v4
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@v4.1.7
         with:
