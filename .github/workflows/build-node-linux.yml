@@ -45,7 +45,7 @@ jobs:
           wget https://github.com/goreleaser/nfpm/releases/download/v2.8.0/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v4.2.1
+        uses: actions/checkout@v4.2.2
         with:
           ref: ${{ github.head_ref }}
       - name: 🥖 Install Bun
