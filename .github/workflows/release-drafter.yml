@@ -25,6 +25,6 @@ jobs:
           echo ${{ github.actor }}
       - name: 🖊️ Create draft release for ${{ steps.get-version.outputs.version }}
         id: release_drafter
-        uses: release-drafter/release-drafter@v6.0.0
+        uses: release-drafter/release-drafter@v6.1.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
