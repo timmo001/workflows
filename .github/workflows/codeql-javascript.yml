@@ -22,10 +22,10 @@ jobs:
       - run: git checkout HEAD^2
         if: ${{ github.event_name == 'pull_request' }}
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3.28.11
+        uses: github/codeql-action/init@v3.28.12
         with:
           languages: javascript
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3.28.11
+        uses: github/codeql-action/analyze@v3.28.12
         with:
           category: "/language:javascript"
