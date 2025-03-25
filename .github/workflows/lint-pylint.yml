@@ -30,7 +30,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗️ Set up Python
-        uses: actions/setup-python@v5.4.0
+        uses: actions/setup-python@v5.5.0
         with:
           architecture: "x64"
           cache: "pip"
