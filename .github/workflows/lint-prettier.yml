@@ -59,7 +59,7 @@ jobs:
           cache-dependency-path: ${{ inputs.code-path }}/**/pnpm-lock.yaml
           cache: pnpm
           check-latest: true
-          node-version: 20.x
+          node-version: 22.x
       - name: 🏗️️ Set up Node.js (yarn)
         if: ${{ !inputs.use-bun && !inputs.use-pnpm }}
         uses: actions/setup-node@v4.0.2
@@ -67,7 +67,7 @@ jobs:
           cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
           cache: yarn
           check-latest: true
-          node-version: 20.x
+          node-version: 22.x
       - name: ⤵️ Install dependencies
         run: |
           if [ ${{ inputs.use-pnpm }} ]; then

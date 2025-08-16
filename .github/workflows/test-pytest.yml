@@ -34,7 +34,7 @@ jobs:
           architecture: "x64"
           cache: "pip"
           check-latest: true
-          python-version: "3.12"
+          python-version: "3.13"
       - name: 📦 Install test requirements
         run: |
           python -V
