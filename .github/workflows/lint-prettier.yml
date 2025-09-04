@@ -54,7 +54,7 @@ jobs:
         uses: pnpm/action-setup@v4
       - name: 🏗️ Set up Node.js (pnpm)
         if: ${{ inputs.use-pnpm }}
-        uses: actions/setup-node@v4.0.2
+        uses: actions/setup-node@v5
         with:
           cache-dependency-path: ${{ inputs.code-path }}/**/pnpm-lock.yaml
           cache: pnpm
@@ -62,7 +62,7 @@ jobs:
           node-version: 22.x
       - name: 🏗️️ Set up Node.js (yarn)
         if: ${{ !inputs.use-bun && !inputs.use-pnpm }}
-        uses: actions/setup-node@v4.0.2
+        uses: actions/setup-node@v5
         with:
           cache-dependency-path: ${{ inputs.code-path }}/**/yarn.lock
           cache: yarn
