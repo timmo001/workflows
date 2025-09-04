@@ -35,7 +35,7 @@ jobs:
           name: ${{ inputs.additional-artifacts-name }}
           path: ${{ inputs.additional-artifacts-path }}
       - name: 🏗️ Set up Python
-        uses: actions/setup-python@v5.6.0
+        uses: actions/setup-python@v6.0.0
         with:
           architecture: "x64"
           cache: "pip"
