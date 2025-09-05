@@ -35,7 +35,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
       - name: Sync node version and setup cache
-        uses: actions/setup-node@v4.0.2
+        uses: actions/setup-node@v5
         with:
           node-version: "lts/*"
           cache: "yarn"
