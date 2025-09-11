@@ -17,7 +17,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗️ Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           cache-dependency-path: ./**/yarn.lock
           cache: yarn
