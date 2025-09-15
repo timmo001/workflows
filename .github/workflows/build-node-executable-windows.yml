@@ -37,7 +37,7 @@ jobs:
           name: windows-out
           path: out.zip
       - name: 🚀 Create setup file
-        uses: joncloud/makensis-action@v4.1
+        uses: joncloud/makensis-action@v5.0
         with:
           script-file: "installer-${{ inputs.name }}.nsi"
       - name: ⬆️ Upload Artifacts - Setup
