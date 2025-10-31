@@ -91,7 +91,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: ⤵️ Download Artifact - deb
-        uses: actions/download-artifact@v5.0.0
+        uses: actions/download-artifact@v6.0.0
         with:
           name: linux-deb
       - name: 🏗️ Set up build cache
