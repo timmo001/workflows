@@ -15,7 +15,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.1
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗️ Install packages
