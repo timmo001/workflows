@@ -96,7 +96,7 @@ jobs:
           name: linux-deb
       - name: 🏗️ Set up build cache
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /tmp/.docker-cache
           key: docker-${{ github.ref }}-${{ matrix.architecture }}-${{ github.sha }}
