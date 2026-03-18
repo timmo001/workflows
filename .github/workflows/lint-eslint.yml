@@ -34,7 +34,7 @@ jobs:
           bun-version: latest
       - name: 🍎 Install pnpm
         if: ${{ inputs.use-pnpm }}
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
       - name: 🏗️ Set up Node.js (pnpm)
         if: ${{ inputs.use-pnpm }}
         uses: actions/setup-node@v6
