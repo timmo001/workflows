@@ -33,7 +33,7 @@ jobs:
         with:
           msbuild-architecture: x64
       - name: 🏗️ Set up NuGet
-        uses: nuget/setup-nuget@v2
+        uses: nuget/setup-nuget@v3
         with:
           nuget-version: ${{ matrix.nuget }}
       - name: 🏗️ Build
