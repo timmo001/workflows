@@ -26,7 +26,7 @@ jobs:
       - name: 🚀 Print output of stale repos tool
         run: echo "${{ steps.stale-repos.outputs.inactiveRepos }}"
       - name: 🚀 Create issues for stale repos
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const repos = ${{ steps.stale-repos.outputs.inactiveRepos }}
