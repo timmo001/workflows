@@ -112,7 +112,7 @@ jobs:
           path: "*setup.exe"
       - name: ⬆️ Upload to Release Assets - Setup
         if: ${{ inputs.create-setup && github.event_name == 'release' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             *setup.exe
