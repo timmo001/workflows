@@ -22,7 +22,7 @@ jobs:
           echo ${{ github.actor }}
       - name: 🚀 Run Release Drafter
         id: release-drafter
-        uses: release-drafter/release-drafter@v7.2.0
+        uses: release-drafter/release-drafter@v7.2.1
         env:
           GITHUB_TOKEN: ${{ secrets.PUSH_TOKEN }}
       - name: ⤵️ Check out code from GitHub
