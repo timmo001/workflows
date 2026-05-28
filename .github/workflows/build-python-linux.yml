@@ -62,5 +62,4 @@ jobs:
       - name: 🏗️ Install package
         run: |
           cd ${{ inputs.code-path }}
-          uv venv
           uv pip install .
