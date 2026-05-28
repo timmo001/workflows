@@ -19,11 +19,11 @@ jobs:
           echo ${{ github.actor }}
       - name: 🚀 Run Release Drafter
         id: release_drafter
-        uses: release-drafter/release-drafter@v7.3.1
+        uses: release-drafter/release-drafter@693d20e7c1ce1a81d3a41962f85914253b518449 # v7.3.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.head_ref }}
       - name: ✏ Set Version File
@@ -45,7 +45,7 @@ jobs:
             --no-git-tag-version
           cat package.json
       - name: 🖊 Commit
-        uses: stefanzweifel/git-auto-commit-action@v7.0.0
+        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
         if: ${{ github.event_name == 'pull_request_target' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

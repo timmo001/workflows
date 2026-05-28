@@ -30,11 +30,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.head_ref }}
       - name: 🏗️ Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           cache: gradle
           distribution: "temurin"
@@ -52,7 +52,7 @@ jobs:
           cd ${{ inputs.code-path }}
           ./gradlew build
       - name: ↗ Upload APK - Debug
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-debug-apk
           path: ${{ inputs.code-path }}/app/build/outputs/apk/debug/app-debug.apk
@@ -61,12 +61,12 @@ jobs:
           cd ${{ inputs.code-path }}
           ./gradlew bundle
       - name: ↗ Upload AAB - Debug
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-debug-aab
           path: ${{ inputs.code-path }}/app/build/outputs/bundle/debug/app-debug.aab
       - name: 🖋 Sign AAB
-        uses: r0adkll/sign-android-release@v1
+        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407 # v1
         with:
           alias: ${{ secrets.ALIAS }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
@@ -76,25 +76,25 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "33.0.0"
       - name: ↗ Upload AAB - Release
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-release-aab
           path: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
       - name: ↗ Upload APK - Release Asset
         if: ${{ github.event_name == 'release' }}
-        uses: fnkr/github-action-ghr@v1.3
+        uses: fnkr/github-action-ghr@96b1448dc6162f370067e1de51e856e733a76b4f # v1.3
         env:
           GHR_PATH: ${{ inputs.code-path }}/app/build/outputs/apk/debug/app-debug.apk
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: ↗ Upload AAB - Release Asset
         if: ${{ github.event_name == 'release' }}
-        uses: fnkr/github-action-ghr@v1.3
+        uses: fnkr/github-action-ghr@96b1448dc6162f370067e1de51e856e733a76b4f # v1.3
         env:
           GHR_PATH: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: 📢 Deploy to Play Store - Internal Sharing
         if: ${{ github.ref == 'refs/heads/master' }}
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@eb49699984a39f23558439581660aa6f088acfd6 # v1
         with:
           packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
@@ -102,7 +102,7 @@ jobs:
           track: internalsharing
       - name: 📢 Deploy to Play Store - Beta
         if: ${{ github.event_name == 'release' && github.event.release.prerelease == true }}
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@eb49699984a39f23558439581660aa6f088acfd6 # v1
         with:
           packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
@@ -110,7 +110,7 @@ jobs:
           track: beta
       - name: 📢 Deploy to Play Store - Production
         if: ${{ github.event_name == 'release' && github.event.release.prerelease == false }}
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@eb49699984a39f23558439581660aa6f088acfd6 # v1
         with:
           packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab

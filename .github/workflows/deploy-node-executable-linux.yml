@@ -22,7 +22,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: ℹ️ Gather version and environment
         id: release
         run: |
@@ -50,25 +50,25 @@ jobs:
           - amd64
     steps:
       - name: ⤵️ Check out code from GitHub
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: ⤵️ Download Artifact - deb
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
         with:
           name: linux-deb
           workflow: build-linux.yml
           workflow_conclusion: success
       - name: 🏗️ Set up build cache
         id: cache
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: /tmp/.docker-cache
           key: docker-${{ github.ref }}-${{ matrix.architecture }}-${{ github.sha }}
           restore-keys: |
             docker-${{ github.ref }}-${{ matrix.architecture }}
       - name: 🏗️ Set up QEMU
-        uses: docker/setup-qemu-action@v4.1.0
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
       - name: 🏗️ Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.1.0
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
       - name: ℹ️ Compose build flags
         id: flags
         run: |
@@ -82,13 +82,13 @@ jobs:
             exit 1
           fi
       - name: 🏗️ Login to GitHub Container Registry
-        uses: docker/login-action@v4.2.0
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: 🚀 Build and push
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           push: true
           # yamllint disable rule:line-length
@@ -116,7 +116,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: ⤵️ Download Artifact - linux-out
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
         with:
           name: linux-out
           path: linux-out
@@ -126,7 +126,7 @@ jobs:
         run: |
           tar -czvf linux-out.tar.gz linux-out/*
       - name: ⬆️ Upload Artifacts to Release Assets
-        uses: fnkr/github-action-ghr@v1.3
+        uses: fnkr/github-action-ghr@96b1448dc6162f370067e1de51e856e733a76b4f # v1.3
         env:
           GHR_PATH: linux-out.tar.gz
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -144,14 +144,14 @@ jobs:
           - linux-rpm
     steps:
       - name: ⤵️ Download Artifact - ${{ matrix.artifact }}
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
           workflow: build-linux.yml
           workflow_conclusion: success
       - name: ⬆️ Upload to Release Assets
-        uses: fnkr/github-action-ghr@v1.3
+        uses: fnkr/github-action-ghr@96b1448dc6162f370067e1de51e856e733a76b4f # v1.3
         env:
           GHR_PATH: ${{ matrix.artifact }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
