@@ -100,7 +100,7 @@ jobs:
           path: dist
       - name: 🚀 Create setup file
         if: ${{ inputs.create-setup || github.event_name == 'release' }}
-        uses: joncloud/makensis-action@2e66f8383dcbd5a92f72a7f0812b5ca2a5db90bf # v5.0
+        uses: joncloud/makensis-action@971ef20f43e4f9f3af2c7f276cb7348d033da1cd # v5.0
         with:
           script-file: installer-${{ inputs.name }}.nsi
           # arguments: "/DPRODUCT_VERSION=${{ needs.get_version.outputs.version }}"

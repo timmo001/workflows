@@ -94,7 +94,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: 📢 Deploy to Play Store - Internal Sharing
         if: ${{ github.ref == 'refs/heads/master' }}
-        uses: r0adkll/upload-google-play@eb49699984a39f23558439581660aa6f088acfd6 # v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
@@ -102,7 +102,7 @@ jobs:
           track: internalsharing
       - name: 📢 Deploy to Play Store - Beta
         if: ${{ github.event_name == 'release' && github.event.release.prerelease == true }}
-        uses: r0adkll/upload-google-play@eb49699984a39f23558439581660aa6f088acfd6 # v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
@@ -110,7 +110,7 @@ jobs:
           track: beta
       - name: 📢 Deploy to Play Store - Production
         if: ${{ github.event_name == 'release' && github.event.release.prerelease == false }}
-        uses: r0adkll/upload-google-play@eb49699984a39f23558439581660aa6f088acfd6 # v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           packageName: ${{ inputs.package-name }}
           releaseFiles: ${{ inputs.code-path }}/app/build/outputs/bundle/release/app-release.aab
