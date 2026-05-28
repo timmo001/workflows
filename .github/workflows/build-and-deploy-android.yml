@@ -5,6 +5,12 @@ name: Build and Deploy Android Application
 on:
   workflow_call:
     inputs:
+      java-version:
+        description: "Java (Temurin) version"
+        required: false
+        type: string
+        # renovate: datasource=java-version depName=java
+        default: "21.0.11+10"
       code-path:
         required: false
         type: string
@@ -38,7 +44,7 @@ jobs:
         with:
           cache: gradle
           distribution: "temurin"
-          java-version: "21"
+          java-version: ${{ inputs.java-version }}
       - name: 🏗️ Grant execute permission for gradlew
         run: |
           cd ${{ inputs.code-path }}

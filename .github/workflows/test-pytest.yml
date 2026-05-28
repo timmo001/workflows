@@ -5,6 +5,12 @@ name: "Test - Pytest"
 on:
   workflow_call:
     inputs:
+      python-version:
+        description: "Python version"
+        required: false
+        type: string
+        # renovate: datasource=python-version depName=python versioning=python
+        default: "3.14.5"
       code-path:
         required: false
         type: string
@@ -34,7 +40,7 @@ jobs:
           architecture: "x64"
           cache: "pip"
           check-latest: true
-          python-version: "3.13"
+          python-version: ${{ inputs.python-version }}
       - name: 📦 Install test requirements
         run: |
           python -V

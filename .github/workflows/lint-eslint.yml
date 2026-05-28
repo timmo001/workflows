@@ -5,6 +5,12 @@ name: "Lint - ESLint"
 on:
   workflow_call:
     inputs:
+      node-version:
+        description: "Node.js version"
+        required: false
+        type: string
+        # renovate: datasource=node-version depName=node versioning=node
+        default: "26.2.0"
       code-path:
         required: false
         type: string
@@ -42,7 +48,7 @@ jobs:
           cache-dependency-path: ${{ inputs.code-path || '.' }}/**/pnpm-lock.yaml
           cache: pnpm
           check-latest: true
-          node-version: 22.x
+          node-version: ${{ inputs.node-version }}
       - name: 🏗️️ Set up Node.js (yarn)
         if: ${{ !inputs.use-bun && !inputs.use-pnpm }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -50,7 +56,7 @@ jobs:
           cache-dependency-path: ${{ inputs.code-path || '.' }}/**/yarn.lock
           cache: yarn
           check-latest: true
-          node-version: 22.x
+          node-version: ${{ inputs.node-version }}
       - name: ⤵️ Install dependencies
         run: |
           if [ ${{ inputs.use-pnpm }} ]; then

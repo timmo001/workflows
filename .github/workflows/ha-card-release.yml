@@ -9,7 +9,8 @@ on:
         description: "Node.js version"
         required: false
         type: string
-        default: "lts/*"
+        # renovate: datasource=node-version depName=node versioning=node
+        default: "26.2.0"
       dist-glob:
         description: "Glob pattern for release assets"
         required: false

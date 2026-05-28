@@ -1,0 +1,34 @@
+---
+name: Renovate - Auto-merge (any)
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_call: {}
+  workflow_dispatch: {}
+
+permissions:
+  pull-requests: write
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  renovate-automerge:
+    runs-on: ubuntu-latest
+    if: ${{ github.actor == 'renovate[bot]' || github.actor == 'renovate-bot' }}
+    steps:
+      - name: Enable auto-merge for Renovate PRs
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
