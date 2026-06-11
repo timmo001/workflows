@@ -10,7 +10,7 @@ on:
         required: false
         type: string
         # renovate: datasource=python-version depName=python versioning=python
-        default: "3.14.5"
+        default: "3.14.6"
       code-path:
         required: false
         type: string
