@@ -17,7 +17,7 @@ on:
         required: false
         type: string
         # renovate: datasource=node-version depName=node versioning=node
-        default: "26.3.0"
+        default: "26.3.1"
       file-types:
         required: false
         type: string
@@ -80,7 +80,7 @@ jobs:
         with:
           check-latest: true
           # renovate: datasource=node-version depName=node versioning=node
-          node-version: ${{ inputs.node-version || '26.3.0' }}
+          node-version: ${{ inputs.node-version || '26.3.1' }}
       - name: ⤵️ Install dependencies
         if: ${{ github.event_name == 'workflow_call' }}
         run: |
