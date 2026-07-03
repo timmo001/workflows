@@ -1,0 +1,59 @@
+---
+name: Lint - ShellCheck
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_call:
+    inputs:
+      scandir:
+        description: "Directory to scan for shell scripts"
+        required: false
+        type: string
+        default: "."
+      severity:
+        description: "Minimum severity to report (style, info, warning, error)"
+        required: false
+        type: string
+        default: ""
+      ignore_names:
+        description: "Space-separated script names to ignore"
+        required: false
+        type: string
+        default: ""
+      ignore_paths:
+        description: "Space-separated paths to ignore"
+        required: false
+        type: string
+        default: ""
+      additional_files:
+        description: "Space-separated extra files to check"
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+
+jobs:
+  lint-shellcheck:
+    name: 👕 ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.head_ref }}
+      - name: 🚀 Run ShellCheck
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        with:
+          severity: ${{ inputs.severity }}
+          scandir: ${{ inputs.scandir || '.' }}
+          ignore_names: ${{ inputs.ignore_names }}
+          ignore_paths: ${{ inputs.ignore_paths }}
+          additional_files: ${{ inputs.additional_files }}
