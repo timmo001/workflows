@@ -9,6 +9,7 @@ on:
         description: "actionlint version to use"
         required: false
         type: string
+        # renovate: datasource=github-releases depName=rhysd/actionlint
         default: "1.7.12"
       lint-markdown:
         description: "Run markdownlint"

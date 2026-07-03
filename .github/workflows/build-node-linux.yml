@@ -48,6 +48,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev libopengl0
+          # renovate: datasource=github-releases depName=goreleaser/nfpm
           wget https://github.com/goreleaser/nfpm/releases/download/v2.8.0/nfpm_amd64.deb
           sudo apt install ./nfpm_amd64.deb
       - name: ⤵️ Check out code from GitHub
