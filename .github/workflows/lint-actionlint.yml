@@ -1,0 +1,39 @@
+---
+name: Lint - ActionLint
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_call:
+    inputs:
+      actionlint-version:
+        description: "actionlint version to use"
+        required: false
+        type: string
+        # renovate: datasource=github-releases depName=rhysd/actionlint
+        default: "1.7.12"
+  workflow_dispatch:
+
+jobs:
+  lint-actionlint:
+    name: 👕 ActionLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.head_ref }}
+      - name: ⤵️ Download actionlint
+        run: |
+          version="${{ inputs.actionlint-version || '1.7.12' }}"
+          curl -sL "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz" \
+            | tar xz -C /usr/local/bin actionlint
+      - name: 🚀 Run actionlint
+        run: actionlint -shellcheck= -pyflakes=
