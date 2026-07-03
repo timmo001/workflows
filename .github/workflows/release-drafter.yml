@@ -16,14 +16,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: 🏗️ Show event name
-        run: |
-          echo ${{ github.event }}
-          echo ${{ github.event_name }}
-          echo ${{ github.event_path }}
-          echo ${{ github.base_ref }}
-          echo ${{ github.actor }}
-      - name: 🖊️ Create draft release for ${{ steps.get-version.outputs.version }}
+      - name: 🖊️ Create draft release
         id: release_drafter
         uses: release-drafter/release-drafter@4d75298e00d9e34c483e5ff8c68d0ea1c1940c1e # v7.5.1
         env:

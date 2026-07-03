@@ -1,5 +1,5 @@
 ---
-name: Build msbuild Linux
+name: Build msbuild Windows
 
 # yamllint disable-line rule:truthy
 on:
@@ -9,6 +9,11 @@ on:
         required: false
         type: string
         default: "."
+      nuget-version:
+        description: "NuGet version"
+        required: false
+        type: string
+        default: "latest"
       output-name:
         required: true
         type: string
@@ -35,7 +40,7 @@ jobs:
       - name: 🏗️ Set up NuGet
         uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4
         with:
-          nuget-version: ${{ matrix.nuget }}
+          nuget-version: ${{ inputs.nuget-version }}
       - name: 🏗️ Build
         run: |
           cd ${{ inputs.code-path }}
