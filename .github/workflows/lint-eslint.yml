@@ -59,9 +59,9 @@ jobs:
           node-version: ${{ inputs.node-version }}
       - name: ⤵️ Install dependencies
         run: |
-          if [ ${{ inputs.use-pnpm }} ]; then
+          if [ "${{ inputs.use-pnpm }}" = "true" ]; then
               pnpm install
-          elif [ ${{ inputs.use-bun }} ]; then
+          elif [ "${{ inputs.use-bun }}" = "true" ]; then
               bun install
           else
               yarn install
@@ -71,18 +71,18 @@ jobs:
         run: |
           if grep -q "next lint" "package.json"; then
               echo "next lint is present in package.json"
-              if [ ${{ inputs.use-pnpm }} ]; then
+              if [ "${{ inputs.use-pnpm }}" = "true" ]; then
                   pnpm run lint
-              elif [ ${{ inputs.use-bun }} ]; then
+              elif [ "${{ inputs.use-bun }}" = "true" ]; then
                   bun run lint
               else
                   yarn lint
               fi
           else
               echo "next lint is not found in package.json"
-              if [ ${{ inputs.use-pnpm }} ]; then
+              if [ "${{ inputs.use-pnpm }}" = "true" ]; then
                   pnpm run eslint
-              elif [ ${{ inputs.use-bun }} ]; then
+              elif [ "${{ inputs.use-bun }}" = "true" ]; then
                   bun run eslint
               else
                   yarn eslint

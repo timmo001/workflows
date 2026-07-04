@@ -84,9 +84,9 @@ jobs:
       - name: ⤵️ Install dependencies
         if: ${{ github.event_name == 'workflow_call' }}
         run: |
-          if [ ${{ inputs.use-pnpm }} ]; then
+          if [ "${{ inputs.use-pnpm }}" = "true" ]; then
               pnpm install
-          elif [ ${{ inputs.use-bun }} ]; then
+          elif [ "${{ inputs.use-bun }}" = "true" ]; then
               bun install
           else
               yarn install
@@ -94,12 +94,12 @@ jobs:
         working-directory: ${{ inputs.code-path }}
       - name: 🚀 Run Prettier
         run: |
-          if [ ${{ inputs.use-pnpm }} ]; then
-              pnpx prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}
-          elif [ ${{ inputs.use-bun }} ]; then
-              bun run prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}
+          if [ "${{ inputs.use-pnpm }}" = "true" ]; then
+              pnpx prettier --check ./**/*.${{ inputs.file-types || '{json,yml}' }}
+          elif [ "${{ inputs.use-bun }}" = "true" ]; then
+              bun run prettier --check ./**/*.${{ inputs.file-types || '{json,yml}' }}
           else
-              npx prettier --check **/*.${{ inputs.file-types || '{json,yml}' }}
+              npx prettier --check ./**/*.${{ inputs.file-types || '{json,yml}' }}
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -26,13 +26,13 @@ jobs:
       - name: 🚀 Run JSONLint
         run: |
           sudo apt install -y jsonlint
-          for file in $(find ./ -type f -name "*.json"); do
-            if ! jsonlint-php -q $file; then
-              export FAILED=1
+          while IFS= read -r -d '' file; do
+            if ! jsonlint-php -q "$file"; then
+              FAILED=1
             else
               echo "$file OK"
             fi
-          done
+          done < <(find ./ -type f -name "*.json" -print0)
           if [ "${FAILED}" = "1" ]; then
             exit 1
           fi
