@@ -22,5 +22,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.head_ref }}
-      - name: 🚀 Run mdl
-        uses: actionshub/markdownlint@6c82ff529253530dfbf75c37570876c52692835f # main
+      - name: 🏗 Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: 🚀 Run markdownlint-cli2
+        run: bunx --bun markdownlint-cli2 "**/*.md"

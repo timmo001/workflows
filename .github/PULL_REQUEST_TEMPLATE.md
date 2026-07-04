@@ -15,5 +15,3 @@
 <!-- All other checks are handled by the CI server as preflight checks.
      Make sure to fix any errors found.
      Your PR will not be merged if fixable errors are not resolved -->
-
-
