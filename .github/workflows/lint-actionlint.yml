@@ -36,4 +36,4 @@ jobs:
           curl -sL "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz" \
             | tar xz -C /usr/local/bin actionlint
       - name: 🚀 Run actionlint
-        run: actionlint -shellcheck= -pyflakes=
+        run: actionlint
