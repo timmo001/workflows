@@ -10,7 +10,7 @@ on:
         required: false
         type: string
         # renovate: datasource=node-version depName=node versioning=node
-        default: "26.4.0"
+        default: "26.5.0"
       submodules:
         description: "Checkout submodules recursively"
         required: false
