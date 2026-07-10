@@ -1,0 +1,398 @@
+---
+name: Publish AUR
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      package-name:
+        description: "AUR package base to publish"
+        required: true
+        type: string
+      artifact-name:
+        description: "Artifact containing the final AUR files"
+        required: true
+        type: string
+      pkgbuild-path:
+        description: "Path to the final PKGBUILD within the artifact"
+        required: false
+        type: string
+        default: "PKGBUILD"
+      auxiliary-file-paths:
+        description: "Newline-separated auxiliary file paths within the artifact"
+        required: false
+        type: string
+        default: ""
+      arch-image:
+        description: "Arch Linux image used to build and validate the package"
+        required: false
+        type: string
+        # renovate-container: datasource=docker depName=ghcr.io/timmo001/system-bridge/ci-build-arch
+        default: "ghcr.io/timmo001/system-bridge/ci-build-arch:latest@sha256:1364e8914df024999f31dce77b2fbeb7103d543a4f3b40df8d6237078ad05e5d"
+    secrets:
+      AUR_SSH_PRIVATE_KEY:
+        description: "SSH private key authorised to publish the AUR package"
+        required: true
+    outputs:
+      changed:
+        description: "Whether an AUR commit was pushed"
+        value: ${{ jobs.publish-package.outputs.changed }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-aur-${{ inputs.package-name }}
+  cancel-in-progress: false
+
+jobs:
+  validate-package:
+    name: Validate AUR package
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: ${{ inputs.arch-image }}
+    steps:
+      - name: Download package files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ runner.temp }}/aur-input
+      - name: Build and validate package
+        env:
+          ARTIFACT_ROOT: ${{ runner.temp }}/aur-input
+          AUXILIARY_FILE_PATHS: ${{ inputs.auxiliary-file-paths }}
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          PKGBUILD_PATH: ${{ inputs.pkgbuild-path }}
+          VALIDATED_ROOT: ${{ runner.temp }}/aur-validated
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          validate_path() {
+            local path="$1"
+
+            [[ -n "$path" ]] || fail "Package file paths must not be empty."
+            [[ "$path" != /* ]] || fail "Package file paths must be relative: $path"
+            [[ ! "$path" =~ (^|/)\.\.?(/|$) ]] || fail "Package file paths must not contain dot segments: $path"
+            [[ ! "$path" =~ (^|/)\.git(/|$) ]] || fail "Package file paths must not contain .git: $path"
+            [[ ! "$path" =~ [[:cntrl:]] ]] || fail "Package file paths must not contain control characters."
+          }
+
+          resolve_file() {
+            local path="$1"
+            local resolved
+
+            validate_path "$path"
+            [[ -f "$ARTIFACT_ROOT/$path" && ! -L "$ARTIFACT_ROOT/$path" ]] || fail "Package file is missing or is not a regular file: $path"
+            resolved="$(realpath -e -- "$ARTIFACT_ROOT/$path")"
+            [[ "$resolved" == "$ARTIFACT_ROOT"/* ]] || fail "Package file resolves outside the artifact: $path"
+            printf '%s\n' "$resolved"
+          }
+
+          copy_file() {
+            local source="$1"
+            local relative="$2"
+            local destination_root="$3"
+
+            mkdir -p -- "$destination_root/$(dirname -- "$relative")"
+            cp -- "$source" "$destination_root/$relative"
+          }
+
+          trap 'rm -rf -- "${build_root:-}" "${srcinfo_root:-}"; rm -f -- "${dependency_srcinfo:-}" "${makepkg_script:-}" "${srcinfo_script:-}"' EXIT
+
+          [[ "$PACKAGE_NAME" =~ ^[a-z0-9@_+][a-z0-9@._+-]*$ ]] || fail "Invalid Arch package base: $PACKAGE_NAME"
+
+          ARTIFACT_ROOT="$(realpath -e -- "$ARTIFACT_ROOT")"
+          pkgbuild_source="$(resolve_file "$PKGBUILD_PATH")"
+          declare -A managed_paths=([PKGBUILD]=1)
+          declare -a auxiliary_paths=()
+          declare -a auxiliary_sources=()
+
+          while IFS= read -r path || [[ -n "$path" ]]; do
+            [[ -n "$path" ]] || continue
+            validate_path "$path"
+            case "$path" in
+              PKGBUILD | */PKGBUILD | .SRCINFO | */.SRCINFO | MANIFEST | CHECKSUMS)
+                fail "Reserved auxiliary file path: $path"
+                ;;
+            esac
+            case "$path" in
+              */*)
+                [[ "$path" =~ ^keys/pgp/[^/]+\.asc$ || "$path" =~ ^LICENSES/[^/]+$ ]] \
+                  || fail "Unsupported AUR auxiliary file path: $path"
+                ;;
+            esac
+            [[ -z "${managed_paths[$path]+x}" ]] || fail "Duplicate package file path: $path"
+            managed_paths["$path"]=1
+            auxiliary_paths+=("$path")
+            auxiliary_sources+=("$(resolve_file "$path")")
+          done <<< "$AUXILIARY_FILE_PATHS"
+
+          for command in awk cut find git gpg makepkg pacman pacman-conf realpath runuser sed sha256sum useradd; do
+            command -v "$command" >/dev/null || fail "The Arch image does not provide $command."
+          done
+
+          build_root="$(mktemp -d)"
+          copy_file "$pkgbuild_source" PKGBUILD "$build_root"
+          for index in "${!auxiliary_paths[@]}"; do
+            copy_file "${auxiliary_sources[$index]}" "${auxiliary_paths[$index]}" "$build_root"
+          done
+
+          dependency_srcinfo="$(mktemp)"
+          srcinfo_script="$(mktemp)"
+          cat > "$srcinfo_script" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$1"
+          makepkg --printsrcinfo
+          EOF
+          chmod 0755 "$srcinfo_script"
+          id -u aurbuild >/dev/null 2>&1 && fail "The Arch image must not define the aurbuild user."
+          useradd -m -s /bin/bash aurbuild
+          chown -R aurbuild:aurbuild "$build_root"
+          env -u MISE_CACHE_DIR -u MISE_DATA_DIR -u MISE_INSTALL_PATH \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/bin \
+            runuser -u aurbuild -- "$srcinfo_script" "$build_root" > "$dependency_srcinfo"
+          build_architecture="$(pacman-conf Architecture)"
+          mapfile -t package_dependencies < <(
+            awk -v architecture="$build_architecture" '
+              /^[^[:space:]]/ { in_pkgbase = 0 }
+              $1 == "pkgbase" { in_pkgbase = 1 }
+              in_pkgbase && ($1 == "depends" || $1 == "makedepends" || $1 == "checkdepends" ||
+                $1 == "depends_" architecture || $1 == "makedepends_" architecture ||
+                $1 == "checkdepends_" architecture) { dependencies[$3] = 1 }
+              END { for (dependency in dependencies) print dependency }
+            ' "$dependency_srcinfo"
+          )
+          rm -f -- "$dependency_srcinfo"
+          if ((${#package_dependencies[@]})); then
+            mapfile -t missing_dependencies < <(pacman -T -- "${package_dependencies[@]}" || :)
+            if ((${#missing_dependencies[@]})); then
+              pacman -Syu --needed --noconfirm --asdeps -- "${missing_dependencies[@]}"
+            fi
+          fi
+
+          if [[ -d "$build_root/keys/pgp" ]]; then
+            while IFS= read -r -d '' key; do
+              env -u MISE_CACHE_DIR -u MISE_DATA_DIR -u MISE_INSTALL_PATH \
+                PATH=/usr/local/sbin:/usr/local/bin:/usr/bin \
+                runuser -u aurbuild -- gpg --batch --import "$key"
+            done < <(find "$build_root/keys/pgp" -maxdepth 1 -type f -name '*.asc' -print0)
+          fi
+
+          makepkg_script="$(mktemp)"
+          cat > "$makepkg_script" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$1"
+          makepkg --syncdeps --noconfirm
+          EOF
+          chmod 0755 "$makepkg_script"
+          env -u MISE_CACHE_DIR -u MISE_DATA_DIR -u MISE_INSTALL_PATH \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/bin \
+            runuser -u aurbuild -- "$makepkg_script" "$build_root"
+          rm -f -- "$makepkg_script"
+
+          rm -rf -- "$VALIDATED_ROOT"
+          mkdir -p -- "$VALIDATED_ROOT"
+          copy_file "$pkgbuild_source" PKGBUILD "$VALIDATED_ROOT"
+          for index in "${!auxiliary_paths[@]}"; do
+            copy_file "${auxiliary_sources[$index]}" "${auxiliary_paths[$index]}" "$VALIDATED_ROOT"
+          done
+
+          srcinfo_root="$(mktemp -d)"
+          cp -a -- "$VALIDATED_ROOT/." "$srcinfo_root/"
+          chown -R aurbuild:aurbuild "$srcinfo_root"
+          cat > "$srcinfo_script" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$1"
+          makepkg --printsrcinfo > .SRCINFO
+          EOF
+          chmod 0755 "$srcinfo_script"
+          env -u MISE_CACHE_DIR -u MISE_DATA_DIR -u MISE_INSTALL_PATH \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/bin \
+            runuser -u aurbuild -- "$srcinfo_script" "$srcinfo_root"
+          rm -f -- "$srcinfo_script"
+          cp -- "$srcinfo_root/.SRCINFO" "$VALIDATED_ROOT/.SRCINFO"
+
+          srcinfo_package="$(awk '$1 == "pkgbase" && $2 == "=" { print $3; exit }' "$VALIDATED_ROOT/.SRCINFO")"
+          [[ "$srcinfo_package" == "$PACKAGE_NAME" ]] || fail ".SRCINFO declares pkgbase '$srcinfo_package', expected '$PACKAGE_NAME'."
+
+          {
+            printf 'PKGBUILD\n'
+            if ((${#auxiliary_paths[@]})); then
+              printf '%s\n' "${auxiliary_paths[@]}"
+            fi
+            printf '.SRCINFO\n'
+          } > "$VALIDATED_ROOT/MANIFEST"
+
+          : > "$VALIDATED_ROOT/CHECKSUMS"
+          while IFS= read -r path; do
+            printf '%s\t%s\n' "$(sha256sum -- "$VALIDATED_ROOT/$path" | cut -d ' ' -f 1)" "$path" >> "$VALIDATED_ROOT/CHECKSUMS"
+          done < "$VALIDATED_ROOT/MANIFEST"
+
+      - name: Upload validated package files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: aur-validated-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aur-validated
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-package:
+    name: Publish AUR package
+    needs: validate-package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      changed: ${{ steps.changes.outputs.changed }}
+    steps:
+      - name: Download validated package files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: aur-validated-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aur-validated
+      - name: Verify validated package files
+        env:
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          VALIDATED_ROOT: ${{ runner.temp }}/aur-validated
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          validate_path() {
+            local path="$1"
+
+            [[ -n "$path" ]] || fail "Validated package file paths must not be empty."
+            [[ "$path" != /* ]] || fail "Validated package file paths must be relative: $path"
+            [[ ! "$path" =~ (^|/)\.\.?(/|$) ]] || fail "Validated package file paths must not contain dot segments: $path"
+            [[ ! "$path" =~ (^|/)\.git(/|$) ]] || fail "Validated package file paths must not contain .git: $path"
+            [[ ! "$path" =~ [[:cntrl:]] ]] || fail "Validated package file paths must not contain control characters."
+          }
+
+          [[ "$PACKAGE_NAME" =~ ^[a-z0-9@_+][a-z0-9@._+-]*$ ]] || fail "Invalid Arch package base: $PACKAGE_NAME"
+          [[ -f "$VALIDATED_ROOT/MANIFEST" && ! -L "$VALIDATED_ROOT/MANIFEST" ]] || fail "Validated package manifest is missing."
+          [[ -f "$VALIDATED_ROOT/CHECKSUMS" && ! -L "$VALIDATED_ROOT/CHECKSUMS" ]] || fail "Validated package checksums are missing."
+
+          VALIDATED_ROOT="$(realpath -e -- "$VALIDATED_ROOT")"
+          declare -A managed_paths=()
+          manifest_count=0
+          while IFS= read -r path || [[ -n "$path" ]]; do
+            validate_path "$path"
+            [[ "$path" != MANIFEST && "$path" != CHECKSUMS ]] || fail "Reserved path in validated package manifest: $path"
+            case "$path" in
+              PKGBUILD | .SRCINFO) ;;
+              keys/pgp/*.asc | LICENSES/*)
+                [[ "$path" != */*/*/* ]] || fail "Unsupported validated AUR file path: $path"
+                ;;
+              */*)
+                fail "Unsupported validated AUR file path: $path"
+                ;;
+            esac
+            [[ -z "${managed_paths[$path]+x}" ]] || fail "Duplicate validated package file path: $path"
+            [[ -f "$VALIDATED_ROOT/$path" && ! -L "$VALIDATED_ROOT/$path" ]] || fail "Validated package file is missing or is not a regular file: $path"
+            resolved="$(realpath -e -- "$VALIDATED_ROOT/$path")"
+            [[ "$resolved" == "$VALIDATED_ROOT"/* ]] || fail "Validated package file resolves outside the artifact: $path"
+            managed_paths["$path"]=1
+            manifest_count=$((manifest_count + 1))
+          done < "$VALIDATED_ROOT/MANIFEST"
+
+          [[ -n "${managed_paths[PKGBUILD]+x}" ]] || fail "Validated package does not contain PKGBUILD."
+          [[ -n "${managed_paths[.SRCINFO]+x}" ]] || fail "Validated package does not contain .SRCINFO."
+
+          declare -A checksummed_paths=()
+          checksum_count=0
+          while IFS=$'\t' read -r expected path || [[ -n "$expected$path" ]]; do
+            [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || fail "Invalid validated package checksum."
+            [[ -n "${managed_paths[$path]+x}" ]] || fail "Checksum references an unmanaged package file: $path"
+            [[ -z "${checksummed_paths[$path]+x}" ]] || fail "Duplicate checksum for package file: $path"
+            actual="$(sha256sum -- "$VALIDATED_ROOT/$path" | cut -d ' ' -f 1)"
+            [[ "$actual" == "$expected" ]] || fail "Checksum mismatch for validated package file: $path"
+            checksummed_paths["$path"]=1
+            checksum_count=$((checksum_count + 1))
+          done < "$VALIDATED_ROOT/CHECKSUMS"
+          [[ "$checksum_count" -eq "$manifest_count" ]] || fail "Validated package checksum count does not match its manifest."
+
+          while IFS= read -r -d '' file; do
+            relative="${file#"$VALIDATED_ROOT"/}"
+            case "$relative" in
+              MANIFEST | CHECKSUMS)
+                continue
+                ;;
+            esac
+            [[ -n "${managed_paths[$relative]+x}" ]] || fail "Undeclared file in validated package: $relative"
+          done < <(find "$VALIDATED_ROOT" -type f -print0)
+
+          symlink="$(find "$VALIDATED_ROOT" -type l -print -quit)"
+          [[ -z "$symlink" ]] || fail "Symlinks are not permitted in validated package artifacts."
+
+          srcinfo_package="$(awk '$1 == "pkgbase" && $2 == "=" { print $3; exit }' "$VALIDATED_ROOT/.SRCINFO")"
+          [[ "$srcinfo_package" == "$PACKAGE_NAME" ]] || fail ".SRCINFO declares pkgbase '$srcinfo_package', expected '$PACKAGE_NAME'."
+      - name: Prepare AUR commit
+        id: changes
+        env:
+          AUR_ROOT: ${{ runner.temp }}/aur-repository
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          VALIDATED_ROOT: ${{ runner.temp }}/aur-validated
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git -c init.defaultBranch=master clone "https://aur.archlinux.org/${PACKAGE_NAME}.git" "$AUR_ROOT"
+
+          declare -a managed_paths=()
+          while IFS= read -r path || [[ -n "$path" ]]; do
+            mkdir -p -- "$AUR_ROOT/$(dirname -- "$path")"
+            rm -f -- "$AUR_ROOT/$path"
+            cp --no-dereference -- "$VALIDATED_ROOT/$path" "$AUR_ROOT/$path"
+            managed_paths+=("$path")
+          done < "$VALIDATED_ROOT/MANIFEST"
+
+          git -C "$AUR_ROOT" --literal-pathspecs add -f -- "${managed_paths[@]}"
+          if git -C "$AUR_ROOT" diff --cached --quiet --exit-code; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No AUR package changes to publish."
+            exit 0
+          fi
+
+          git -C "$AUR_ROOT" config user.name "GitHub Actions"
+          git -C "$AUR_ROOT" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$AUR_ROOT" commit -m "Update package metadata"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Push AUR commit
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          AUR_ROOT: ${{ runner.temp }}/aur-repository
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          PACKAGE_NAME: ${{ inputs.package-name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ssh_root="$(mktemp -d)"
+          trap 'rm -rf -- "$ssh_root"' EXIT
+          chmod 0700 "$ssh_root"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$ssh_root/private_key"
+          chmod 0600 "$ssh_root/private_key"
+
+          # Ed25519 host key published at https://aur.archlinux.org.
+          printf '%s\n' \
+            'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' \
+            > "$ssh_root/known_hosts"
+
+          git -C "$AUR_ROOT" remote set-url origin "ssh://aur@aur.archlinux.org/${PACKAGE_NAME}.git"
+          GIT_SSH_COMMAND="ssh -i $ssh_root/private_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o CheckHostIP=no -o UserKnownHostsFile=$ssh_root/known_hosts" \
+            git -C "$AUR_ROOT" push origin HEAD:master
