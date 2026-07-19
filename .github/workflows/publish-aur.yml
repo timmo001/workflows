@@ -28,7 +28,7 @@ on:
         required: false
         type: string
         # renovate-container: datasource=docker depName=ghcr.io/timmo001/system-bridge/ci-build-arch
-        default: "ghcr.io/timmo001/system-bridge/ci-build-arch:latest@sha256:01fc14b5049746d93c39f1208edf08d60ff618f0521db2c5c9d3624514662207"
+        default: "ghcr.io/timmo001/system-bridge/ci-build-arch:latest@sha256:97a711cb2b21b1281e5127def83074d3fd08b628e77852250a07731dcf9690a1"
     secrets:
       AUR_SSH_PRIVATE_KEY:
         description: "SSH private key authorised to publish the AUR package"
