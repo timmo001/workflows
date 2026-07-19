@@ -251,7 +251,7 @@ jobs:
             echo "::error::Expected $expected_assets release assets, found $actual_assets."
             exit 1
           }
-          find "$ASSET_ROOT" -maxdepth 1 -type f -printf '%f\n' | sort \
+          find "$ASSET_ROOT" -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort \
             | while IFS= read -r asset; do
                 (cd "$ASSET_ROOT" && sha256sum "$asset")
               done > "$ASSET_ROOT/SHA256SUMS"
