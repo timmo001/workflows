@@ -23,10 +23,17 @@ on:
         type: string
         default: "1.3.14"
       smoke-test-arguments:
-        description: "Trusted newline-separated arguments passed to the compiled executable"
+        description: >-
+          Trusted newline-separated executable argument lists; each line is one invocation
         required: false
         type: string
         default: "--version"
+      package-prepare-command:
+        description: >-
+          Trusted shell command run after compilation and before nFPM packaging
+        required: false
+        type: string
+        default: ""
       prerelease:
         description: "Publish the GitHub release as a prerelease"
         required: false
@@ -188,12 +195,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          while IFS= read -r invocation || [[ -n "$invocation" ]]; do
+            [[ -n "$invocation" ]] || continue
+            # This input is trusted caller configuration, not pull request content.
+            read -r -a arguments <<< "$invocation"
+            "dist/release/root/$BINARY_NAME" "${arguments[@]}"
+          done <<< "$SMOKE_TEST_ARGUMENTS"
+      - name: Prepare package files
+        if: inputs.package-prepare-command != ''
+        env:
+          PACKAGE_PREPARE_COMMAND: ${{ inputs.package-prepare-command }}
+        shell: bash
+        run: |
+          set -euo pipefail
           # This input is trusted caller configuration, not pull request content.
-          arguments=()
-          if [[ -n "$SMOKE_TEST_ARGUMENTS" ]]; then
-            mapfile -t arguments <<< "$SMOKE_TEST_ARGUMENTS"
-          fi
-          "dist/release/root/$BINARY_NAME" "${arguments[@]}"
+          bash -euo pipefail -c "$PACKAGE_PREPARE_COMMAND"
       - name: Install nFPM
         env:
           NFPM_DOWNLOAD_ARCHITECTURE: ${{ matrix.nfpm-download-architecture }}
