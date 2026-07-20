@@ -23,7 +23,7 @@ on:
         required: false
         type: string
         # renovate: datasource=python-version depName=python versioning=python
-        default: "3.14.2"
+        default: "3.14.6"
       skills-ref-version:
         description: "skills-ref version to use"
         required: false
