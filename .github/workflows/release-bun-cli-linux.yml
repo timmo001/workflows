@@ -6,9 +6,14 @@ on:
   workflow_call:
     inputs:
       binary-name:
-        description: "Executable and release asset base name"
+        description: "Compiled executable name"
         required: true
         type: string
+      package-name:
+        description: "Package and release asset base name; defaults to binary-name"
+        required: false
+        type: string
+        default: ""
       entrypoint:
         description: "Bun entrypoint to compile"
         required: true
@@ -151,6 +156,7 @@ jobs:
       - name: Validate inputs
         env:
           BINARY_NAME: ${{ inputs.binary-name }}
+          PACKAGE_NAME: ${{ inputs.package-name || inputs.binary-name }}
           ENTRYPOINT: ${{ inputs.entrypoint }}
           PACKAGE_CONFIG: ${{ inputs.package-config }}
         shell: bash
@@ -159,6 +165,10 @@ jobs:
 
           [[ "$BINARY_NAME" =~ ^[a-z0-9][a-z0-9._+-]*$ ]] || {
             echo "::error::Invalid binary name: $BINARY_NAME"
+            exit 1
+          }
+          [[ "$PACKAGE_NAME" =~ ^[a-z0-9][a-z0-9._+-]*$ ]] || {
+            echo "::error::Invalid package name: $PACKAGE_NAME"
             exit 1
           }
           for path in "$ENTRYPOINT" "$PACKAGE_CONFIG"; do
@@ -230,6 +240,7 @@ jobs:
           BINARY_NAME: ${{ inputs.binary-name }}
           DEB_ARCHITECTURE: ${{ matrix.deb-architecture }}
           PACKAGE_CONFIG: ${{ inputs.package-config }}
+          PACKAGE_NAME: ${{ inputs.package-name || inputs.binary-name }}
           RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
           RPM_ARCHITECTURE: ${{ matrix.rpm-architecture }}
           VERSION: ${{ needs.version.outputs.release-version }}
@@ -241,11 +252,11 @@ jobs:
           mkdir -p "$assets"
           tar --create --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
             --directory=dist/release/root "$BINARY_NAME" \
-            | gzip --no-name > "$assets/${BINARY_NAME}-${VERSION}-linux-${RELEASE_ARCHITECTURE}.tar.gz"
+            | gzip --no-name > "$assets/${PACKAGE_NAME}-${VERSION}-linux-${RELEASE_ARCHITECTURE}.tar.gz"
           ./nfpm package --config "$PACKAGE_CONFIG" --packager deb \
-            --target "$assets/${BINARY_NAME}_${VERSION}_${DEB_ARCHITECTURE}.deb"
+            --target "$assets/${PACKAGE_NAME}_${VERSION}_${DEB_ARCHITECTURE}.deb"
           ./nfpm package --config "$PACKAGE_CONFIG" --packager rpm \
-            --target "$assets/${BINARY_NAME}-${VERSION}-1.${RPM_ARCHITECTURE}.rpm"
+            --target "$assets/${PACKAGE_NAME}-${VERSION}-1.${RPM_ARCHITECTURE}.rpm"
       - name: Upload release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
