@@ -1,0 +1,91 @@
+---
+name: Lint - Agent Skills
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  workflow_call:
+    inputs:
+      skill-roots:
+        description: "Space-separated directories containing Agent Skills"
+        required: false
+        type: string
+        default: ".agents/skills .opencode/skills"
+      python-version:
+        description: "Python version to use"
+        required: false
+        type: string
+        # renovate: datasource=python-version depName=python versioning=python
+        default: "3.14.2"
+      skills-ref-version:
+        description: "skills-ref version to use"
+        required: false
+        type: string
+        default: "0.1.1"
+  workflow_dispatch:
+
+jobs:
+  lint-agent-skills:
+    name: Validate Agent Skills
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code from GitHub
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ inputs.python-version || '3.14.2' }}
+
+      - name: Install skills-ref
+        run: python -m pip install --disable-pip-version-check --quiet "skills-ref==${{ inputs.skills-ref-version || '0.1.1' }}"
+
+      - name: Validate skills
+        env:
+          SKILL_ROOTS: ${{ inputs.skill-roots || '.agents/skills .opencode/skills' }}
+        run: |
+          set -euo pipefail
+
+          failures=0
+          checked=0
+
+          for root in $SKILL_ROOTS; do
+            if [[ ! -d "$root" ]]; then
+              continue
+            fi
+
+            for skill_dir in "$root"/*; do
+              [[ -d "$skill_dir" ]] || continue
+
+              if [[ ! -f "$skill_dir/SKILL.md" ]]; then
+                printf 'Skill directory missing SKILL.md: %s\n' "$skill_dir" >&2
+                failures=$((failures + 1))
+                continue
+              fi
+
+              checked=$((checked + 1))
+              if ! python -m skills_ref.cli validate "$skill_dir"; then
+                printf 'skills-ref validation failed: %s\n' "$skill_dir" >&2
+                failures=$((failures + 1))
+              fi
+            done
+          done
+
+          if ((checked == 0)); then
+            printf 'No skills found to validate.\n' >&2
+            exit 1
+          fi
+
+          if ((failures > 0)); then
+            printf '%s skill(s) failed validation.\n' "$failures" >&2
+            exit 1
+          fi
+
+          printf 'Validated %s skill(s) with skills-ref.\n' "$checked"
