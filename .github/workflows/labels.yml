@@ -11,6 +11,12 @@ on:
   schedule:
     - cron: "34 5 * * *"
   workflow_call:
+    inputs:
+      labels-ref:
+        description: "Git ref containing the label definitions"
+        required: false
+        type: string
+        default: "master"
   workflow_dispatch:
 
 jobs:
@@ -19,9 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: ⤵️ Download latest labels definitions
+        env:
+          LABELS_REF: ${{ inputs.labels-ref || 'master' }}
         run: |
           curl -s --retry 5 \
-            "https://raw.githubusercontent.com/timmo001/workflows/master/.github/labels.yml" \
+            "https://raw.githubusercontent.com/timmo001/workflows/${LABELS_REF}/.github/labels.yml" \
             > labels.yml
       - name: 🚀 Run Label Syncer
         uses: micnncim/action-label-syncer@3abd5ab72fda571e69fffd97bd4e0033dd5f495c # v1.3.0
