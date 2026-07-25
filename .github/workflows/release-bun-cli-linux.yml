@@ -39,6 +39,12 @@ on:
         required: false
         type: string
         default: ""
+      archive-extra-paths:
+        description: >-
+          Trusted newline-separated paths under dist/release/root to include in release archives
+        required: false
+        type: string
+        default: ""
       prerelease:
         description: "Publish the GitHub release as a prerelease"
         required: false
@@ -242,6 +248,7 @@ jobs:
           PACKAGE_CONFIG: ${{ inputs.package-config }}
           PACKAGE_NAME: ${{ inputs.package-name || inputs.binary-name }}
           RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
+          ARCHIVE_EXTRA_PATHS: ${{ inputs.archive-extra-paths }}
           RPM_ARCHITECTURE: ${{ matrix.rpm-architecture }}
           VERSION: ${{ needs.version.outputs.release-version }}
         shell: bash
@@ -250,8 +257,21 @@ jobs:
 
           assets="dist/release/assets"
           mkdir -p "$assets"
+          archive_paths=("$BINARY_NAME")
+          while IFS= read -r path || [[ -n "$path" ]]; do
+            [[ -n "$path" ]] || continue
+            [[ "$path" != /* && ! "$path" =~ (^|/)\.\.?(/|$) ]] || {
+              echo "::error::Invalid archive path: $path"
+              exit 1
+            }
+            [[ -e "dist/release/root/$path" ]] || {
+              echo "::error::Archive path not found: $path"
+              exit 1
+            }
+            archive_paths+=("$path")
+          done <<< "$ARCHIVE_EXTRA_PATHS"
           tar --create --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-            --directory=dist/release/root "$BINARY_NAME" \
+            --directory=dist/release/root "${archive_paths[@]}" \
             | gzip --no-name > "$assets/${PACKAGE_NAME}-${VERSION}-linux-${RELEASE_ARCHITECTURE}.tar.gz"
           ./nfpm package --config "$PACKAGE_CONFIG" --packager deb \
             --target "$assets/${PACKAGE_NAME}_${VERSION}_${DEB_ARCHITECTURE}.deb"
