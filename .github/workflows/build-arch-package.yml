@@ -9,8 +9,13 @@ on:
         description: "Allowlisted Arch package name"
         required: true
         type: string
+      package-files-artifact-name:
+        description: "Same-run artifact containing a prepared package build context"
+        required: false
+        type: string
+        default: ""
       pkgbuild-path:
-        description: "Path to the PKGBUILD"
+        description: "Path to the PKGBUILD within the source or prepared artifact"
         required: false
         type: string
         default: ".scripts/linux/PKGBUILD"
@@ -98,9 +103,16 @@ jobs:
             echo "::error::Checked out source does not match the event SHA."
             exit 1
           }
+      - name: Download prepared package files
+        if: inputs.package-files-artifact-name != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.package-files-artifact-name }}
+          path: ${{ runner.temp }}/arch-package-files
       - name: Build package
         env:
           PACKAGE_NAME: ${{ inputs.package-name }}
+          PACKAGE_FILES_ARTIFACT_NAME: ${{ inputs.package-files-artifact-name }}
           PKGBUILD_PATH: ${{ inputs.pkgbuild-path }}
           SOURCE_REPOSITORY: ${{ github.repository }}
           SOURCE_SHA: ${{ github.sha }}
@@ -113,14 +125,24 @@ jobs:
             exit 1
           }
 
-          [[ -f "$PKGBUILD_PATH" && ! -L "$PKGBUILD_PATH" ]] \
+          package_files_root="$GITHUB_WORKSPACE"
+          if [[ -n "$PACKAGE_FILES_ARTIFACT_NAME" ]]; then
+            package_files_root="$RUNNER_TEMP/arch-package-files"
+          fi
+          selected_pkgbuild="$package_files_root/$PKGBUILD_PATH"
+          [[ -f "$selected_pkgbuild" && ! -L "$selected_pkgbuild" ]] \
             || fail "PKGBUILD is missing or is not a regular file: $PKGBUILD_PATH"
           build_root="$(mktemp -d)"
           source_cache="$(mktemp -d)"
           package_root="$GITHUB_WORKSPACE/.arch-packages"
           trap 'rm -rf -- "$build_root" "$source_cache"' EXIT
-          cp -a -- "$(dirname -- "$PKGBUILD_PATH")/." "$build_root/"
-          selected_pkgbuild="$build_root/$(basename -- "$PKGBUILD_PATH")"
+          if [[ -n "$PACKAGE_FILES_ARTIFACT_NAME" ]]; then
+            cp -a -- "$package_files_root/." "$build_root/"
+            selected_pkgbuild="$build_root/$PKGBUILD_PATH"
+          else
+            cp -a -- "$(dirname -- "$selected_pkgbuild")/." "$build_root/"
+            selected_pkgbuild="$build_root/$(basename -- "$PKGBUILD_PATH")"
+          fi
           if [[ "$selected_pkgbuild" != "$build_root/PKGBUILD" ]]; then
             mv -- "$selected_pkgbuild" "$build_root/PKGBUILD"
           fi
