@@ -204,7 +204,7 @@ jobs:
           #!/usr/bin/env bash
           set -euo pipefail
           cd "$1"
-          makepkg --noconfirm --holdver
+          makepkg --noconfirm
           EOF
           chmod 0755 "$makepkg_script"
           runuser -u archbuild -- env \
