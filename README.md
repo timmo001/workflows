@@ -39,6 +39,7 @@ The collection includes reusable workflows for:
 - Linting source code, configuration and documentation
 - Running tests, dependency reviews and CodeQL analysis
 - Preparing stable Python distributions from immutable release source
+- Building allowlisted Arch packages from exact source commits
 - Building and releasing Home Assistant cards and command-line tools
 - Managing dependency updates, labels, stale items and releases
 
@@ -54,3 +55,11 @@ job in the caller repository. PyPI Trusted Publishing does not currently
 support reusable workflows, so the caller must download that artifact and
 publish it with `id-token: write`. The shared workflow does not accept package
 index credentials or modify the source repository.
+
+`build-arch-package.yml` builds only package and repository pairs pinned in the
+public `timmo001/arch-repo` allowlist revision embedded in the workflow. Its
+`ARCH_REPO_DISPATCH_TOKEN` secret must be a fine-grained token selected only for
+`timmo001/arch-repo`, with Contents write permission. The protected publisher
+uses a separate `SOURCE_ARTIFACT_TOKEN`, selected only for source repositories
+and granted Actions read permission. Build jobs never receive either token or
+the publisher's signing and R2 credentials.

@@ -1,0 +1,314 @@
+---
+name: Build Arch package
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      package-name:
+        description: "Allowlisted Arch package name"
+        required: true
+        type: string
+      pkgbuild-path:
+        description: "Path to the PKGBUILD"
+        required: false
+        type: string
+        default: ".scripts/linux/PKGBUILD"
+    secrets:
+      ARCH_REPO_DISPATCH_TOKEN:
+        description: "Token limited to dispatching timmo001/arch-repo"
+        required: true
+    outputs:
+      artifact-name:
+        description: "Validated package artifact name"
+        value: ${{ jobs.validate.outputs.artifact-name }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-arch-package-${{ github.repository }}-${{ github.sha }}-${{ inputs.package-name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build package
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      # renovate-container: datasource=docker depName=archlinux
+      image: archlinux:latest@sha256:3406a568f45d68f0bef35dc80b3eacec8bda59b0292b2e50d5932ba1667f20cf
+    steps:
+      - name: Install build tooling
+        run: pacman -Syu --noconfirm --needed base-devel curl git jq sudo
+      - name: Validate build contract
+        env:
+          ALLOWLIST_URL: https://raw.githubusercontent.com/timmo001/arch-repo/1efe71c0cafbb83ba9a564f0a742a8a12474a90e/config/packages.json
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          PKGBUILD_PATH: ${{ inputs.pkgbuild-path }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          [[ "$SOURCE_REPOSITORY" =~ ^timmo001/[A-Za-z0-9._-]+$ ]] \
+            || fail "Unsupported source repository: $SOURCE_REPOSITORY"
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] \
+            || fail "The source revision must be a full commit SHA."
+          [[ "$PACKAGE_NAME" =~ ^[a-z0-9@_+][a-z0-9@._+-]*$ ]] \
+            || fail "Invalid Arch package name: $PACKAGE_NAME"
+          [[ "$PACKAGE_NAME" != *-debug ]] \
+            || fail "Debug packages cannot be published."
+          [[ "$PKGBUILD_PATH" != /* && ! "$PKGBUILD_PATH" =~ (^|/)\.\.?(/|$) ]] \
+            || fail "The PKGBUILD path must be relative without dot segments."
+
+          visibility="$(curl --fail --location --silent --show-error \
+            "https://api.github.com/repos/$SOURCE_REPOSITORY" | jq -r .visibility)"
+          [[ "$visibility" == "public" ]] \
+            || fail "Source repository must be public."
+
+          allowlist="$(mktemp)"
+          trap 'rm -f -- "$allowlist"' EXIT
+          curl --fail --location --silent --show-error "$ALLOWLIST_URL" > "$allowlist"
+          jq -e \
+            --arg package "$PACKAGE_NAME" \
+            --arg repository "$SOURCE_REPOSITORY" \
+            '.packages[$package].repository == $repository and
+              (.packages[$package].architectures | index("x86_64") != null)' \
+            "$allowlist" >/dev/null \
+            || fail "$PACKAGE_NAME is not allowlisted for $SOURCE_REPOSITORY on x86_64."
+      - name: Check out exact source revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify checked out source
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]] || {
+            echo "::error::Checked out source does not match the event SHA."
+            exit 1
+          }
+      - name: Build package
+        env:
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          PKGBUILD_PATH: ${{ inputs.pkgbuild-path }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          [[ -f "$PKGBUILD_PATH" && ! -L "$PKGBUILD_PATH" ]] \
+            || fail "PKGBUILD is missing or is not a regular file: $PKGBUILD_PATH"
+          build_root="$(mktemp -d)"
+          source_cache="$(mktemp -d)"
+          package_root="$GITHUB_WORKSPACE/.arch-packages"
+          trap 'rm -rf -- "$build_root" "$source_cache"' EXIT
+          cp -a -- "$(dirname -- "$PKGBUILD_PATH")/." "$build_root/"
+          mv -- "$build_root/PKGBUILD" "$build_root/PKGBUILD.source"
+          {
+            printf 'source ./PKGBUILD.source\n'
+            printf 'expected_source=%q\n' "git+https://github.com/$SOURCE_REPOSITORY.git"
+            printf 'source_sha=%q\n' "$SOURCE_SHA"
+            cat <<'EOF'
+          matched=0
+          while IFS= read -r source_name; do
+            declare -n sources="$source_name"
+            for index in "${!sources[@]}"; do
+              value="${sources[$index]}"
+              prefix=""
+              if [[ "$value" == *::* ]]; then
+                prefix="${value%%::*}::"
+                value="${value##*::}"
+              fi
+              value="${value%%#*}"
+              if [[ "$value" == "$expected_source" ]]; then
+                sources[$index]="${prefix}${value}#commit=${source_sha}"
+                matched=$((matched + 1))
+              fi
+            done
+            unset -n sources
+          done < <(compgen -A variable | awk '/^source(_[A-Za-z0-9_]+)?$/')
+          if [[ "$PACKAGE_NAME" == *-git ]]; then
+            ((matched == 1)) || {
+              printf '%s must contain exactly one source for %s\n' \
+                "$PACKAGE_NAME" "$expected_source" >&2
+              return 1
+            }
+          fi
+          ((matched <= 1)) || {
+            printf 'PKGBUILD contains multiple sources for %s\n' "$expected_source" >&2
+            return 1
+          }
+          EOF
+          } > "$build_root/PKGBUILD"
+
+          rm -rf -- "$package_root"
+          mkdir -p -- "$package_root"
+          useradd --create-home --shell /bin/bash archbuild
+          chown -R archbuild:archbuild "$build_root" "$source_cache" "$package_root"
+
+          srcinfo_script="$(mktemp)"
+          cat > "$srcinfo_script" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$1"
+          makepkg --printsrcinfo > .SRCINFO
+          EOF
+          chmod 0755 "$srcinfo_script"
+          runuser -u archbuild -- env BUILDDIR="$build_root" SRCDEST="$source_cache" \
+            "$srcinfo_script" "$build_root"
+          while IFS= read -r source; do
+            source="${source##*::}"
+            case "$source" in
+              git+*)
+                [[ "$source" =~ ^git\+[^#]+\#commit=[a-f0-9]{40}$ ]] \
+                  || fail "Every Git source must be pinned to a full commit SHA: $source"
+                ;;
+              bzr+* | fossil+* | hg+* | svn+*)
+                fail "Unsupported VCS source: $source"
+                ;;
+            esac
+          done < <(
+            awk '$1 ~ /^source(_[A-Za-z0-9_]+)?$/ && $2 == "=" { print $3 }' \
+              "$build_root/.SRCINFO"
+          )
+          mapfile -t dependencies < <(
+            awk '$1 ~ /^(depends|makedepends|checkdepends)$/ && $2 == "=" { print $3 }' \
+              "$build_root/.SRCINFO" | sort -u
+          )
+          if ((${#dependencies[@]})); then
+            mapfile -t missing < <(pacman -T -- "${dependencies[@]}" || :)
+            ((${#missing[@]} == 0)) \
+              || pacman -S --noconfirm --needed --asdeps -- "${missing[@]}"
+          fi
+
+          makepkg_script="$(mktemp)"
+          cat > "$makepkg_script" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$1"
+          makepkg --noconfirm --holdver
+          EOF
+          chmod 0755 "$makepkg_script"
+          runuser -u archbuild -- env \
+            PKGDEST="$package_root" \
+            SRCDEST="$source_cache" \
+            SOURCE_DATE_EPOCH="$(date --date="$(git show -s --format=%cI "$SOURCE_SHA")" +%s)" \
+            "$makepkg_script" "$build_root"
+      - name: Upload package candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: arch-package-candidate-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/.arch-packages
+          if-no-files-found: error
+          retention-days: 1
+
+  validate:
+    name: Validate package artifact
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      artifact-name: ${{ steps.artifact.outputs.name }}
+    steps:
+      - name: Download package candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: arch-package-candidate-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/candidate
+      - name: Validate package candidate
+        env:
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          PACKAGE_ROOT: ${{ runner.temp }}/candidate
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          shopt -s nullglob
+          packages=("$PACKAGE_ROOT"/*.pkg.tar.zst)
+          ((${#packages[@]} == 1)) \
+            || fail "Expected exactly one package, found ${#packages[@]}."
+          package="${packages[0]}"
+          unexpected="$(find "$PACKAGE_ROOT" -mindepth 1 -maxdepth 1 \
+            \( ! -type f -o ! -name '*.pkg.tar.zst' \) -print -quit)"
+          [[ -z "$unexpected" ]] \
+            || fail "Candidate contains an unexpected entry: ${unexpected##*/}"
+          pkgname="$(bsdtar -xOf "$package" .PKGINFO | awk '$1 == "pkgname" { print $3; exit }')"
+          [[ "$pkgname" == "$PACKAGE_NAME" ]] \
+            || fail "Built package is $pkgname, expected $PACKAGE_NAME."
+          [[ "$pkgname" != *-debug && "${package##*/}" != *-debug-* ]] \
+            || fail "Debug packages cannot be published."
+
+          validated="$RUNNER_TEMP/validated"
+          mkdir -p -- "$validated"
+          cp -- "$package" "$validated/"
+          jq -n \
+            --arg artifact "${package##*/}" \
+            --arg package "$PACKAGE_NAME" \
+            --arg repository "$SOURCE_REPOSITORY" \
+            --arg sha "$SOURCE_SHA" \
+            '{artifact: $artifact, package: $package, source_repository: $repository,
+              source_sha: $sha}' > "$validated/provenance.json"
+      - name: Set artifact name
+        id: artifact
+        run: |
+          echo "name=arch-package-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}" \
+            >> "$GITHUB_OUTPUT"
+      - name: Upload validated package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ runner.temp }}/validated
+          if-no-files-found: error
+          retention-days: 7
+
+  dispatch:
+    name: Dispatch publication
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch validated package
+        env:
+          ARTIFACT_NAME: ${{ needs.validate.outputs.artifact-name }}
+          GH_TOKEN: ${{ secrets.ARCH_REPO_DISPATCH_TOKEN }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST repos/timmo001/arch-repo/dispatches \
+            --raw-field event_type=publish-package \
+            --field client_payload="$(jq -cn \
+              --arg artifact_name "$ARTIFACT_NAME" \
+              --arg source_repository "$SOURCE_REPOSITORY" \
+              --arg source_run_id "$SOURCE_RUN_ID" \
+              --arg source_sha "$SOURCE_SHA" \
+              '{artifact_name: $artifact_name,
+                source_repository: $source_repository,
+                source_run_id: $source_run_id,
+                source_sha: $source_sha}')"
