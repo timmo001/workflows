@@ -121,9 +121,10 @@ jobs:
           trap 'rm -rf -- "$build_root" "$source_cache"' EXIT
           cp -a -- "$(dirname -- "$PKGBUILD_PATH")/." "$build_root/"
           selected_pkgbuild="$build_root/$(basename -- "$PKGBUILD_PATH")"
-          mv -- "$selected_pkgbuild" "$build_root/PKGBUILD.source"
+          if [[ "$selected_pkgbuild" != "$build_root/PKGBUILD" ]]; then
+            mv -- "$selected_pkgbuild" "$build_root/PKGBUILD"
+          fi
           {
-            printf 'source ./PKGBUILD.source\n'
             printf 'expected_source=%q\n' "git+https://github.com/$SOURCE_REPOSITORY.git"
             printf 'source_sha=%q\n' "$SOURCE_SHA"
             cat <<'EOF'
@@ -157,7 +158,7 @@ jobs:
             return 1
           }
           EOF
-          } > "$build_root/PKGBUILD"
+          } >> "$build_root/PKGBUILD"
 
           rm -rf -- "$package_root"
           mkdir -p -- "$package_root"
