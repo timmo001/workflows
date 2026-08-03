@@ -219,6 +219,7 @@ jobs:
         with:
           name: arch-package-candidate-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .arch-packages
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
 
