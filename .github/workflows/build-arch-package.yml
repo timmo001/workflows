@@ -207,10 +207,13 @@ jobs:
           EOF
           chmod 0755 "$makepkg_script"
           runuser -u archbuild -- env \
-            PKGDEST="$package_root" \
             SRCDEST="$source_cache" \
             SOURCE_DATE_EPOCH="$(date --date="$(git -c safe.directory="$GITHUB_WORKSPACE" show -s --format=%cI "$SOURCE_SHA")" +%s)" \
             "$makepkg_script" "$build_root"
+          shopt -s nullglob
+          packages=("$build_root"/*.pkg.tar.zst)
+          ((${#packages[@]})) || fail "makepkg produced no package files."
+          cp -- "${packages[@]}" "$package_root/"
       - name: Upload package candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
