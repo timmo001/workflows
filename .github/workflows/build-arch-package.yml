@@ -120,7 +120,8 @@ jobs:
           package_root="$GITHUB_WORKSPACE/.arch-packages"
           trap 'rm -rf -- "$build_root" "$source_cache"' EXIT
           cp -a -- "$(dirname -- "$PKGBUILD_PATH")/." "$build_root/"
-          mv -- "$build_root/PKGBUILD" "$build_root/PKGBUILD.source"
+          selected_pkgbuild="$build_root/$(basename -- "$PKGBUILD_PATH")"
+          mv -- "$selected_pkgbuild" "$build_root/PKGBUILD.source"
           {
             printf 'source ./PKGBUILD.source\n'
             printf 'expected_source=%q\n' "git+https://github.com/$SOURCE_REPOSITORY.git"
