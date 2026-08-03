@@ -236,6 +236,10 @@ jobs:
         with:
           name: arch-package-candidate-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/candidate
+      - name: Install package inspection tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libarchive-tools
       - name: Validate package candidate
         env:
           PACKAGE_NAME: ${{ inputs.package-name }}
