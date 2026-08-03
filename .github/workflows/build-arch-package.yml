@@ -309,14 +309,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh api --method POST repos/timmo001/arch-repo/dispatches \
-            --raw-field event_type=publish-package \
-            --field client_payload="$(jq -cn \
-              --arg artifact_name "$ARTIFACT_NAME" \
-              --arg source_repository "$SOURCE_REPOSITORY" \
-              --arg source_run_id "$SOURCE_RUN_ID" \
-              --arg source_sha "$SOURCE_SHA" \
-              '{artifact_name: $artifact_name,
-                source_repository: $source_repository,
-                source_run_id: $source_run_id,
-                source_sha: $source_sha}')"
+          jq -cn \
+            --arg artifact_name "$ARTIFACT_NAME" \
+            --arg source_repository "$SOURCE_REPOSITORY" \
+            --arg source_run_id "$SOURCE_RUN_ID" \
+            --arg source_sha "$SOURCE_SHA" \
+            '{event_type: "publish-package", client_payload: {
+              artifact_name: $artifact_name,
+              source_repository: $source_repository,
+              source_run_id: $source_run_id,
+              source_sha: $source_sha}}' \
+            | gh api --method POST repos/timmo001/arch-repo/dispatches --input -
