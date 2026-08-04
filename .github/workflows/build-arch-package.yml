@@ -238,12 +238,17 @@ jobs:
           packages=("$build_root"/*.pkg.tar.zst)
           ((${#packages[@]})) || fail "makepkg produced no package files."
           cp -- "${packages[@]}" "$package_root/"
+          transport_packages=()
+          for package in "${packages[@]}"; do
+            transport_packages+=("${package##*/}")
+          done
+          tar -C "$package_root" -cf "$RUNNER_TEMP/arch-package-candidate.tar" -- \
+            "${transport_packages[@]}"
       - name: Upload package candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: arch-package-candidate-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .arch-packages
-          include-hidden-files: true
+          path: ${{ runner.temp }}/arch-package-candidate.tar
           if-no-files-found: error
           retention-days: 1
 
@@ -259,11 +264,50 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: arch-package-candidate-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/candidate
+          path: ${{ runner.temp }}/candidate-envelope
       - name: Install package inspection tooling
         run: |
           sudo apt-get update
           sudo apt-get install --yes libarchive-tools
+      - name: Extract package candidate
+        env:
+          CANDIDATE_ENVELOPE_ROOT: ${{ runner.temp }}/candidate-envelope
+          PACKAGE_ROOT: ${{ runner.temp }}/candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          envelope="$CANDIDATE_ENVELOPE_ROOT/arch-package-candidate.tar"
+          unexpected="$(find "$CANDIDATE_ENVELOPE_ROOT" -mindepth 1 -maxdepth 1 \
+            \( ! -type f -o ! -name 'arch-package-candidate.tar' \) -print -quit)"
+          [[ -z "$unexpected" && -f "$envelope" && ! -L "$envelope" ]] \
+            || fail "Candidate artifact does not contain only the expected envelope."
+          [[ "$(dd if="$envelope" bs=1 skip=257 count=5 status=none)" == ustar ]] \
+            || fail "Candidate envelope must be an uncompressed tar archive."
+
+          member_list="$(mktemp)"
+          detail_list="$(mktemp)"
+          trap 'rm -f -- "$member_list" "$detail_list"' EXIT
+          tar -tf "$envelope" > "$member_list" \
+            || fail "Candidate envelope is not a readable tar archive."
+          tar -tvf "$envelope" > "$detail_list" \
+            || fail "Candidate envelope metadata cannot be read."
+          mapfile -t members < "$member_list"
+          mapfile -t details < "$detail_list"
+          ((${#members[@]} == 1 && ${#details[@]} == 1)) \
+            || fail "Candidate envelope must contain exactly one entry."
+          [[ "${members[0]}" =~ ^[A-Za-z0-9@._+:~-]+\.pkg\.tar\.zst$ \
+            && "${details[0]:0:1}" == "-" ]] \
+            || fail "Candidate envelope contains an unsafe or unexpected entry."
+
+          mkdir -p -- "$PACKAGE_ROOT"
+          tar -C "$PACKAGE_ROOT" -xf "$envelope" \
+            --no-same-owner --no-same-permissions
       - name: Validate package candidate
         env:
           PACKAGE_NAME: ${{ inputs.package-name }}
@@ -304,6 +348,8 @@ jobs:
             --arg sha "$SOURCE_SHA" \
             '{artifact: $artifact, package: $package, source_repository: $repository,
               source_sha: $sha}' > "$validated/provenance.json"
+          tar -C "$validated" -cf "$RUNNER_TEMP/candidate.tar" -- \
+            "${package##*/}" provenance.json
       - name: Set artifact name
         id: artifact
         run: |
@@ -313,7 +359,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.artifact.outputs.name }}
-          path: ${{ runner.temp }}/validated
+          path: ${{ runner.temp }}/candidate.tar
           if-no-files-found: error
           retention-days: 7
 
