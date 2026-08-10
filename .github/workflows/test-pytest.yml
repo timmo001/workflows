@@ -65,6 +65,7 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: 1
         run: |
+          set -o pipefail
           python --version
           python -m pytest \
             -qq \
