@@ -28,8 +28,6 @@ jobs:
     steps:
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.head_ref }}
       - name: ⤵️ Download actionlint
         run: |
           version="${{ inputs.actionlint-version || '1.7.12' }}"
