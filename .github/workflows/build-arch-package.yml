@@ -48,7 +48,7 @@ jobs:
         run: pacman -Syu --noconfirm --needed base-devel curl git jq sudo
       - name: Validate build contract
         env:
-          ALLOWLIST_URL: https://raw.githubusercontent.com/timmo001/arch-repo/61b285fbc9a14537395687d475a6b81dc66dd235/config/packages.json
+          ALLOWLIST_URL: https://raw.githubusercontent.com/timmo001/arch-repo/38f8ef0798c2afe7dbb81d12b5f8c077eda47ac8/config/packages.json
           PACKAGE_NAME: ${{ inputs.package-name }}
           PKGBUILD_PATH: ${{ inputs.pkgbuild-path }}
           SOURCE_REPOSITORY: ${{ github.repository }}
