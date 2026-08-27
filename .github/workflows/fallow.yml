@@ -26,14 +26,14 @@ jobs:
           fetch-depth: 0
       - name: Run Fallow on changed files
         if: github.event_name != 'workflow_dispatch'
-        uses: fallow-rs/fallow@a87665c0837d60020b8d8dce1bd4920139d5fb9c # v3.18.0
+        uses: fallow-rs/fallow@94d5f7ad28fd921c6709bf4939c2d5fe0b76a273 # v3.19.0
         with:
           root: ${{ inputs.root }}
           format: sarif
           changed-since: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
       - name: Run Fallow full scan
         if: github.event_name == 'workflow_dispatch'
-        uses: fallow-rs/fallow@a87665c0837d60020b8d8dce1bd4920139d5fb9c # v3.18.0
+        uses: fallow-rs/fallow@94d5f7ad28fd921c6709bf4939c2d5fe0b76a273 # v3.19.0
         with:
           root: ${{ inputs.root }}
           format: sarif
