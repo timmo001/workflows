@@ -27026,6 +27026,7 @@ class CommandError extends exports_Schema.TaggedError()("CommandError", {
 }
 var error = (command, cause) => new CommandError({ command, exitCode: -1, stderr: String(cause) });
 var collectText = (stream) => stream.pipe(exports_Stream.decodeText(), exports_Stream.runFold(() => "", (all3, chunk) => all3 + chunk));
+var retainedStderrLength = 16 * 1024;
 
 class Service3 extends exports_Context.Service()("@timmo001/workflows/CommandExecutor") {
 }
@@ -27067,7 +27068,32 @@ var layer14 = exports_Layer.effect(Service3, exports_Effect.gen(function* () {
     const code = yield* spawner.exitCode(make40(command, args2, options)).pipe(exports_Effect.mapError((cause) => error(`${command} ${args2.join(" ")}`.trim(), cause)));
     return Number(code);
   });
-  return Service3.of({ capture, run: run3, exitCode });
+  const stream = exports_Effect.fn("CommandExecutor.stream")(function* (command, args2, options) {
+    const label = options?.label ?? `${command} ${args2.join(" ")}`.trim();
+    return yield* exports_Effect.scoped(exports_Effect.gen(function* () {
+      const handle = yield* spawner.spawn(exports_ChildProcess.make(command, args2, {
+        cwd: options?.cwd,
+        env: options?.env,
+        extendEnv: true,
+        stdin: "inherit"
+      }));
+      let stderrTail = "";
+      const stdout = handle.stdout.pipe(exports_Stream.decodeText(), exports_Stream.runForEach((chunk) => exports_Effect.sync(() => process.stdout.write(chunk))));
+      const stderr = handle.stderr.pipe(exports_Stream.decodeText(), exports_Stream.runForEach((chunk) => exports_Effect.sync(() => {
+        process.stderr.write(chunk);
+        stderrTail = `${stderrTail}${chunk}`.slice(-retainedStderrLength);
+      })));
+      const [, , code] = yield* exports_Effect.all([stdout, stderr, handle.exitCode], { concurrency: "unbounded" });
+      if (Number(code) !== 0) {
+        return yield* new CommandError({
+          command: label,
+          exitCode: Number(code),
+          stderr: stderrTail.trim()
+        });
+      }
+    }).pipe(exports_Effect.mapError((cause) => cause instanceof CommandError ? cause : error(label, cause))));
+  });
+  return Service3.of({ capture, run: run3, exitCode, stream });
 }));
 
 // src/action/ActionRuntime.ts

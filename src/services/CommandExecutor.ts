@@ -13,6 +13,7 @@ export class CommandError extends Schema.TaggedError<CommandError>()(
 export interface CommandOptions {
   readonly cwd?: string | undefined;
   readonly env?: Readonly<Record<string, string>> | undefined;
+  readonly label?: string | undefined;
 }
 
 export interface CommandResult {
@@ -37,6 +38,11 @@ export interface Interface {
     args: readonly string[],
     options?: CommandOptions,
   ) => Effect.Effect<number, CommandError>;
+  readonly stream: (
+    command: string,
+    args: readonly string[],
+    options?: CommandOptions,
+  ) => Effect.Effect<void, CommandError>;
 }
 
 const error = (command: string, cause: unknown) =>
@@ -50,6 +56,8 @@ const collectText = (stream: Stream.Stream<Uint8Array, unknown>) =>
       (all, chunk) => all + chunk,
     ),
   );
+
+const retainedStderrLength = 16 * 1024;
 
 export class Service extends Context.Service<Service, Interface>()(
   "@timmo001/workflows/CommandExecutor",
@@ -127,7 +135,59 @@ export const layer = Layer.effect(
         );
       return Number(code);
     });
-    return Service.of({ capture, run, exitCode });
+    const stream = Effect.fn("CommandExecutor.stream")(function* (
+      command: string,
+      args: readonly string[],
+      options?: CommandOptions,
+    ) {
+      const label = options?.label ?? `${command} ${args.join(" ")}`.trim();
+      return yield* Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* spawner.spawn(
+            ChildProcess.make(command, args, {
+              cwd: options?.cwd,
+              env: options?.env,
+              extendEnv: true,
+              stdin: "inherit",
+            }),
+          );
+          let stderrTail = "";
+          const stdout = handle.stdout.pipe(
+            Stream.decodeText(),
+            Stream.runForEach((chunk) =>
+              Effect.sync(() => process.stdout.write(chunk)),
+            ),
+          );
+          const stderr = handle.stderr.pipe(
+            Stream.decodeText(),
+            Stream.runForEach((chunk) =>
+              Effect.sync(() => {
+                process.stderr.write(chunk);
+                stderrTail = `${stderrTail}${chunk}`.slice(
+                  -retainedStderrLength,
+                );
+              }),
+            ),
+          );
+          const [, , code] = yield* Effect.all(
+            [stdout, stderr, handle.exitCode],
+            { concurrency: "unbounded" },
+          );
+          if (Number(code) !== 0) {
+            return yield* new CommandError({
+              command: label,
+              exitCode: Number(code),
+              stderr: stderrTail.trim(),
+            });
+          }
+        }).pipe(
+          Effect.mapError((cause) =>
+            cause instanceof CommandError ? cause : error(label, cause),
+          ),
+        ),
+      );
+    });
+    return Service.of({ capture, run, exitCode, stream });
   }),
 );
 

@@ -26,6 +26,22 @@ describe("CommandExecutor", () => {
       expect(error.exitCode).toBe(1);
     }).pipe(Effect.provide(commandLayer)),
   );
+
+  it.effect("retains stderr from a failing streamed command", () =>
+    Effect.gen(function* () {
+      const commands = yield* CommandExecutor.Service;
+      const error = yield* Effect.flip(
+        commands.stream(
+          "bash",
+          ["-c", "printf 'precise streamed failure\\n' >&2; exit 7"],
+          { label: "failing stream" },
+        ),
+      );
+      expect(error.command).toBe("failing stream");
+      expect(error.exitCode).toBe(7);
+      expect(error.stderr).toBe("precise streamed failure");
+    }).pipe(Effect.provide(commandLayer)),
+  );
 });
 
 describe("Annotations", () => {
