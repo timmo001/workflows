@@ -48,7 +48,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.head_ref || github.ref_name }}
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -68,14 +68,10 @@ jobs:
           fi
       - name: Configure git identity
         if: steps.changes.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           set -euo pipefail
-          login="$(gh api user --jq .login)"
-          id="$(gh api user --jq .id)"
-          git config user.name "$login"
-          git config user.email "${id}+${login}@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - name: Commit bundle updates to the pull request
         if: >-
           steps.changes.outputs.changed == 'true' &&
@@ -90,7 +86,7 @@ jobs:
           steps.changes.outputs.changed == 'true' &&
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           branch="sync/action-bundles"
