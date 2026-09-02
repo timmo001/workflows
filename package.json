@@ -1,0 +1,32 @@
+{
+  "name": "@timmo001/workflows-actions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bundle": "bun run scripts/bundle.ts",
+    "bundle:check": "bun run scripts/bundle.ts --check",
+    "lint": "oxlint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write \"{src,tests,scripts}/**/*.ts\" oxlint.config.ts package.json tsconfig.json",
+    "format:check": "prettier --check \"{src,tests,scripts}/**/*.ts\" oxlint.config.ts package.json tsconfig.json",
+    "validate": "bun run lint && bun run typecheck && bun run test && bun run format:check && bun run bundle:check",
+    "prepare": "effect-tsgo patch"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "0.39.0",
+    "@effect/vitest": "4.0.0-rc.112",
+    "@oxlint/plugins": "1.81.0",
+    "@timmo001/oxlint-rules": "0.3.0",
+    "@types/bun": "1.4.0",
+    "oxlint": "1.81.0",
+    "prettier": "3.5.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}
