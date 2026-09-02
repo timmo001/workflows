@@ -31,6 +31,19 @@ Pin cross-repository calls to a full commit SHA. This prevents an upstream
 change from altering a workflow without a corresponding update in the calling
 repository.
 
+Some reusable workflows run repository-owned Node actions from
+[`.github/actions`](.github/actions). Those actions are bundled JavaScript
+committed with the workflow revision. Callers keep the same one-line
+`uses: timmo001/workflows/.github/workflows/...@<sha>` interface; they do not
+check out this repository or install its Node tooling. Inside this repository,
+workflows reference sibling actions with `$/.github/actions/<name>` so the
+action resolves from the same commit as the workflow.
+
+When action sources, the lockfile, or action metadata change,
+`sync-action-bundles.yml` rebuilds `dist` and either commits it to the open
+pull request or opens an automerging pull request on `master`.
+`validate-actions.yml` still fails if a committed bundle is out of date.
+
 ## Scope
 
 The collection includes reusable workflows for:
