@@ -72,5 +72,5 @@ jobs:
       - name: Publish package
         env:
           JSR_CLI_VERSION: ${{ inputs.jsr-cli-version }}
-        run: bunx "jsr@$JSR_CLI_VERSION" publish --provenance
+        run: bunx "jsr@$JSR_CLI_VERSION" publish
         working-directory: ${{ inputs.package-path }}
