@@ -24677,33 +24677,6 @@ var readInputs = (names) => {
 };
 var decodeInputs = (schema, names) => exports_Schema.decodeUnknownEffect(schema)(readInputs(names));
 
-// src/action/ActionOutputs.ts
-var exports_ActionOutputs = {};
-__export(exports_ActionOutputs, {
-  ActionOutputs: () => exports_ActionOutputs,
-  setOutput: () => setOutput
-});
-import { randomBytes } from "node:crypto";
-var githubOutputPath = () => process.env.GITHUB_OUTPUT;
-var setOutput = (name, value3) => exports_Effect.gen(function* () {
-  const path = githubOutputPath();
-  if (path === undefined) {
-    yield* exports_Effect.sync(() => {
-      process.stdout.write(`::set-output name=${name}::${value3}
-`);
-    });
-    return;
-  }
-  const fs = yield* exports_FileSystem.FileSystem;
-  const delimiter = `ghadelim_${randomBytes(16).toString("hex")}`;
-  yield* fs.writeFileString(path, `${name}<<${delimiter}
-${value3}
-${delimiter}
-`, {
-    flag: "a"
-  }).pipe(exports_Effect.orDie);
-});
-
 // src/action/ActionRuntime.ts
 var exports_ActionRuntime = {};
 __export(exports_ActionRuntime, {
@@ -26190,15 +26163,15 @@ var stringify = (bytes) => {
   const segments = [bytes.subarray(0, 4), bytes.subarray(4, 6), bytes.subarray(6, 8), bytes.subarray(8, 10), bytes.subarray(10, 16)];
   return segments.map((segment) => Array.from(segment, hex).join("")).join("-");
 };
-var randomBytes2 = () => globalThis.crypto.getRandomValues(new Uint8Array(16));
-function v4Bytes(bytes = randomBytes2()) {
+var randomBytes = () => globalThis.crypto.getRandomValues(new Uint8Array(16));
+function v4Bytes(bytes = randomBytes()) {
   bytes[6] = bytes[6] & 15 | 64;
   bytes[8] = bytes[8] & 63 | 128;
   return bytes;
 }
 var v4String = (bytes) => stringify(bytes === undefined ? v4Bytes() : v4Bytes(bytes));
 var maxV7Timestamp = 2 ** 48 - 1;
-function v7Bytes(timestampMillis, bytes = randomBytes2()) {
+function v7Bytes(timestampMillis, bytes = randomBytes()) {
   const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxV7Timestamp);
   bytes[0] = Math.floor(timestamp / 2 ** 40);
   bytes[1] = Math.floor(timestamp / 2 ** 32) & 255;
@@ -26217,7 +26190,7 @@ var TypeId38 = "~effect/platform/Crypto";
 var Crypto2 = /* @__PURE__ */ Service("effect/Crypto");
 var make35 = (impl) => {
   const randomBytesUnsafe = impl.randomBytes;
-  const randomBytes3 = (size7) => map7(validateSize("randomBytes", size7), randomBytesUnsafe);
+  const randomBytes2 = (size7) => map7(validateSize("randomBytes", size7), randomBytesUnsafe);
   const readUint53 = (bytes) => (bytes[0] & 31) * 2 ** 48 + bytes[1] * 2 ** 40 + bytes[2] * 2 ** 32 + bytes[3] * 2 ** 24 + bytes[4] * 2 ** 16 + bytes[5] * 2 ** 8 + bytes[6];
   const nextDoubleUnsafe = () => readUint53(randomBytesUnsafe(7)) / 2 ** 53;
   const nextIntUnsafe = () => {
@@ -26234,7 +26207,7 @@ var make35 = (impl) => {
   };
   return Crypto2.of({
     [TypeId38]: TypeId38,
-    randomBytes: randomBytes3,
+    randomBytes: randomBytes2,
     nextDoubleUnsafe,
     nextIntUnsafe,
     digest: impl.digest,
@@ -27124,31 +27097,264 @@ var runAction = (program, layer15) => {
   exports_NodeRuntime.runMain(completed, { disableErrorReporting: true });
 };
 
-// src/actions/foundation-smoke/main.ts
+// src/actions/build-arch-package/workflow.ts
+var Stage = exports_Schema.Literals([
+  "validate-contract",
+  "build",
+  "validate",
+  "dispatch"
+]);
 var Inputs = exports_Schema.Struct({
-  message: exports_Schema.String
+  stage: Stage,
+  packageName: exports_Schema.String,
+  packageFilesArtifactName: exports_Schema.optionalKey(exports_Schema.String),
+  pkgbuildPath: exports_Schema.optionalKey(exports_Schema.String),
+  sourceRepository: exports_Schema.String,
+  sourceSha: exports_Schema.String,
+  allowlistUrl: exports_Schema.optionalKey(exports_Schema.String),
+  artifactName: exports_Schema.optionalKey(exports_Schema.String),
+  sourceRunId: exports_Schema.optionalKey(exports_Schema.String)
 });
-var program = exports_Effect.gen(function* () {
-  const annotations = yield* exports_Annotations.Service;
+var failure = (message, title) => {
+  if (title === undefined)
+    return new exports_Annotations.ActionFailure({ message });
+  return new exports_Annotations.ActionFailure({ message, title });
+};
+var requireInput = (value3, name) => value3 === undefined ? exports_Effect.fail(failure(`Input is required: ${name}`)) : exports_Effect.succeed(value3);
+var validateIdentity = (inputs) => {
+  if (!/^timmo001\/[A-Za-z0-9._-]+$/.test(inputs.sourceRepository)) {
+    return failure(`Unsupported source repository: ${inputs.sourceRepository}`);
+  }
+  if (!/^[a-f0-9]{40}$/.test(inputs.sourceSha)) {
+    return failure("The source revision must be a full commit SHA.");
+  }
+  if (!/^[a-z0-9@_+][a-z0-9@._+-]*$/.test(inputs.packageName)) {
+    return failure(`Invalid Arch package name: ${inputs.packageName}`);
+  }
+  if (inputs.packageName.endsWith("-debug")) {
+    return failure("Debug packages cannot be published.");
+  }
+  if (inputs.pkgbuildPath !== undefined && (inputs.pkgbuildPath.startsWith("/") || inputs.pkgbuildPath.split("/").some((part) => part === "." || part === ".."))) {
+    return failure("The PKGBUILD path must be relative without dot segments.");
+  }
+};
+var provenance = (artifact, packageName, sourceRepository, sourceSha) => ({
+  artifact,
+  package: packageName,
+  source_repository: sourceRepository,
+  source_sha: sourceSha
+});
+var dispatchPayload = (artifactName, sourceRepository, sourceRunId, sourceSha) => ({
+  event_type: "publish-package",
+  client_payload: {
+    artifact_name: artifactName,
+    source_repository: sourceRepository,
+    source_run_id: sourceRunId,
+    source_sha: sourceSha
+  }
+});
+var sourcePinningScript = String.raw`matched=0
+while IFS= read -r source_name; do
+  declare -n sources="$source_name"
+  for index in "\${!sources[@]}"; do
+    value="\${sources[$index]}"; prefix=""
+    if [[ "$value" == *::* ]]; then prefix="\${value%%::*}::"; value="\${value##*::}"; fi
+    value="\${value%%#*}"
+    if [[ "$value" == "$expected_source" ]]; then sources[$index]="\${prefix}\${value}#commit=\${source_sha}"; matched=$((matched + 1)); fi
+  done
+  unset -n sources
+done < <(compgen -A variable | awk '/^source(_[A-Za-z0-9_]+)?$/')
+if [[ "$PACKAGE_NAME" == *-git ]]; then
+  ((matched == 1)) || { printf '%s must contain exactly one source for %s\n' "$PACKAGE_NAME" "$expected_source" >&2; return 1; }
+fi
+((matched <= 1)) || { printf 'PKGBUILD contains multiple sources for %s\n' "$expected_source" >&2; return 1; }`.replaceAll("\\${", "${");
+var sourcePolicyScript = String.raw`while IFS= read -r source; do
+  source="\${source##*::}"
+  case "$source" in
+    git+*) [[ "$source" =~ ^git\+[^#]+\#commit=[a-f0-9]{40}$ ]] || fail "Every Git source must be pinned to a full commit SHA: $source" ;;
+    bzr+*|fossil+*|hg+*|svn+*) fail "Unsupported VCS source: $source" ;;
+  esac
+done < <(awk '$1 ~ /^source(_[A-Za-z0-9_]+)?$/ && $2 == "=" { print $3 }' "$build_root/.SRCINFO")`.replaceAll("\\${", "${");
+var buildScript = String.raw`set -euo pipefail
+fail() { printf '%s\n' "$1" >&2; exit 1; }
+[[ "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" == "$SOURCE_SHA" ]] || fail "Checked out source does not match the event SHA."
+package_files_root="$GITHUB_WORKSPACE"
+if [[ -n "$PACKAGE_FILES_ARTIFACT_NAME" ]]; then package_files_root="$RUNNER_TEMP/arch-package-files"; fi
+selected_pkgbuild="$package_files_root/$PKGBUILD_PATH"
+[[ -f "$selected_pkgbuild" && ! -L "$selected_pkgbuild" ]] || fail "PKGBUILD is missing or is not a regular file: $PKGBUILD_PATH"
+build_root="$(mktemp -d)"; source_cache="$(mktemp -d)"; package_root="$GITHUB_WORKSPACE/.arch-packages"
+trap 'rm -rf -- "$build_root" "$source_cache"' EXIT
+if [[ -n "$PACKAGE_FILES_ARTIFACT_NAME" ]]; then
+  cp -a -- "$package_files_root/." "$build_root/"; selected_pkgbuild="$build_root/$PKGBUILD_PATH"
+else
+  cp -a -- "$(dirname -- "$selected_pkgbuild")/." "$build_root/"; selected_pkgbuild="$build_root/$(basename -- "$PKGBUILD_PATH")"
+fi
+if [[ "$selected_pkgbuild" != "$build_root/PKGBUILD" ]]; then mv -- "$selected_pkgbuild" "$build_root/PKGBUILD"; fi
+{
+  printf 'expected_source=%q\n' "git+https://github.com/$SOURCE_REPOSITORY.git"
+  printf 'source_sha=%q\n' "$SOURCE_SHA"
+  cat <<'PINNING'
+${sourcePinningScript}
+PINNING
+} >> "$build_root/PKGBUILD"
+rm -rf -- "$package_root"; mkdir -p -- "$package_root"
+useradd --create-home --shell /bin/bash archbuild
+chown -R archbuild:archbuild "$build_root" "$source_cache" "$package_root"
+runuser -u archbuild -- env BUILDDIR="$build_root" SRCDEST="$source_cache" bash -c 'set -euo pipefail; cd "$1"; makepkg --printsrcinfo > .SRCINFO' _ "$build_root"
+${sourcePolicyScript}
+mapfile -t dependencies < <(awk '$1 ~ /^(depends|makedepends|checkdepends)$/ && $2 == "=" { print $3 }' "$build_root/.SRCINFO" | sort -u)
+if ((\${#dependencies[@]})); then
+  mapfile -t missing < <(pacman -T -- "\${dependencies[@]}" || :)
+  ((\${#missing[@]} == 0)) || pacman -S --noconfirm --needed --asdeps -- "\${missing[@]}"
+fi
+source_date_epoch="$(date --date="$(git -c safe.directory="$GITHUB_WORKSPACE" show -s --format=%cI "$SOURCE_SHA")" +%s)"
+runuser -u archbuild -- env SRCDEST="$source_cache" SOURCE_DATE_EPOCH="$source_date_epoch" bash -c 'set -euo pipefail; cd "$1"; makepkg --noconfirm' _ "$build_root"
+shopt -s nullglob; packages=("$build_root"/*.pkg.tar.zst)
+((\${#packages[@]})) || fail "makepkg produced no package files."
+cp -- "\${packages[@]}" "$package_root/"
+transport_packages=(); for package in "\${packages[@]}"; do transport_packages+=("\${package##*/}"); done
+tar -C "$package_root" -cf "$RUNNER_TEMP/arch-package-candidate.tar" -- "\${transport_packages[@]}"`.replaceAll("\\${", "${");
+var inspectScript = String.raw`set -euo pipefail
+fail() { printf '%s\n' "$1" >&2; exit 1; }
+envelope="$CANDIDATE_ENVELOPE_ROOT/arch-package-candidate.tar"
+unexpected="$(find "$CANDIDATE_ENVELOPE_ROOT" -mindepth 1 -maxdepth 1 \( ! -type f -o ! -name 'arch-package-candidate.tar' \) -print -quit)"
+[[ -z "$unexpected" && -f "$envelope" && ! -L "$envelope" ]] || fail "Candidate artifact does not contain only the expected envelope."
+[[ "$(dd if="$envelope" bs=1 skip=257 count=5 status=none)" == ustar ]] || fail "Candidate envelope must be an uncompressed tar archive."
+member_list="$(mktemp)"; detail_list="$(mktemp)"; trap 'rm -f -- "$member_list" "$detail_list"' EXIT
+tar -tf "$envelope" > "$member_list" || fail "Candidate envelope is not a readable tar archive."
+tar -tvf "$envelope" > "$detail_list" || fail "Candidate envelope metadata cannot be read."
+mapfile -t members < "$member_list"; mapfile -t details < "$detail_list"
+((\${#members[@]} == 1 && \${#details[@]} == 1)) || fail "Candidate envelope must contain exactly one entry."
+[[ "\${members[0]}" =~ ^[A-Za-z0-9@._+:~-]+\.pkg\.tar\.zst$ && "\${details[0]:0:1}" == "-" ]] || fail "Candidate envelope contains an unsafe or unexpected entry."
+mkdir -p -- "$PACKAGE_ROOT"; tar -C "$PACKAGE_ROOT" -xf "$envelope" --no-same-owner --no-same-permissions
+shopt -s nullglob; packages=("$PACKAGE_ROOT"/*.pkg.tar.zst)
+((\${#packages[@]} == 1)) || fail "Expected exactly one package, found \${#packages[@]}."
+package="\${packages[0]}"
+unexpected="$(find "$PACKAGE_ROOT" -mindepth 1 -maxdepth 1 \( ! -type f -o ! -name '*.pkg.tar.zst' \) -print -quit)"
+[[ -z "$unexpected" ]] || fail "Candidate contains an unexpected entry: \${unexpected##*/}"
+pkgname="$(bsdtar -xOf "$package" .PKGINFO | awk '$1 == "pkgname" { print $3; exit }')"
+[[ "$pkgname" == "$PACKAGE_NAME" ]] || fail "Built package is $pkgname, expected $PACKAGE_NAME."
+[[ "$pkgname" != *-debug && "\${package##*/}" != *-debug-* ]] || fail "Debug packages cannot be published."
+printf '%s' "\${package##*/}"`.replaceAll("\\${", "${");
+var mapCommand = exports_Effect.mapError((error2) => failure(error2.stderr.length > 0 ? error2.stderr : `Command failed with exit code ${error2.exitCode}: ${error2.command}`, "Command failed"));
+var validateContract = exports_Effect.fn("BuildArchPackage.validateContract")(function* (inputs) {
   const commands = yield* exports_CommandExecutor.Service;
   const fs = yield* exports_FileSystem.FileSystem;
-  const inputs = yield* exports_ActionInputs.decodeInputs(Inputs, ["message"]).pipe(exports_Effect.mapError(exports_ActionRuntime.toActionFailure));
-  yield* annotations.group("Foundation smoke");
-  const temporary = yield* fs.makeTempDirectoryScoped({
-    prefix: "workflows-foundation-"
-  }).pipe(exports_Effect.orDie);
-  yield* fs.writeFileString(`${temporary}/message.txt`, `${inputs.message}
-`).pipe(exports_Effect.orDie);
-  const echoed = yield* commands.run("cat", [`${temporary}/message.txt`]).pipe(exports_Effect.mapError(exports_ActionRuntime.toActionFailure));
-  const trimmed = echoed.trim();
-  if (trimmed !== inputs.message) {
-    return yield* new exports_Annotations.ActionFailure({
-      message: `Expected echoed message ${JSON.stringify(inputs.message)}, got ${JSON.stringify(trimmed)}`,
-      title: "Smoke check mismatch"
-    });
+  const allowlistUrl = yield* requireInput(inputs.allowlistUrl, "allowlist-url");
+  const repository = yield* commands.run("curl", [
+    "--fail",
+    "--location",
+    "--silent",
+    "--show-error",
+    `https://api.github.com/repos/${inputs.sourceRepository}`
+  ]).pipe(mapCommand);
+  const repositoryFile = yield* fs.makeTempFileScoped({ prefix: "repository-" }).pipe(exports_Effect.mapError((error2) => failure(String(error2), "File operation failed")));
+  yield* fs.writeFileString(repositoryFile, repository).pipe(exports_Effect.mapError((error2) => failure(String(error2), "File operation failed")));
+  const visibility = yield* commands.run("jq", ["-r", ".visibility", repositoryFile]).pipe(mapCommand);
+  if (visibility.trim() !== "public")
+    return yield* failure("Source repository must be public.");
+  const allowlist = yield* commands.run("curl", [
+    "--fail",
+    "--location",
+    "--silent",
+    "--show-error",
+    allowlistUrl
+  ]).pipe(mapCommand);
+  const allowlistFile = yield* fs.makeTempFileScoped({ prefix: "allowlist-" }).pipe(exports_Effect.mapError((error2) => failure(String(error2), "File operation failed")));
+  yield* fs.writeFileString(allowlistFile, allowlist).pipe(exports_Effect.mapError((error2) => failure(String(error2), "File operation failed")));
+  const allowed = yield* commands.exitCode("jq", [
+    "-e",
+    "--arg",
+    "package",
+    inputs.packageName,
+    "--arg",
+    "repository",
+    inputs.sourceRepository,
+    '.packages[$package].repository == $repository and (.packages[$package].architectures | index("x86_64") != null)',
+    allowlistFile
+  ]).pipe(mapCommand);
+  if (allowed !== 0)
+    return yield* failure(`${inputs.packageName} is not allowlisted for ${inputs.sourceRepository} on x86_64.`);
+});
+var build2 = exports_Effect.fn("BuildArchPackage.build")(function* (inputs) {
+  const commands = yield* exports_CommandExecutor.Service;
+  const pkgbuildPath = yield* requireInput(inputs.pkgbuildPath, "pkgbuild-path");
+  yield* commands.stream("bash", ["-c", buildScript], {
+    label: "build Arch package",
+    env: {
+      PACKAGE_NAME: inputs.packageName,
+      PACKAGE_FILES_ARTIFACT_NAME: inputs.packageFilesArtifactName ?? "",
+      PKGBUILD_PATH: pkgbuildPath,
+      SOURCE_REPOSITORY: inputs.sourceRepository,
+      SOURCE_SHA: inputs.sourceSha
+    }
+  }).pipe(mapCommand);
+});
+var validate3 = exports_Effect.fn("BuildArchPackage.validate")(function* (inputs) {
+  const commands = yield* exports_CommandExecutor.Service;
+  const fs = yield* exports_FileSystem.FileSystem;
+  const artifact = yield* commands.run("bash", ["-c", inspectScript], {
+    env: {
+      CANDIDATE_ENVELOPE_ROOT: `${process.env.RUNNER_TEMP}/candidate-envelope`,
+      PACKAGE_ROOT: `${process.env.RUNNER_TEMP}/candidate`,
+      PACKAGE_NAME: inputs.packageName
+    }
+  }).pipe(mapCommand);
+  const filename = artifact.trim();
+  const validated = `${process.env.RUNNER_TEMP}/validated`;
+  yield* fs.makeDirectory(validated, { recursive: true }).pipe(exports_Effect.mapError((error2) => failure(String(error2), "File operation failed")));
+  yield* fs.copyFile(`${process.env.RUNNER_TEMP}/candidate/${filename}`, `${validated}/${filename}`).pipe(exports_Effect.mapError((error2) => failure(String(error2), "File operation failed")));
+  yield* fs.writeFileString(`${validated}/provenance.json`, `${JSON.stringify(provenance(filename, inputs.packageName, inputs.sourceRepository, inputs.sourceSha), null, 2)}
+`).pipe(exports_Effect.mapError((error2) => failure(String(error2), "File operation failed")));
+  yield* commands.stream("tar", [
+    "-C",
+    validated,
+    "-cf",
+    `${process.env.RUNNER_TEMP}/candidate.tar`,
+    "--",
+    filename,
+    "provenance.json"
+  ]).pipe(mapCommand);
+});
+var dispatch = exports_Effect.fn("BuildArchPackage.dispatch")(function* (inputs) {
+  const commands = yield* exports_CommandExecutor.Service;
+  const artifactName = yield* requireInput(inputs.artifactName, "artifact-name");
+  const sourceRunId = yield* requireInput(inputs.sourceRunId, "source-run-id");
+  const payload = JSON.stringify(dispatchPayload(artifactName, inputs.sourceRepository, sourceRunId, inputs.sourceSha));
+  yield* commands.stream("bash", [
+    "-c",
+    'printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -'
+  ], { env: { DISPATCH_PAYLOAD: payload } }).pipe(mapCommand);
+});
+var run3 = exports_Effect.fn("BuildArchPackage.run")(function* (inputs) {
+  const invalid2 = validateIdentity(inputs);
+  if (invalid2 !== undefined)
+    return yield* invalid2;
+  switch (inputs.stage) {
+    case "validate-contract":
+      return yield* validateContract(inputs);
+    case "build":
+      return yield* build2(inputs);
+    case "validate":
+      return yield* validate3(inputs);
+    case "dispatch":
+      return yield* dispatch(inputs);
   }
-  yield* exports_ActionOutputs.setOutput("echoed", trimmed);
-  yield* annotations.notice(`Foundation smoke passed: ${trimmed}`);
-  yield* annotations.endGroup();
+});
+
+// src/actions/build-arch-package/main.ts
+var program = exports_Effect.gen(function* () {
+  const inputs = yield* exports_ActionInputs.decodeInputs(Inputs, [
+    "stage",
+    "packageName",
+    "packageFilesArtifactName",
+    "pkgbuildPath",
+    "sourceRepository",
+    "sourceSha",
+    "allowlistUrl",
+    "artifactName",
+    "sourceRunId"
+  ]).pipe(exports_Effect.mapError(exports_ActionRuntime.toActionFailure));
+  yield* run3(inputs);
 });
 exports_ActionRuntime.runAction(program, exports_ActionRuntime.platformLayer);

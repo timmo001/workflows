@@ -1,0 +1,33 @@
+name: Build Arch package stage
+description: Run one trusted stage of the reusable Arch package build workflow
+inputs:
+  stage:
+    description: Internal workflow stage
+    required: true
+  packageName:
+    description: Allowlisted Arch package name
+    required: true
+  packageFilesArtifactName:
+    description: Prepared build context artifact name
+    required: false
+  pkgbuildPath:
+    description: Relative path to PKGBUILD
+    required: false
+  sourceRepository:
+    description: Source owner and repository
+    required: true
+  sourceSha:
+    description: Full source commit SHA
+    required: true
+  allowlistUrl:
+    description: Pinned package allowlist URL
+    required: false
+  artifactName:
+    description: Validated artifact name for dispatch
+    required: false
+  sourceRunId:
+    description: Source workflow run ID
+    required: false
+runs:
+  using: node24
+  main: dist/index.js
