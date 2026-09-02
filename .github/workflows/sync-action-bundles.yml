@@ -1,0 +1,103 @@
+---
+name: Sync action bundles
+
+# yamllint disable-line rule:truthy
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+    paths:
+      - src/**
+      - scripts/bundle.ts
+      - package.json
+      - bun.lock
+      - tsconfig.json
+      - .github/actions/**/action.yml
+  push:
+    branches:
+      - master
+    paths:
+      - src/**
+      - scripts/bundle.ts
+      - package.json
+      - bun.lock
+      - tsconfig.json
+      - .github/actions/**/action.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-action-bundles-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Rebuild and merge bundles
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.0"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Rebuild action bundles
+        run: bun run bundle
+      - name: Detect bundle changes
+        id: changes
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/actions; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          fi
+      - name: Configure git identity
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Commit bundle updates to the pull request
+        if: >-
+          steps.changes.outputs.changed == 'true' &&
+          github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git add .github/actions
+          git commit -m "Rebuild action bundles"
+          git push
+      - name: Open automerging pull request for master drift
+        if: >-
+          steps.changes.outputs.changed == 'true' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch="sync/action-bundles"
+          git checkout -B "$branch"
+          git add .github/actions
+          git commit -m "Rebuild action bundles"
+          git push --force -u origin "$branch"
+          pr_url="$(gh pr list --head "$branch" --base master --json url --jq '.[0].url // empty')"
+          if [[ -z "$pr_url" ]]; then
+            pr_url="$(gh pr create --base master --head "$branch" \
+              --title "Rebuild action bundles" \
+              --body "Rebuild committed Node action bundles so they match current TypeScript sources and lockfile.")"
+          fi
+          gh pr merge --auto --squash "$pr_url"

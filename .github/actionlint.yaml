@@ -1,0 +1,6 @@
+# GitHub added `$/` self-repository uses syntax on 2026-07-30.
+# actionlint 1.7.12 does not accept it yet (rhysd/actionlint#732).
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      - 'specifying action "\$/.+" in invalid format because ref is missing.+'

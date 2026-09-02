@@ -1,0 +1,13 @@
+name: Foundation smoke
+description: Verify the shared Effect action foundation can run as a bundled Node action
+inputs:
+  message:
+    description: Message echoed through process execution and temporary storage
+    required: true
+    default: foundation-ok
+outputs:
+  echoed:
+    description: Message read back from the temporary file
+runs:
+  using: node24
+  main: dist/index.js
