@@ -1,0 +1,7 @@
+pkgname=example-source
+pkgver=1
+pkgrel=1
+arch=(x86_64)
+source=(source.tar.gz)
+sha256sums=(SKIP)
+package() { install -Dm644 "$srcdir/source.tar.gz" "$pkgdir/usr/share/example/source"; }

@@ -1,0 +1,9 @@
+pkgname=example-git
+pkgver=1
+pkgrel=1
+arch=(x86_64)
+source=(git+https://github.com/timmo001/example.git)
+source_x86_64=(https://example.invalid/helper-x86_64.tar.gz)
+sha256sums=(SKIP)
+sha256sums_x86_64=(SKIP)
+package() { install -Dm644 /dev/null "$pkgdir/usr/share/example/data"; }

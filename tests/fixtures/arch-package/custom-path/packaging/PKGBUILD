@@ -1,0 +1,8 @@
+pkgname=example
+pkgver=1
+pkgrel=1
+arch=(x86_64)
+_file=example.tar.gz
+source=("$_file::https://example.invalid/releases/$pkgver.tar.gz")
+sha256sums=(SKIP)
+package() { install -Dm644 "$srcdir/$_file" "$pkgdir/usr/share/example/archive"; }

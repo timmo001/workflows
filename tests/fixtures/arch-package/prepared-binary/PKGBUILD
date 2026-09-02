@@ -1,0 +1,7 @@
+pkgname=example-bin
+pkgver=1
+pkgrel=1
+arch=(x86_64)
+source=(example auxiliary.conf)
+sha256sums=(SKIP SKIP)
+package() { install -Dm755 "$srcdir/example" "$pkgdir/usr/bin/example"; }

@@ -10,6 +10,11 @@ const actions = [
     entry: "src/actions/foundation-smoke/main.ts",
     outfile: ".github/actions/foundation-smoke/dist/index.js",
   },
+  {
+    name: "build-arch-package",
+    entry: "src/actions/build-arch-package/main.ts",
+    outfile: ".github/actions/build-arch-package/dist/index.js",
+  },
 ] as const;
 
 const check = process.argv.includes("--check");

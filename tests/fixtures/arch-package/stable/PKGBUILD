@@ -1,0 +1,7 @@
+pkgname=example
+pkgver=1
+pkgrel=1
+arch=(x86_64)
+source=(https://example.invalid/example-1.tar.gz)
+sha256sums=(SKIP)
+package() { install -Dm644 /dev/null "$pkgdir/usr/share/example/data"; }
