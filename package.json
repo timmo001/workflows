@@ -25,7 +25,7 @@
     "@timmo001/oxlint-rules": "0.3.0",
     "@types/bun": "1.4.0",
     "oxlint": "1.81.0",
-    "prettier": "3.5.3",
+    "prettier": "3.9.6",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   }
