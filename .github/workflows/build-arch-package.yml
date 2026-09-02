@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     container:
-      image: archlinux:latest@sha256:82b1b08faae9d61e3e7e13d562f4d09114d939105b0d59ff34140f3bd418593a  # renovate-container: datasource=docker depName=archlinux
+      image: archlinux:latest@sha256:82b1b08faae9d61e3e7e13d562f4d09114d939105b0d59ff34140f3bd418593a # renovate-container: datasource=docker depName=archlinux
     steps:
       - name: Install build tooling
         run: pacman -Syu --noconfirm --needed base-devel curl git jq sudo
