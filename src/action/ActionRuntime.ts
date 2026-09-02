@@ -10,9 +10,7 @@ export const platformLayer = Layer.mergeAll(
 );
 
 export type KnownActionError =
-  | Annotations.ActionFailure
-  | CommandExecutor.CommandError
-  | Schema.SchemaError;
+  Annotations.ActionFailure | CommandExecutor.CommandError | Schema.SchemaError;
 
 export const toActionFailure = (
   error: KnownActionError,
