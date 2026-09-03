@@ -1,0 +1,30 @@
+name: Build Python PyPI release stage
+description: Run one trusted stage of the reusable Python PyPI release workflow
+inputs:
+  stage:
+    description: Internal workflow stage
+    required: true
+  eventName:
+    description: GitHub event name
+    required: false
+  eventAction:
+    description: GitHub event action
+    required: false
+  releaseDraft:
+    description: Whether the GitHub release is a draft
+    required: false
+  releasePrerelease:
+    description: Whether the GitHub release is a prerelease
+    required: false
+  releaseTag:
+    description: GitHub release tag
+    required: false
+  packageName:
+    description: PyPI distribution name
+    required: false
+  distDir:
+    description: Directory containing built distributions
+    required: false
+runs:
+  using: node24
+  main: dist/index.js

@@ -25,6 +25,11 @@ const actions = [
     entry: "src/actions/release-bun-cli/main.ts",
     outfile: ".github/actions/release-bun-cli/dist/index.js",
   },
+  {
+    name: "build-python-pypi-release",
+    entry: "src/actions/build-python-pypi-release/main.ts",
+    outfile: ".github/actions/build-python-pypi-release/dist/index.js",
+  },
 ] as const;
 
 const check = process.argv.includes("--check");

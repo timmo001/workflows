@@ -33,7 +33,7 @@ jobs:
         with:
           bun-version: "1.4.0"
       - name: Install test system dependencies
-        run: sudo apt-get install --yes libarchive-tools
+        run: sudo apt-get install --yes libarchive-tools python3-packaging
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Validate

@@ -35,36 +35,14 @@ jobs:
       artifact-name: ${{ steps.artifact.outputs.name }}
     steps:
       - name: Validate release event
-        env:
-          EVENT_ACTION: ${{ github.event.action }}
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_DRAFT: ${{ github.event.release.draft }}
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          [[ "$EVENT_NAME" == "release" ]] || {
-            echo "::error::PyPI publication requires a release event."
-            exit 1
-          }
-          [[ "$EVENT_ACTION" == "published" ]] || {
-            echo "::error::PyPI publication requires a published release."
-            exit 1
-          }
-          [[ "$RELEASE_DRAFT" == "false" ]] || {
-            echo "::error::Draft releases cannot be published to PyPI."
-            exit 1
-          }
-          [[ "$RELEASE_PRERELEASE" == "false" ]] || {
-            echo "::error::Prereleases cannot be published through the stable PyPI workflow."
-            exit 1
-          }
-          [[ -n "$RELEASE_TAG" ]] || {
-            echo "::error::The release has no tag."
-            exit 1
-          }
+        uses: $/.github/actions/build-python-pypi-release
+        with:
+          stage: validate-event
+          eventName: ${{ github.event_name }}
+          eventAction: ${{ github.event.action }}
+          releaseDraft: ${{ github.event.release.draft }}
+          releasePrerelease: ${{ github.event.release.prerelease }}
+          releaseTag: ${{ github.event.release.tag_name }}
       - name: Check out release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,18 +50,10 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
       - name: Verify immutable release source
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          source_sha="$(git rev-parse HEAD)"
-          tag_sha="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
-          [[ "$tag_sha" == "$source_sha" ]] || {
-            echo "::error::Release tag $RELEASE_TAG resolves to $tag_sha, not event source $source_sha."
-            exit 1
-          }
+        uses: $/.github/actions/build-python-pypi-release
+        with:
+          stage: validate-source
+          releaseTag: ${{ github.event.release.tag_name }}
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -92,22 +62,10 @@ jobs:
       - name: Install build tooling
         run: python -m pip install --upgrade build packaging twine
       - name: Validate stable release tag
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        shell: python
-        run: |
-          import os
-
-          from packaging.version import InvalidVersion, Version
-
-          tag = os.environ["RELEASE_TAG"]
-          try:
-              version = Version(tag)
-          except InvalidVersion as error:
-              raise SystemExit(f"Invalid PEP 440 release tag: {tag}") from error
-
-          if version.is_devrelease or version.is_prerelease or version.local is not None:
-              raise SystemExit(f"Release tag is not a stable public version: {tag}")
+        uses: $/.github/actions/build-python-pypi-release
+        with:
+          stage: validate-tag
+          releaseTag: ${{ github.event.release.tag_name }}
       - name: Build distributions
         run: |
           rm -rf dist
@@ -115,87 +73,11 @@ jobs:
       - name: Check distributions
         run: python -m twine check dist/*
       - name: Validate distribution metadata
-        env:
-          PACKAGE_NAME: ${{ inputs.package-name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        shell: python
-        run: |
-          from email.parser import BytesParser
-          import os
-          from pathlib import Path
-          import tarfile
-          from zipfile import ZipFile
-
-          from packaging.utils import (
-              canonicalize_name,
-              parse_sdist_filename,
-              parse_wheel_filename,
-          )
-          from packaging.version import Version
-
-          expected_name = canonicalize_name(os.environ["PACKAGE_NAME"])
-          expected_version = Version(os.environ["RELEASE_TAG"])
-          distributions = Path("dist")
-          wheels = list(distributions.glob("*.whl"))
-          sdists = list(distributions.glob("*.tar.gz"))
-          files = [path for path in distributions.iterdir() if path.is_file()]
-
-          if len(wheels) != 1 or len(sdists) != 1 or set(files) != set(wheels + sdists):
-              raise SystemExit(
-                  "Expected dist to contain exactly one wheel and one .tar.gz source "
-                  f"distribution, found: {[path.name for path in files]}"
-              )
-
-          wheel_name, wheel_version, _, _ = parse_wheel_filename(wheels[0].name)
-          sdist_name, sdist_version = parse_sdist_filename(sdists[0].name)
-          for kind, name, version in (
-              ("wheel filename", wheel_name, wheel_version),
-              ("sdist filename", sdist_name, sdist_version),
-          ):
-              if canonicalize_name(name) != expected_name or version != expected_version:
-                  raise SystemExit(
-                      f"{kind} identifies {name} {version}, expected "
-                      f"{expected_name} {expected_version}"
-                  )
-
-          with ZipFile(wheels[0]) as archive:
-              metadata_paths = [
-                  path for path in archive.namelist() if path.endswith(".dist-info/METADATA")
-              ]
-              if len(metadata_paths) != 1:
-                  raise SystemExit("Wheel must contain exactly one METADATA file")
-              wheel_metadata = BytesParser().parsebytes(archive.read(metadata_paths[0]))
-
-          with tarfile.open(sdists[0], mode="r:gz") as archive:
-              metadata_members = [
-                  member
-                  for member in archive.getmembers()
-                  if member.isfile() and member.name.count("/") == 1
-                  and member.name.endswith("/PKG-INFO")
-              ]
-              if len(metadata_members) != 1:
-                  raise SystemExit("Source distribution must contain one top-level PKG-INFO")
-              metadata_file = archive.extractfile(metadata_members[0])
-              if metadata_file is None:
-                  raise SystemExit("Unable to read source distribution PKG-INFO")
-              sdist_metadata = BytesParser().parsebytes(metadata_file.read())
-
-          for kind, metadata in (
-              ("wheel metadata", wheel_metadata),
-              ("sdist metadata", sdist_metadata),
-          ):
-              name = metadata["Name"]
-              version = metadata["Version"]
-              if (
-                  name is None
-                  or version is None
-                  or canonicalize_name(name) != expected_name
-                  or Version(version) != expected_version
-              ):
-                  raise SystemExit(
-                      f"{kind} identifies {name} {version}, expected "
-                      f"{expected_name} {expected_version}"
-                  )
+        uses: $/.github/actions/build-python-pypi-release
+        with:
+          stage: validate-distributions
+          packageName: ${{ inputs.package-name }}
+          releaseTag: ${{ github.event.release.tag_name }}
       - name: Set artifact name
         id: artifact
         run: |
