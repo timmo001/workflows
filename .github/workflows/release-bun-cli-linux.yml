@@ -100,41 +100,10 @@ jobs:
           ref: ${{ inputs.source-ref || github.sha }}
       - name: Allocate YYYYMMDD.N version
         id: version
-        env:
-          REQUESTED_VERSION: ${{ inputs.release-version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          source_sha="$(git rev-parse HEAD)"
-          if [[ -n "$REQUESTED_VERSION" ]]; then
-            [[ "$REQUESTED_VERSION" =~ ^[0-9]{8}\.[0-9]+$ ]] || {
-              echo "::error::Invalid release version: $REQUESTED_VERSION"
-              exit 1
-            }
-            version="$REQUESTED_VERSION"
-          else
-            release_date="$(date --utc +%Y%m%d)"
-            existing="$(git tag --points-at "$source_sha" --list --sort=-version:refname \
-              | grep -E '^[0-9]{8}\.[0-9]+$' | sed -n '1p' || :)"
-            if [[ -n "$existing" ]]; then
-              version="$existing"
-            else
-              latest="$(git tag --list "${release_date}.*" --sort=-version:refname | sed -n '1p')"
-              if [[ -z "$latest" ]]; then
-                sequence=0
-              elif [[ "$latest" =~ ^${release_date}\.([0-9]+)$ ]]; then
-                sequence=$((BASH_REMATCH[1] + 1))
-              else
-                echo "::error::Invalid release tag in the ${release_date} series: $latest"
-                exit 1
-              fi
-              version="${release_date}.${sequence}"
-            fi
-          fi
-
-          echo "release-version=$version" >> "$GITHUB_OUTPUT"
-          echo "source-sha=$source_sha" >> "$GITHUB_OUTPUT"
+        uses: $/.github/actions/release-bun-cli
+        with:
+          stage: allocate-version
+          releaseVersion: ${{ inputs.release-version }}
 
   build:
     name: Build Linux ${{ matrix.architecture }}
@@ -144,45 +113,19 @@ jobs:
       matrix:
         include:
           - architecture: x86_64
-            bun-target: bun-linux-x64-baseline
-            deb-architecture: amd64
-            nfpm-architecture: amd64
-            nfpm-download-architecture: x86_64
-            rpm-architecture: x86_64
             runner: ubuntu-24.04
           - architecture: aarch64
-            bun-target: bun-linux-arm64
-            deb-architecture: arm64
-            nfpm-architecture: arm64
-            nfpm-download-architecture: arm64
-            rpm-architecture: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Validate inputs
-        env:
-          BINARY_NAME: ${{ inputs.binary-name }}
-          PACKAGE_NAME: ${{ inputs.package-name || inputs.binary-name }}
-          ENTRYPOINT: ${{ inputs.entrypoint }}
-          PACKAGE_CONFIG: ${{ inputs.package-config }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          [[ "$BINARY_NAME" =~ ^[a-z0-9][a-z0-9._+-]*$ ]] || {
-            echo "::error::Invalid binary name: $BINARY_NAME"
-            exit 1
-          }
-          [[ "$PACKAGE_NAME" =~ ^[a-z0-9][a-z0-9._+-]*$ ]] || {
-            echo "::error::Invalid package name: $PACKAGE_NAME"
-            exit 1
-          }
-          for path in "$ENTRYPOINT" "$PACKAGE_CONFIG"; do
-            [[ -n "$path" && "$path" != /* && ! "$path" =~ (^|/)\.\.?(/|$) ]] || {
-              echo "::error::Paths must be relative and must not contain dot segments: $path"
-              exit 1
-            }
-          done
+        uses: $/.github/actions/release-bun-cli
+        with:
+          stage: validate-inputs
+          binaryName: ${{ inputs.binary-name }}
+          packageName: ${{ inputs.package-name }}
+          entrypoint: ${{ inputs.entrypoint }}
+          packageConfig: ${{ inputs.package-config }}
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -195,88 +138,43 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Compile executable
-        env:
-          BINARY_NAME: ${{ inputs.binary-name }}
-          BUN_TARGET: ${{ matrix.bun-target }}
-          ENTRYPOINT: ${{ inputs.entrypoint }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist/release/root
-          bun build "$ENTRYPOINT" --compile --target="$BUN_TARGET" --outfile "dist/release/root/$BINARY_NAME"
+        uses: $/.github/actions/release-bun-cli
+        with:
+          stage: compile
+          binaryName: ${{ inputs.binary-name }}
+          packageName: ${{ inputs.package-name }}
+          entrypoint: ${{ inputs.entrypoint }}
+          packageConfig: ${{ inputs.package-config }}
+          architecture: ${{ matrix.architecture }}
       - name: Smoke-test executable
-        env:
-          BINARY_NAME: ${{ inputs.binary-name }}
-          SMOKE_TEST_ARGUMENTS: ${{ inputs.smoke-test-arguments }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          while IFS= read -r invocation || [[ -n "$invocation" ]]; do
-            [[ -n "$invocation" ]] || continue
-            # This input is trusted caller configuration, not pull request content.
-            read -r -a arguments <<< "$invocation"
-            "dist/release/root/$BINARY_NAME" "${arguments[@]}"
-          done <<< "$SMOKE_TEST_ARGUMENTS"
+        uses: $/.github/actions/release-bun-cli
+        with:
+          stage: smoke-test
+          binaryName: ${{ inputs.binary-name }}
+          smokeTestArguments: ${{ inputs.smoke-test-arguments }}
       - name: Prepare package files
         if: inputs.package-prepare-command != ''
-        env:
-          PACKAGE_PREPARE_COMMAND: ${{ inputs.package-prepare-command }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # This input is trusted caller configuration, not pull request content.
-          bash -euo pipefail -c "$PACKAGE_PREPARE_COMMAND"
+        uses: $/.github/actions/release-bun-cli
+        with:
+          stage: prepare-package
+          packagePrepareCommand: ${{ inputs.package-prepare-command }}
       - name: Install nFPM
-        env:
-          NFPM_DOWNLOAD_ARCHITECTURE: ${{ matrix.nfpm-download-architecture }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          archive="nfpm_${NFPM_VERSION}_Linux_${NFPM_DOWNLOAD_ARCHITECTURE}.tar.gz"
-          base_url="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}"
-          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
-          curl --fail --location --silent --show-error --output checksums.txt "$base_url/checksums.txt"
-          grep "  ${archive}$" checksums.txt | sha256sum --check --strict
-          tar --extract --gzip --file "$archive" nfpm
-          chmod 0755 nfpm
+        uses: $/.github/actions/release-bun-cli
+        with:
+          stage: install-nfpm
+          architecture: ${{ matrix.architecture }}
+          nfpmVersion: ${{ env.NFPM_VERSION }}
       - name: Build archives and packages
-        env:
-          ARCH: ${{ matrix.nfpm-architecture }}
-          BINARY_NAME: ${{ inputs.binary-name }}
-          DEB_ARCHITECTURE: ${{ matrix.deb-architecture }}
-          PACKAGE_CONFIG: ${{ inputs.package-config }}
-          PACKAGE_NAME: ${{ inputs.package-name || inputs.binary-name }}
-          RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
-          ARCHIVE_EXTRA_PATHS: ${{ inputs.archive-extra-paths }}
-          RPM_ARCHITECTURE: ${{ matrix.rpm-architecture }}
-          VERSION: ${{ needs.version.outputs.release-version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          assets="dist/release/assets"
-          mkdir -p "$assets"
-          archive_paths=("$BINARY_NAME")
-          while IFS= read -r path || [[ -n "$path" ]]; do
-            [[ -n "$path" ]] || continue
-            [[ "$path" != /* && ! "$path" =~ (^|/)\.\.?(/|$) ]] || {
-              echo "::error::Invalid archive path: $path"
-              exit 1
-            }
-            [[ -e "dist/release/root/$path" ]] || {
-              echo "::error::Archive path not found: $path"
-              exit 1
-            }
-            archive_paths+=("$path")
-          done <<< "$ARCHIVE_EXTRA_PATHS"
-          tar --create --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-            --directory=dist/release/root "${archive_paths[@]}" \
-            | gzip --no-name > "$assets/${PACKAGE_NAME}-${VERSION}-linux-${RELEASE_ARCHITECTURE}.tar.gz"
-          ./nfpm package --config "$PACKAGE_CONFIG" --packager deb \
-            --target "$assets/${PACKAGE_NAME}_${VERSION}_${DEB_ARCHITECTURE}.deb"
-          ./nfpm package --config "$PACKAGE_CONFIG" --packager rpm \
-            --target "$assets/${PACKAGE_NAME}-${VERSION}-1.${RPM_ARCHITECTURE}.rpm"
+        uses: $/.github/actions/release-bun-cli
+        with:
+          stage: build-assets
+          binaryName: ${{ inputs.binary-name }}
+          packageName: ${{ inputs.package-name }}
+          entrypoint: ${{ inputs.entrypoint }}
+          packageConfig: ${{ inputs.package-config }}
+          architecture: ${{ matrix.architecture }}
+          archiveExtraPaths: ${{ inputs.archive-extra-paths }}
+          releaseVersion: ${{ needs.version.outputs.release-version }}
       - name: Upload release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -315,63 +213,18 @@ jobs:
           name: release-${{ inputs.binary-name }}-aarch64-${{ github.run_id }}
           path: ${{ runner.temp }}/release-assets
       - name: Verify assets and create checksums
-        env:
-          ASSET_ROOT: ${{ runner.temp }}/release-assets
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          expected_assets=6
-          actual_assets="$(find "$ASSET_ROOT" -maxdepth 1 -type f | wc -l)"
-          [[ "$actual_assets" -eq "$expected_assets" ]] || {
-            echo "::error::Expected $expected_assets release assets, found $actual_assets."
-            exit 1
-          }
-          find "$ASSET_ROOT" -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort \
-            | while IFS= read -r asset; do
-                (cd "$ASSET_ROOT" && sha256sum "$asset")
-              done > "$ASSET_ROOT/SHA256SUMS"
-          (cd "$ASSET_ROOT" && sha256sum --check --strict SHA256SUMS)
+        uses: $/.github/actions/release-bun-cli
+        with:
+          stage: verify-assets
+          assetRoot: ${{ runner.temp }}/release-assets
       - name: Publish GitHub prerelease
+        uses: $/.github/actions/release-bun-cli
         env:
-          ASSET_ROOT: ${{ runner.temp }}/release-assets
           GH_TOKEN: ${{ github.token }}
-          PRERELEASE: ${{ inputs.prerelease }}
-          EXISTING_RELEASE: ${{ inputs.existing-release }}
-          RELEASE_VERSION: ${{ needs.version.outputs.release-version }}
-          SOURCE_SHA: ${{ needs.version.outputs.source-sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "$EXISTING_RELEASE" == "true" ]]; then
-            gh release view "$RELEASE_VERSION" >/dev/null
-            gh release upload "$RELEASE_VERSION" "$ASSET_ROOT"/* --clobber
-            exit 0
-          fi
-
-          release_exists=false
-          if git rev-parse --verify --quiet "refs/tags/$RELEASE_VERSION" >/dev/null; then
-            [[ "$(git rev-list -n 1 "$RELEASE_VERSION")" == "$SOURCE_SHA" ]] || {
-              echo "::error::Release tag $RELEASE_VERSION already points to another commit."
-              exit 1
-            }
-            gh release view "$RELEASE_VERSION" >/dev/null 2>&1 && release_exists=true
-          fi
-
-          if [[ "$release_exists" == "true" ]]; then
-            gh release edit "$RELEASE_VERSION" \
-              --target "$SOURCE_SHA" \
-              --title "$RELEASE_VERSION" \
-              --notes "Rolling release $RELEASE_VERSION from commit $SOURCE_SHA." \
-              --prerelease="$PRERELEASE"
-            gh release upload "$RELEASE_VERSION" "$ASSET_ROOT"/* --clobber
-          else
-            prerelease_arguments=()
-            [[ "$PRERELEASE" == "true" ]] && prerelease_arguments+=(--prerelease)
-            gh release create "$RELEASE_VERSION" "$ASSET_ROOT"/* \
-              --target "$SOURCE_SHA" \
-              --title "$RELEASE_VERSION" \
-              --notes "Rolling release $RELEASE_VERSION from commit $SOURCE_SHA." \
-              "${prerelease_arguments[@]}"
-          fi
+        with:
+          stage: publish-release
+          assetRoot: ${{ runner.temp }}/release-assets
+          prerelease: "${{ inputs.prerelease }}"
+          existingRelease: "${{ inputs.existing-release }}"
+          releaseVersion: ${{ needs.version.outputs.release-version }}
+          sourceSha: ${{ needs.version.outputs.source-sha }}

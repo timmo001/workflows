@@ -20,6 +20,11 @@ const actions = [
     entry: "src/actions/publish-aur/main.ts",
     outfile: ".github/actions/publish-aur/dist/index.js",
   },
+  {
+    name: "release-bun-cli",
+    entry: "src/actions/release-bun-cli/main.ts",
+    outfile: ".github/actions/release-bun-cli/dist/index.js",
+  },
 ] as const;
 
 const check = process.argv.includes("--check");

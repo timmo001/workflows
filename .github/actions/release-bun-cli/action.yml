@@ -1,0 +1,56 @@
+name: Release Bun CLI stage
+description: Run one trusted stage of the reusable Bun CLI Linux release workflow
+inputs:
+  stage:
+    description: Internal workflow stage
+    required: true
+  binaryName:
+    description: Compiled executable name
+    required: false
+  packageName:
+    description: Package and release asset base name
+    required: false
+  entrypoint:
+    description: Bun entrypoint to compile
+    required: false
+  packageConfig:
+    description: nFPM configuration owned by the caller
+    required: false
+  architecture:
+    description: Linux architecture to build
+    required: false
+  smokeTestArguments:
+    description: Trusted newline-separated executable argument lists
+    required: false
+  packagePrepareCommand:
+    description: Trusted shell command run after compilation and before nFPM packaging
+    required: false
+  archiveExtraPaths:
+    description: Trusted newline-separated paths under dist/release/root
+    required: false
+  prerelease:
+    description: Publish the GitHub release as a prerelease
+    required: false
+  releaseVersion:
+    description: Existing or allocated YYYYMMDD.N release version
+    required: false
+  sourceSha:
+    description: Full source commit SHA used for the release
+    required: false
+  existingRelease:
+    description: Upload assets to an existing release without editing it
+    required: false
+  assetRoot:
+    description: Directory containing combined release assets
+    required: false
+  nfpmVersion:
+    description: nFPM version to download and verify
+    required: false
+outputs:
+  release-version:
+    description: Allocated YYYYMMDD.N release version
+  source-sha:
+    description: Full source commit SHA used for the release
+runs:
+  using: node24
+  main: dist/index.js
