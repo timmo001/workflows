@@ -71,23 +71,13 @@ jobs:
         run: bun install --frozen-lockfile
         working-directory: ${{ inputs.package-path }}
       - name: Validate release
-        env:
-          BUILD_COMMAND: ${{ inputs.build-command }}
-          CHECK_COMMAND: ${{ inputs.check-command }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
-        shell: bash
-        working-directory: ${{ inputs.package-path }}
-        run: |
-          set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
-          [[ "$RELEASE_TAG" == "$version" ]] || {
-            echo "::error::Release tag $RELEASE_TAG does not match package version $version"
-            exit 1
-          }
-          # These commands are trusted caller configuration, not release content.
-          bash -euo pipefail -c "$CHECK_COMMAND"
-          bash -euo pipefail -c "$BUILD_COMMAND"
-          npm pack --dry-run
+        uses: $/.github/actions/validate-js-package
+        with:
+          contract: npm
+          packagePath: ${{ inputs.package-path }}
+          checkCommand: ${{ inputs.check-command }}
+          buildCommand: ${{ inputs.build-command }}
+          releaseTag: ${{ github.event.release.tag_name || github.ref_name }}
       - name: Publish package
         run: npm publish --access public
         working-directory: ${{ inputs.package-path }}

@@ -1,0 +1,24 @@
+name: Validate JS package
+description: Run shared Bun, npm, and JSR package contract validation
+inputs:
+  contract:
+    description: Package contract to validate
+    required: true
+  packagePath:
+    description: Directory containing the package
+    required: false
+  checkCommand:
+    description: Trusted command that validates the package
+    required: false
+  buildCommand:
+    description: Trusted command that builds the package
+    required: false
+  jsrCliVersion:
+    description: JSR CLI version used for package validation
+    required: false
+  releaseTag:
+    description: GitHub release tag to compare with package versions
+    required: false
+runs:
+  using: node24
+  main: dist/index.js
