@@ -40,6 +40,11 @@ const actions = [
     entry: "src/actions/validate-agent-skills/main.ts",
     outfile: ".github/actions/validate-agent-skills/dist/index.js",
   },
+  {
+    name: "validate-json",
+    entry: "src/actions/validate-json/main.ts",
+    outfile: ".github/actions/validate-json/dist/index.js",
+  },
 ] as const;
 
 const check = process.argv.includes("--check");

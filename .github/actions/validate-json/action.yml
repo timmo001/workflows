@@ -1,0 +1,5 @@
+name: Validate JSON
+description: Recursively validate JSON files
+runs:
+  using: node24
+  main: dist/index.js
