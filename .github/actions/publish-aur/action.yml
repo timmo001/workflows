@@ -1,0 +1,24 @@
+name: Publish AUR package stage
+description: Run one trusted stage of the reusable AUR publication workflow
+inputs:
+  stage:
+    description: Internal workflow stage
+    required: true
+  packageName:
+    description: AUR package base
+    required: true
+  pkgbuildPath:
+    description: Relative path to the source PKGBUILD
+    required: false
+  auxiliaryFilePaths:
+    description: Newline-separated auxiliary file paths
+    required: false
+  aurSshPrivateKey:
+    description: SSH private key authorised to publish the AUR package
+    required: false
+outputs:
+  changed:
+    description: Whether an AUR commit was prepared
+runs:
+  using: node24
+  main: dist/index.js

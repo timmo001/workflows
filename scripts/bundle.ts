@@ -15,6 +15,11 @@ const actions = [
     entry: "src/actions/build-arch-package/main.ts",
     outfile: ".github/actions/build-arch-package/dist/index.js",
   },
+  {
+    name: "publish-aur",
+    entry: "src/actions/publish-aur/main.ts",
+    outfile: ".github/actions/publish-aur/dist/index.js",
+  },
 ] as const;
 
 const check = process.argv.includes("--check");
