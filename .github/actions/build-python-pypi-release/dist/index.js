@@ -24447,7 +24447,9 @@ var readRawInput = (name) => {
 var readInputs = (names) => {
   const inputs = {};
   for (const name of names) {
-    inputs[name] = readRawInput(name);
+    const value3 = readRawInput(name);
+    if (value3 !== undefined)
+      inputs[name] = value3;
   }
   return inputs;
 };

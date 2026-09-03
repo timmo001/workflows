@@ -9,11 +9,12 @@ export const readRawInput = (name: string): string | undefined => {
 };
 
 export const readInputs = (names: readonly string[]) => {
-  const inputs: Record<string, string | undefined> = {};
+  const inputs: Record<string, string> = {};
   for (const name of names) {
-    inputs[name] = readRawInput(name);
+    const value = readRawInput(name);
+    if (value !== undefined) inputs[name] = value;
   }
-  return inputs satisfies Record<string, string | undefined>;
+  return inputs;
 };
 
 export const decodeInputs = <S extends Schema.Top>(
