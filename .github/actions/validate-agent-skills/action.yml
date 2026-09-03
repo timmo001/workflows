@@ -1,0 +1,9 @@
+name: Validate Agent Skills
+description: Discover and validate Agent Skills with skills-ref
+inputs:
+  skillRoots:
+    description: Space-separated directories containing Agent Skills
+    required: true
+runs:
+  using: node24
+  main: dist/index.js
