@@ -10,7 +10,7 @@ on:
         required: false
         type: string
         # renovate: datasource=npm depName=bun
-        default: "1.4.0"
+        default: "1.4.2"
       node-version:
         description: "Node.js version used for npm package inspection"
         required: false
