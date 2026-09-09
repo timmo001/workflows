@@ -16,7 +16,7 @@ on:
         required: false
         type: string
         # renovate: datasource=node-version depName=node versioning=node
-        default: "26.8.1"
+        default: "26.8.2"
       npm-version:
         description: "npm CLI version with trusted publishing support"
         required: false
