@@ -1,6 +1,8 @@
-import { Effect, FileSystem, Schema } from "effect";
+import { Gh } from "@timmo001/effect-gh";
+import { Effect, FileSystem, Schema, Stream } from "effect";
 import { ActionOutputs } from "../../action/ActionOutputs.js";
 import { Annotations } from "../../action/Annotations.js";
+import { GitHubCommand } from "../../action/GitHubCommand.js";
 import { CommandExecutor } from "../../services/CommandExecutor.js";
 
 export const Stage = Schema.Literals([
@@ -210,38 +212,14 @@ find "$ASSET_ROOT" -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort 
     done > "$ASSET_ROOT/SHA256SUMS"
 (cd "$ASSET_ROOT" && sha256sum --check --strict SHA256SUMS)`;
 
-export const publishReleaseScript = String.raw`set -euo pipefail
-if [[ "$EXISTING_RELEASE" == "true" ]]; then
-  gh release view "$RELEASE_VERSION" >/dev/null
-  gh release upload "$RELEASE_VERSION" "$ASSET_ROOT"/* --clobber
-  exit 0
-fi
-
-release_exists=false
+export const releaseTagScript = String.raw`set -euo pipefail
 if git rev-parse --verify --quiet "refs/tags/$RELEASE_VERSION" >/dev/null; then
   [[ "$(git rev-list -n 1 "$RELEASE_VERSION")" == "$SOURCE_SHA" ]] || {
     printf 'Release tag %s already points to another commit.\n' "$RELEASE_VERSION" >&2
     exit 1
   }
-  gh release view "$RELEASE_VERSION" >/dev/null 2>&1 && release_exists=true
-fi
-
-if [[ "$release_exists" == "true" ]]; then
-  gh release edit "$RELEASE_VERSION" \
-    --target "$SOURCE_SHA" \
-    --title "$RELEASE_VERSION" \
-    --notes "Rolling release $RELEASE_VERSION from commit $SOURCE_SHA." \
-    --prerelease="$PRERELEASE"
-  gh release upload "$RELEASE_VERSION" "$ASSET_ROOT"/* --clobber
-else
-  prerelease_arguments=()
-  [[ "$PRERELEASE" == "true" ]] && prerelease_arguments+=(--prerelease)
-  gh release create "$RELEASE_VERSION" "$ASSET_ROOT"/* \
-    --target "$SOURCE_SHA" \
-    --title "$RELEASE_VERSION" \
-    --notes "Rolling release $RELEASE_VERSION from commit $SOURCE_SHA." \
-    "\${prerelease_arguments[@]}"
-fi`.replaceAll("\\${", "${");
+  printf true
+fi`;
 
 const resolvedPackageName = (inputs: Inputs, binaryName: string) =>
   inputs.packageName ?? binaryName;
@@ -459,18 +437,90 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
     "release-version",
   );
   const sourceSha = yield* requireInput(inputs.sourceSha, "source-sha");
-  yield* commands
-    .stream("bash", ["-c", publishReleaseScript], {
-      label: "publish GitHub release",
-      env: {
-        ASSET_ROOT: assetRoot,
-        EXISTING_RELEASE: inputs.existingRelease ?? "false",
-        PRERELEASE: inputs.prerelease ?? "true",
-        RELEASE_VERSION: releaseVersion,
-        SOURCE_SHA: sourceSha,
-      },
+  const gh = yield* Gh;
+  const label = "publish GitHub release";
+  const github = yield* GitHubCommand.make(label);
+  const env = {
+    ASSET_ROOT: assetRoot,
+    EXISTING_RELEASE: inputs.existingRelease ?? "false",
+    PRERELEASE: inputs.prerelease ?? "true",
+    RELEASE_VERSION: releaseVersion,
+    SOURCE_SHA: sourceSha,
+  };
+  const assets = commands
+    .run("bash", ["-c", 'set -euo pipefail\nprintf "%s\\0" "$ASSET_ROOT"/*'], {
+      env,
     })
+    .pipe(
+      mapCommand,
+      Effect.map((stdout) => stdout.split("\0").slice(0, -1)),
+    );
+  if (env.EXISTING_RELEASE === "true") {
+    yield* github.stream(["release", "view", releaseVersion], {
+      env,
+      suppressStdout: true,
+    });
+    yield* github.stream(
+      ["release", "upload", releaseVersion, ...(yield* assets), "--clobber"],
+      { env },
+    );
+    return;
+  }
+  const tag = yield* commands
+    .capture("bash", ["-c", releaseTagScript], { env })
     .pipe(mapCommand);
+  if (tag.stderr !== "") yield* github.writeStderr(`${tag.stderr}\n`);
+  if (tag.exitCode !== 0) {
+    return yield* failure(
+      tag.stderr.slice(-16 * 1024).trim() ||
+        `Command failed with exit code ${tag.exitCode}: ${label}`,
+      "Command failed",
+    );
+  }
+  const releaseExists =
+    tag.stdout === "true" &&
+    (yield* gh.stream(["release", "view", releaseVersion], { env }).pipe(
+      Stream.runDrain,
+      Effect.as(true),
+      Effect.catchTag("GhCommandError", () => Effect.succeed(false)),
+      github.mapError,
+    ));
+  const flags = [
+    "--target",
+    sourceSha,
+    "--title",
+    releaseVersion,
+    "--notes",
+    `Rolling release ${releaseVersion} from commit ${sourceSha}.`,
+  ];
+  if (releaseExists) {
+    yield* github.stream(
+      [
+        "release",
+        "edit",
+        releaseVersion,
+        ...flags,
+        `--prerelease=${env.PRERELEASE}`,
+      ],
+      { env },
+    );
+    yield* github.stream(
+      ["release", "upload", releaseVersion, ...(yield* assets), "--clobber"],
+      { env },
+    );
+  } else {
+    yield* github.stream(
+      [
+        "release",
+        "create",
+        releaseVersion,
+        ...(yield* assets),
+        ...flags,
+        ...(env.PRERELEASE === "true" ? ["--prerelease"] : []),
+      ],
+      { env },
+    );
+  }
 });
 
 export const run = Effect.fn("ReleaseBunCli.run")(function* (inputs: Inputs) {

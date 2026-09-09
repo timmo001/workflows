@@ -1,5 +1,6 @@
 import { Effect, FileSystem, Schema } from "effect";
 import { Annotations } from "../../action/Annotations.js";
+import { GitHubCommand } from "../../action/GitHubCommand.js";
 import { CommandExecutor } from "../../services/CommandExecutor.js";
 
 export const Stage = Schema.Literals([
@@ -346,7 +347,6 @@ const validate = Effect.fn("BuildArchPackage.validate")(function* (
 const dispatch = Effect.fn("BuildArchPackage.dispatch")(function* (
   inputs: Inputs,
 ) {
-  const commands = yield* CommandExecutor.Service;
   const artifactName = yield* requireInput(
     inputs.artifactName,
     "artifact-name",
@@ -360,16 +360,23 @@ const dispatch = Effect.fn("BuildArchPackage.dispatch")(function* (
       inputs.sourceSha,
     ),
   );
-  yield* commands
-    .stream(
-      "bash",
-      [
-        "-c",
-        'printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -',
-      ],
-      { env: { DISPATCH_PAYLOAD: payload } },
-    )
-    .pipe(mapCommand);
+  const github = yield* GitHubCommand.make(
+    'bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -',
+  );
+  yield* github.stream(
+    [
+      "api",
+      "--method",
+      "POST",
+      "repos/timmo001/arch-repo/dispatches",
+      "--input",
+      "-",
+    ],
+    {
+      env: { DISPATCH_PAYLOAD: payload },
+      stdin: payload,
+    },
+  );
 });
 
 export const run = Effect.fn("BuildArchPackage.run")(function* (

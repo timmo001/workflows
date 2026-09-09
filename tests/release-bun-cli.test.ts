@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
+import { layer } from "@timmo001/effect-gh";
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 import { Annotations } from "../src/action/Annotations.js";
@@ -23,7 +24,7 @@ import {
   linuxAssetNames,
   newlineValues,
   packageAssetsScript,
-  publishReleaseScript,
+  releaseTagScript,
   resolveReleaseVersion,
   smokeTestScript,
   type Inputs,
@@ -48,6 +49,7 @@ const commandLayer = CommandExecutor.layer.pipe(
 const runStage = (inputs: Inputs) =>
   Effect.runPromiseExit(
     Effect.scoped(run(inputs)).pipe(
+      Effect.provide(layer()),
       Effect.provide(commandLayer),
       Effect.provide(NodeServices.layer),
     ),
@@ -222,7 +224,7 @@ describe("release-bun-cli scripts", () => {
     writeArchiveScript,
     packageAssetsScript,
     verifyAssetsScript,
-    publishReleaseScript,
+    releaseTagScript,
   ])("keeps a syntactically valid bash stage script %#", (script) => {
     expect(() => execFileSync("bash", ["-n", "-c", script])).not.toThrow();
   });

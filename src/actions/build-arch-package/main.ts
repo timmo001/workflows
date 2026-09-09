@@ -1,3 +1,4 @@
+import { layer } from "@timmo001/effect-gh";
 import { Effect } from "effect";
 import { ActionInputs } from "../../action/ActionInputs.js";
 import { ActionRuntime } from "../../action/ActionRuntime.js";
@@ -18,4 +19,7 @@ const program = Effect.gen(function* () {
   yield* run(inputs);
 });
 
-ActionRuntime.runAction(program, ActionRuntime.platformLayer);
+ActionRuntime.runAction(
+  program.pipe(Effect.provide(layer())),
+  ActionRuntime.platformLayer,
+);

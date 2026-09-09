@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NodeServices } from "@effect/platform-node";
+import { layer } from "@timmo001/effect-gh";
 import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
@@ -204,7 +205,11 @@ const validateFixture = (root: string) => {
         stage: "validate",
         packageName: "example",
       }),
-    ).pipe(Effect.provide(commandLayer), Effect.provide(NodeServices.layer)),
+    ).pipe(
+      Effect.provide(layer()),
+      Effect.provide(commandLayer),
+      Effect.provide(NodeServices.layer),
+    ),
   ).finally(() => {
     if (previous === undefined) delete process.env.RUNNER_TEMP;
     else process.env.RUNNER_TEMP = previous;
