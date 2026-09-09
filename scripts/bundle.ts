@@ -56,7 +56,8 @@ for (const action of actions) {
   const absoluteOut = join(process.cwd(), action.outfile);
   await mkdir(dirname(absoluteOut), { recursive: true });
   const temporary = `${absoluteOut}.tmp`;
-  await $`bun build ${action.entry} --target=node --format=esm --outfile=${temporary}`;
+  // The Git-pinned SDK exposes TypeScript through its bun export; output stays Node ESM.
+  await $`bun build ${action.entry} --target=node --conditions=bun --format=esm --outfile=${temporary}`;
   const next = await readFile(temporary);
   if (check) {
     let current: Uint8Array | undefined;

@@ -8,7 +8,7 @@
     "bundle:check": "bun run scripts/bundle.ts --check",
     "lint": "oxlint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --config scripts/vitest.config.ts",
     "format": "prettier --write \"{src,tests,scripts}/**/*.ts\" oxlint.config.ts package.json tsconfig.json",
     "format:check": "prettier --check \"{src,tests,scripts}/**/*.ts\" oxlint.config.ts package.json tsconfig.json",
     "validate": "bun run lint && bun run typecheck && bun run test && bun run format:check && bun run bundle:check",
@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.112",
+    "@timmo001/effect-gh": "github:timmo001/effect-gh#d4a3a865a3275b4be71884fe0d625521bfc63171",
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {
