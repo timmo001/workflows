@@ -192,17 +192,13 @@ function isIterable(input) {
 }
 
 // node_modules/effect/dist/Hash.js
-var symbol = "~effect/interfaces/Hash";
+var symbol = "~effect/Hash";
 var hash = (self) => {
   switch (typeof self) {
     case "number":
       return number(self);
     case "bigint":
       return string(self.toString(10));
-    case "boolean":
-      return string(String(self));
-    case "symbol":
-      return string(String(self));
     case "string":
       return string(self);
     case "undefined":
@@ -246,7 +242,7 @@ var hash = (self) => {
       }
     }
     default:
-      throw new Error(`BUG: unhandled typeof ${typeof self} - please report an issue at https://github.com/Effect-TS/effect/issues`);
+      return string(String(self));
   }
 };
 var random = (self) => {
@@ -259,14 +255,8 @@ var combine = /* @__PURE__ */ dual(2, (self, b) => self * 53 ^ b);
 var optimize = (n) => n & 3221225471 | n >>> 1 & 1073741824;
 var isHash = (u) => hasProperty(u, symbol);
 var number = (n) => {
-  if (n !== n) {
-    return string("NaN");
-  }
-  if (n === Infinity) {
-    return string("Infinity");
-  }
-  if (n === -Infinity) {
-    return string("-Infinity");
+  if (n !== n || n === Infinity || n === -Infinity) {
+    return string(String(n));
   }
   let h = n | 0;
   if (h !== n) {
@@ -316,7 +306,7 @@ function withVisitedTracking(obj, fn) {
 }
 
 // node_modules/effect/dist/Equal.js
-var symbol2 = "~effect/interfaces/Equal";
+var symbol2 = "~effect/Equal";
 function equals() {
   if (arguments.length === 1) {
     return (self) => compareBoth(self, arguments[0]);
@@ -553,6 +543,15 @@ function format(input, options) {
     }
   };
   function recur(v, d = 0) {
+    try {
+      return recurUnsafe(v, d);
+    } catch {
+      if (typeof v === "object" && v !== null || typeof v === "function")
+        ancestors.delete(v);
+      return "[inspection threw]";
+    }
+  }
+  function recurUnsafe(v, d = 0) {
     if (typeof v === "string")
       return JSON.stringify(v);
     if (typeof v === "number" || v == null || typeof v === "boolean" || typeof v === "symbol")
@@ -575,17 +574,17 @@ ${ind(d)}]`;
         output = formatDate(v);
       } else if (!options?.ignoreToString && hasProperty(v, "toString") && typeof v["toString"] === "function" && v["toString"] !== Object.prototype.toString && v["toString"] !== Array.prototype.toString) {
         const s = safeToString(v);
-        output = v instanceof Error && v.cause ? `${s} (cause: ${recur(v.cause, d)})` : s;
+        output = v instanceof Error && v.cause !== undefined ? `${s} (cause: ${recur(v.cause, d)})` : s;
       } else if (Symbol.iterator in v) {
         output = `${v.constructor.name}(${recur(Array.from(v), d)})`;
       } else {
         const keys = ownKeys(v);
         if (!gap || keys.length <= 1) {
-          const body = `{${keys.map((k) => `${formatPropertyKey(k)}:${recur(v[k], d)}`).join(",")}}`;
+          const body = `{${keys.map((k) => `${formatPropertyKey(k)}:${recur(safeGet(v, k), d)}`).join(",")}}`;
           output = wrap(v, body);
         } else {
           const body = `{
-${keys.map((k) => `${ind(d + 1)}${formatPropertyKey(k)}: ${recur(v[k], d + 1)}`).join(`,
+${keys.map((k) => `${ind(d + 1)}${formatPropertyKey(k)}: ${recur(safeGet(v, k), d + 1)}`).join(`,
 `)}
 ${ind(d)}}`;
           output = wrap(v, body);
@@ -618,6 +617,13 @@ function safeToString(input) {
     return typeof s === "string" ? s : String(s);
   } catch {
     return "[toString threw]";
+  }
+}
+function safeGet(input, key) {
+  try {
+    return input[key];
+  } catch {
+    return "[property access threw]";
   }
 }
 function formatJson(input, options) {
@@ -683,6 +689,22 @@ var BaseProto = {
   }
 };
 
+// node_modules/effect/dist/internal/stackTraceLimit.js
+var isStackTraceLimitWritable = () => {
+  const desc = Object.getOwnPropertyDescriptor(Error, "stackTraceLimit");
+  if (desc === undefined) {
+    return Object.isExtensible(Error);
+  }
+  return Object.hasOwn(desc, "writable") ? desc.writable === true : desc.set !== undefined;
+};
+var canWriteStackTraceLimit = /* @__PURE__ */ isStackTraceLimitWritable();
+var getStackTraceLimit = () => Error.stackTraceLimit;
+var setStackTraceLimit = (value) => {
+  if (canWriteStackTraceLimit) {
+    Error.stackTraceLimit = value;
+  }
+};
+
 // node_modules/effect/dist/Utils.js
 class SingleShotGen {
   called = false;
@@ -717,7 +739,7 @@ var pickInternalCall = () => {
       } finally {}
     }
   };
-  const isNotOptimizedAway = standard[InternalTypeId](() => new Error().stack)?.includes(InternalTypeId) === true;
+  const isNotOptimizedAway = getStackTraceLimit() !== 0 && standard[InternalTypeId](() => new Error().stack)?.includes(InternalTypeId) === true;
   return isNotOptimizedAway ? standard[InternalTypeId] : forced[InternalTypeId];
 };
 var internalCall = /* @__PURE__ */ pickInternalCall();
@@ -816,8 +838,6 @@ var CauseTypeId = "~effect/Cause";
 var CauseReasonTypeId = "~effect/Cause/Reason";
 var isCause = (self) => hasProperty(self, CauseTypeId);
 class CauseImpl {
-  [CauseTypeId];
-  reasons;
   constructor(failures) {
     this[CauseTypeId] = CauseTypeId;
     this.reasons = failures;
@@ -888,7 +908,6 @@ class ReasonBase {
 var constEmptyAnnotations = /* @__PURE__ */ new Map;
 
 class Fail extends ReasonBase {
-  error;
   constructor(error, annotations = constEmptyAnnotations) {
     super("Fail", annotations, error);
     this.error = error;
@@ -914,7 +933,6 @@ var causeEmpty = /* @__PURE__ */ new CauseImpl([]);
 var causeFail = (error) => new CauseImpl([new Fail(error)]);
 
 class Die extends ReasonBase {
-  defect;
   constructor(defect, annotations = constEmptyAnnotations) {
     super("Die", annotations, defect);
     this.defect = defect;
@@ -957,10 +975,12 @@ var makePrimitiveProto = (options) => ({
 });
 var makePrimitive = (options) => {
   const Proto = makePrimitiveProto(options);
-  return function() {
-    const self = Object.create(Proto);
-    self[args] = options.single === false ? arguments : arguments[0];
-    return self;
+  const PrimitiveImpl = function(value) {
+    this[args] = value;
+  };
+  PrimitiveImpl.prototype = Proto;
+  return function(value) {
+    return new PrimitiveImpl(value);
   };
 };
 var makeExit = (options) => {
@@ -988,10 +1008,12 @@ var makeExit = (options) => {
       return combine(string(options.op), hash(this[args]));
     }
   };
+  const ExitPrimitive = function(value) {
+    this[args] = value;
+  };
+  ExitPrimitive.prototype = Proto;
   return function(value) {
-    const self = Object.create(Proto);
-    self[args] = value;
-    return self;
+    return new ExitPrimitive(value);
   };
 };
 var exitSucceed = /* @__PURE__ */ makeExit({
@@ -1014,9 +1036,9 @@ var exitFailCause = /* @__PURE__ */ makeExit({
   [evaluate](fiber) {
     let cause = this[args];
     let annotated = false;
-    if (fiber.currentStackFrame) {
+    if (fiber.cache.stackFrame) {
       cause = causeAnnotate(cause, {
-        mapUnsafe: new Map([[StackTraceKey.key, fiber.currentStackFrame]])
+        mapUnsafe: new Map([[StackTraceKey.key, fiber.cache.stackFrame]])
       });
       annotated = true;
     }
@@ -1033,6 +1055,14 @@ var withFiber = /* @__PURE__ */ makePrimitive({
   op: "WithFiber",
   [evaluate](fiber) {
     return this[args](fiber);
+  }
+});
+var withFiberSucceed = /* @__PURE__ */ makePrimitive({
+  op: "WithFiberSucceed",
+  [evaluate](fiber) {
+    const value = this[args](fiber);
+    const cont = fiber.getCont(contA);
+    return cont ? cont[contA](value, fiber) : fiber.yieldWith(exitSucceed(value));
   }
 });
 var YieldableError = /* @__PURE__ */ function() {
@@ -1110,7 +1140,7 @@ var Prototype2 = (options) => makePrimitiveProto({
 });
 
 // node_modules/effect/dist/internal/option.js
-var TypeId = "~effect/data/Option";
+var TypeId = "~effect/Option";
 var CommonProto = {
   [TypeId]: {
     _A: (_) => _
@@ -1169,14 +1199,14 @@ var isOption = (input) => hasProperty(input, TypeId);
 var isNone = (fa) => fa._tag === "None";
 var isSome = (fa) => fa._tag === "Some";
 var none = /* @__PURE__ */ Object.create(NoneProto);
-var some = (value) => {
-  const a = Object.create(SomeProto);
-  a.value = value;
-  return a;
+var SomeImpl = function(value) {
+  this.value = value;
 };
+SomeImpl.prototype = SomeProto;
+var some = (value) => new SomeImpl(value);
 
 // node_modules/effect/dist/internal/result.js
-var TypeId2 = "~effect/data/Result";
+var TypeId2 = "~effect/Result";
 var CommonProto2 = {
   [TypeId2]: {
     _A: (_) => _,
@@ -1230,16 +1260,16 @@ var FailureProto = /* @__PURE__ */ Object.assign(/* @__PURE__ */ Object.create(C
 var isResult = (input) => hasProperty(input, TypeId2);
 var isFailure = (result) => result._tag === "Failure";
 var isSuccess = (result) => result._tag === "Success";
-var fail = (failure) => {
-  const a = Object.create(FailureProto);
-  a.failure = failure;
-  return a;
+var FailureImpl = function(failure) {
+  this.failure = failure;
 };
-var succeed = (success) => {
-  const a = Object.create(SuccessProto);
-  a.success = success;
-  return a;
+FailureImpl.prototype = FailureProto;
+var fail = (failure) => new FailureImpl(failure);
+var SuccessImpl = function(success) {
+  this.success = success;
 };
+SuccessImpl.prototype = SuccessProto;
+var succeed = (success) => new SuccessImpl(success);
 
 // node_modules/effect/dist/Order.js
 function make(compare) {
@@ -1488,7 +1518,7 @@ var mergeAll = (...ctxs) => {
 };
 var Reference = Service;
 // node_modules/effect/dist/Duration.js
-var TypeId4 = "~effect/time/Duration";
+var TypeId4 = "~effect/Duration";
 var bigint0 = /* @__PURE__ */ BigInt(0);
 var bigint1 = /* @__PURE__ */ BigInt(1);
 var bigint2 = /* @__PURE__ */ BigInt(2);
@@ -1758,6 +1788,9 @@ var equals2 = /* @__PURE__ */ dual(2, (self, that) => Equivalence(self, that));
 // node_modules/effect/dist/internal/array.js
 var isArrayNonEmpty = (self) => self.length > 0;
 
+// node_modules/effect/dist/internal/count.js
+var normalize = (n) => n > 0 ? Math.floor(n) : 0;
+
 // node_modules/effect/dist/Result.js
 var succeed2 = succeed;
 var fail2 = fail;
@@ -1794,63 +1827,18 @@ var constEmptyIterator = {
 var Array2 = globalThis.Array;
 var fromIterable = (collection) => Array2.isArray(collection) ? collection : Array2.from(collection);
 var append = /* @__PURE__ */ dual(2, (self, last) => [...self, last]);
-var appendAll = /* @__PURE__ */ dual(2, (self, that) => fromIterable(self).concat(fromIterable(that)));
 var isArray = Array2.isArray;
 var isArrayNonEmpty2 = isArrayNonEmpty;
 var isReadonlyArrayNonEmpty = isArrayNonEmpty;
-var hashBucketsAdd = (buckets, value) => {
-  const hash2 = hash(value);
-  const bucket = buckets.get(hash2);
-  if (bucket === undefined) {
-    buckets.set(hash2, [value]);
-    return true;
-  }
-  for (const previous of bucket) {
-    if (equals(previous, value)) {
-      return false;
-    }
-  }
-  bucket.push(value);
-  return true;
-};
-var union = /* @__PURE__ */ dual(2, (self, that) => {
-  const a = fromIterable(self);
-  const b = fromIterable(that);
-  if (isReadonlyArrayNonEmpty(a)) {
-    return isReadonlyArrayNonEmpty(b) ? dedupe(appendAll(a, b)) : a;
-  }
-  return b;
-});
 var empty2 = () => [];
 var of = (a) => [a];
 var map2 = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
-var dedupe = (self) => {
-  const input = fromIterable(self);
-  if (input.length < 2) {
-    return [...input];
-  }
-  const buckets = new Map;
-  const out = [];
-  for (const value of input) {
-    if (hashBucketsAdd(buckets, value)) {
-      out.push(value);
-    }
-  }
-  return out;
-};
 
 // node_modules/effect/dist/Scheduler.js
 var Scheduler = /* @__PURE__ */ Reference("effect/Scheduler", {
   fiberCached: true,
   defaultValue: () => new MixedScheduler
 });
-var setImmediate = "setImmediate" in globalThis ? (f) => {
-  const timer = globalThis.setImmediate(f);
-  return () => globalThis.clearImmediate(timer);
-} : (f) => {
-  const timer = setTimeout(f, 0);
-  return () => clearTimeout(timer);
-};
 var setMicrotask = (f) => {
   let cancelled = false;
   Promise.resolve().then(() => {
@@ -1860,6 +1848,20 @@ var setMicrotask = (f) => {
   return () => {
     cancelled = true;
   };
+};
+var setTimer = "setImmediate" in globalThis ? (f) => {
+  const timer = globalThis.setImmediate(f);
+  return () => globalThis.clearImmediate(timer);
+} : (f) => {
+  const timer = setTimeout(f, 0);
+  return () => clearTimeout(timer);
+};
+var setImmediate = (f) => {
+  try {
+    return setTimer(f);
+  } catch {
+    return setMicrotask(f);
+  }
 };
 
 class PriorityBuckets {
@@ -1897,7 +1899,7 @@ class MixedScheduler {
     this.setImmediate = setImmediateFn ?? (executionMode === "sync" ? setMicrotask : setImmediate);
   }
   shouldYield(fiber) {
-    return fiber.currentOpCount >= fiber.maxOpsBeforeYield;
+    return fiber.currentOpCount >= fiber.cache.maxOpsBeforeYield;
   }
   makeDispatcher() {
     return new MixedSchedulerDispatcher(this.setImmediate);
@@ -1954,7 +1956,7 @@ var Error3 = Error2;
 var TaggedError2 = TaggedError;
 
 // node_modules/effect/dist/Encoding.js
-var EncodingErrorTypeId = "~effect/encoding/EncodingError";
+var EncodingErrorTypeId = "~effect/Encoding/EncodingError";
 
 class EncodingError extends (/* @__PURE__ */ TaggedError2("EncodingError")) {
   [EncodingErrorTypeId] = EncodingErrorTypeId;
@@ -2000,12 +2002,37 @@ var decodeBase64 = (str) => {
   }
 };
 var randomHex = (length) => {
-  let result = "";
-  for (let i = length >>> 3;i > 0; i--) {
-    const word = Math.random() * 4294967296 >>> 0;
-    result += byteToHex[word >>> 24] + byteToHex[word >>> 16 & 255] + byteToHex[word >>> 8 & 255] + byteToHex[word & 255];
+  switch (length) {
+    case 16:
+      return randomHex16();
+    case 32:
+      return randomHex32();
+    default: {
+      let result = "";
+      for (let i = length >>> 3;i > 0; i--) {
+        result += randomHex8();
+      }
+      return result;
+    }
   }
-  return result;
+};
+var hexCharCodes = /* @__PURE__ */ Uint8Array.from("0123456789abcdef", (c) => c.charCodeAt(0));
+var randomWord = () => Math.random() * 4294967296 >>> 0;
+var randomHex8 = () => {
+  const a = randomWord();
+  return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15]);
+};
+var randomHex16 = () => {
+  const a = randomWord();
+  const b = randomWord();
+  return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15], hexCharCodes[b >>> 28], hexCharCodes[b >>> 24 & 15], hexCharCodes[b >>> 20 & 15], hexCharCodes[b >>> 16 & 15], hexCharCodes[b >>> 12 & 15], hexCharCodes[b >>> 8 & 15], hexCharCodes[b >>> 4 & 15], hexCharCodes[b & 15]);
+};
+var randomHex32 = () => {
+  const a = randomWord();
+  const b = randomWord();
+  const c = randomWord();
+  const d = randomWord();
+  return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15], hexCharCodes[b >>> 28], hexCharCodes[b >>> 24 & 15], hexCharCodes[b >>> 20 & 15], hexCharCodes[b >>> 16 & 15], hexCharCodes[b >>> 12 & 15], hexCharCodes[b >>> 8 & 15], hexCharCodes[b >>> 4 & 15], hexCharCodes[b & 15], hexCharCodes[c >>> 28], hexCharCodes[c >>> 24 & 15], hexCharCodes[c >>> 20 & 15], hexCharCodes[c >>> 16 & 15], hexCharCodes[c >>> 12 & 15], hexCharCodes[c >>> 8 & 15], hexCharCodes[c >>> 4 & 15], hexCharCodes[c & 15], hexCharCodes[d >>> 28], hexCharCodes[d >>> 24 & 15], hexCharCodes[d >>> 20 & 15], hexCharCodes[d >>> 16 & 15], hexCharCodes[d >>> 12 & 15], hexCharCodes[d >>> 8 & 15], hexCharCodes[d >>> 4 & 15], hexCharCodes[d & 15]);
 };
 var encoder = /* @__PURE__ */ new TextEncoder;
 var stripCrlf = (str) => str.replace(/[\n\r]/g, "");
@@ -2044,10 +2071,6 @@ function getBase64Code(charCode) {
 }
 var base64abc = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"];
 var base64codes = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 0, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255, 255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51];
-var byteToHex = [];
-for (let i = 0;i < 256; i++) {
-  byteToHex.push(i.toString(16).padStart(2, "0"));
-}
 
 // node_modules/effect/dist/Tracer.js
 var ParentSpanKey = "effect/Tracer/ParentSpan";
@@ -2069,15 +2092,14 @@ var MinimumTraceLevel = /* @__PURE__ */ Reference("effect/Tracer/MinimumTraceLev
 var TracerKey = "effect/Tracer";
 var Tracer = /* @__PURE__ */ Reference(TracerKey, {
   fiberCached: true,
-  defaultValue: () => make4({
-    span: (options) => new NativeSpan(options)
-  })
+  defaultValue: () => nativeTracer
+});
+var nativeTracer = /* @__PURE__ */ make4({
+  span: (options) => new NativeSpan(options)
 });
 
 class NativeSpan {
   _tag = "Span";
-  spanId;
-  traceId = "native";
   sampled;
   name;
   parent;
@@ -2086,8 +2108,10 @@ class NativeSpan {
   startTime;
   kind;
   status;
-  attributes;
-  events = [];
+  _traceId = undefined;
+  _spanId = undefined;
+  _attributes = undefined;
+  _events = undefined;
   constructor(options) {
     this.name = options.name;
     this.parent = options.parent;
@@ -2100,9 +2124,18 @@ class NativeSpan {
       _tag: "Started",
       startTime: options.startTime
     };
-    this.attributes = new Map;
-    this.traceId = getOrUndefined(options.parent)?.traceId ?? randomHex(32);
-    this.spanId = randomHex(16);
+  }
+  get traceId() {
+    return this._traceId ??= getOrUndefined(this.parent)?.traceId ?? randomHex(32);
+  }
+  get spanId() {
+    return this._spanId ??= randomHex(16);
+  }
+  get attributes() {
+    return this._attributes ??= new Map;
+  }
+  get events() {
+    return this._events ??= [];
   }
   end(endTime, exit) {
     this.status = {
@@ -2124,7 +2157,7 @@ class NativeSpan {
 }
 
 // node_modules/effect/dist/internal/metric.js
-var FiberRuntimeMetricsKey = "effect/observability/Metric/FiberRuntimeMetricsKey";
+var FiberRuntimeMetricsKey = "effect/Metric/FiberRuntimeMetrics";
 
 // node_modules/effect/dist/internal/references.js
 var CurrentStackFrame = /* @__PURE__ */ Reference("effect/References/CurrentStackFrame", {
@@ -2132,6 +2165,7 @@ var CurrentStackFrame = /* @__PURE__ */ Reference("effect/References/CurrentStac
   defaultValue: constUndefined
 });
 var TracerEnabled = /* @__PURE__ */ Reference("effect/References/TracerEnabled", {
+  fiberCached: true,
   defaultValue: constTrue
 });
 var TracerTimingEnabled = /* @__PURE__ */ Reference("effect/References/TracerTimingEnabled", {
@@ -2158,22 +2192,6 @@ var CurrentLogSpans = /* @__PURE__ */ Reference("effect/References/CurrentLogSpa
   defaultValue: () => []
 });
 
-// node_modules/effect/dist/internal/stackTraceLimit.js
-var isStackTraceLimitWritable = () => {
-  const desc = Object.getOwnPropertyDescriptor(Error, "stackTraceLimit");
-  if (desc === undefined) {
-    return Object.isExtensible(Error);
-  }
-  return Object.hasOwn(desc, "writable") ? desc.writable === true : desc.set !== undefined;
-};
-var canWriteStackTraceLimit = /* @__PURE__ */ isStackTraceLimitWritable();
-var getStackTraceLimit = () => Error.stackTraceLimit;
-var setStackTraceLimit = (value) => {
-  if (canWriteStackTraceLimit) {
-    Error.stackTraceLimit = value;
-  }
-};
-
 // node_modules/effect/dist/internal/tracer.js
 var makeStackCleaner = (line) => (stack) => {
   let cache;
@@ -2194,7 +2212,6 @@ var makeStackCleaner = (line) => (stack) => {
 
 // node_modules/effect/dist/internal/effect.js
 class Interrupt extends ReasonBase {
-  fiberId;
   constructor(fiberId, annotations = constEmptyAnnotations) {
     super("Interrupt", annotations, "Interrupted");
     this.fiberId = fiberId;
@@ -2231,13 +2248,30 @@ var findError = (self) => {
 };
 var hasInterrupts = (self) => self.reasons.some(isInterruptReason);
 var hasInterruptsOnly = (self) => self.reasons.length > 0 && self.reasons.every(isInterruptReason);
+var dedupeReasons = (self, that) => {
+  const buckets = new Map;
+  const out = [];
+  for (const reason of self.concat(that)) {
+    const hash2 = hash(reason);
+    const bucket = buckets.get(hash2);
+    if (bucket === undefined) {
+      buckets.set(hash2, [reason]);
+    } else if (bucket.some((previous) => equals(previous, reason))) {
+      continue;
+    } else {
+      bucket.push(reason);
+    }
+    out.push(reason);
+  }
+  return out;
+};
 var causeCombine = /* @__PURE__ */ dual(2, (self, that) => {
   if (self.reasons.length === 0) {
     return that;
   } else if (that.reasons.length === 0) {
     return self;
   }
-  const newCause = new CauseImpl(union(self.reasons, that.reasons));
+  const newCause = new CauseImpl(dedupeReasons(self.reasons, that.reasons));
   return equals(self, newCause) ? self : newCause;
 });
 var causeMap = /* @__PURE__ */ dual(2, (self, f) => {
@@ -2279,7 +2313,8 @@ var causePrettyErrors = (self, options) => {
   if (self.reasons.length === 0)
     return errors;
   const prevStackLimit = getStackTraceLimit();
-  setStackTraceLimit(1);
+  if (prevStackLimit !== 0)
+    setStackTraceLimit(1);
   for (const failure of self.reasons) {
     if (failure._tag === "Interrupt") {
       interrupts.push(failure);
@@ -2298,7 +2333,8 @@ var causePrettyErrors = (self, options) => {
     error.stack = `${error.name}: ${error.message}`;
     errors.push(causePrettyError(error, interrupts[0].annotations, options));
   }
-  setStackTraceLimit(prevStackLimit);
+  if (prevStackLimit !== 0)
+    setStackTraceLimit(prevStackLimit);
   return errors;
 };
 var causePrettyError = (original, annotations, options) => {
@@ -2439,14 +2475,15 @@ class FiberImpl {
     this.currentOpCount = 0;
     this.interruptible = interruptible;
     this._stack = [];
-    this._observers = [];
+    this._observers = undefined;
     this._exit = undefined;
     this._children = undefined;
     this._interruptedCause = undefined;
     this._yielded = undefined;
     this._running = false;
     this._deferredInterrupt = false;
-    this.runtimeMetrics?.recordFiberStart(this.context);
+    this._parent = undefined;
+    this.cache.runtimeMetrics?.recordFiberStart(this.context);
   }
   [FiberTypeId];
   id;
@@ -2460,19 +2497,12 @@ class FiberImpl {
   _yielded;
   _running;
   _deferredInterrupt;
+  _parent;
   context;
-  currentScheduler;
-  currentTracerContext;
-  currentSpan;
-  currentLogLevel;
-  minimumLogLevel;
-  currentStackFrame;
-  runtimeMetrics;
-  maxOpsBeforeYield;
-  currentPreventYield;
+  cache;
   _dispatcher = undefined;
   get currentDispatcher() {
-    return this._dispatcher ??= this.currentScheduler.makeDispatcher();
+    return this._dispatcher ??= this.cache.scheduler.makeDispatcher();
   }
   getRef(ref) {
     return get(this.context, ref);
@@ -2482,9 +2512,13 @@ class FiberImpl {
       cb(this._exit);
       return constVoid;
     }
-    this._observers.push(cb);
+    if (this._observers === undefined) {
+      this._observers = [cb];
+    } else {
+      this._observers.push(cb);
+    }
     return () => {
-      if (this._exit)
+      if (this._exit || this._observers === undefined)
         return;
       const index = this._observers.indexOf(cb);
       if (index >= 0) {
@@ -2497,8 +2531,8 @@ class FiberImpl {
       return;
     }
     let cause = causeInterrupt(fiberId);
-    if (this.currentStackFrame) {
-      cause = causeAnnotate(cause, make2(StackTraceKey, this.currentStackFrame));
+    if (this.cache.stackFrame) {
+      cause = causeAnnotate(cause, make2(StackTraceKey, this.cache.stackFrame));
     }
     if (annotations) {
       cause = causeAnnotate(cause, annotations);
@@ -2532,11 +2566,18 @@ class FiberImpl {
       return this.evaluate(flatMap2(interruptChildren, () => exit));
     }
     this._exit = exit;
-    this.runtimeMetrics?.recordFiberEnd(this.context, this._exit);
-    for (let i = 0;i < this._observers.length; i++) {
-      this._observers[i](exit);
+    this.cache.runtimeMetrics?.recordFiberEnd(this.context, this._exit);
+    if (this._parent) {
+      this._parent._children?.delete(this);
+      this._parent = undefined;
     }
-    this._observers.length = 0;
+    if (this._observers !== undefined) {
+      const observers = this._observers;
+      this._observers = undefined;
+      for (let i = 0;i < observers.length; i++) {
+        observers[i](exit);
+      }
+    }
     this._stack.length = 0;
     this._children = undefined;
     this.context = empty();
@@ -2556,12 +2597,13 @@ class FiberImpl {
           current = failCause(this._interruptedCause);
         }
         this.currentOpCount++;
-        if (!yielding && !this.currentPreventYield && this.currentScheduler.shouldYield(this)) {
+        const cache = this.cache;
+        if (!yielding && !cache.preventYield && cache.scheduler.shouldYield(this)) {
           yielding = true;
           const prev = current;
           current = flatMap2(yieldNow, () => prev);
         }
-        current = this.currentTracerContext ? this.currentTracerContext(current, this) : current[evaluate](this);
+        current = cache.tracerContext ? cache.tracerContext(current, this) : current[evaluate](this);
         if (current === Yield) {
           const yielded = this._yielded;
           if (ExitTypeId in yielded) {
@@ -2595,10 +2637,13 @@ class FiberImpl {
       const op = this._stack.pop();
       if (!op)
         return;
-      const cont = op[contAll] && op[contAll](this);
-      if (cont) {
-        cont[symbol] = cont;
-        return cont;
+      const all = op[contAll];
+      if (all !== undefined) {
+        const cont = all.call(op, this);
+        if (cont) {
+          cont[symbol] = cont;
+          return cont;
+        }
       }
       if (op[symbol])
         return op;
@@ -2619,25 +2664,34 @@ class FiberImpl {
     this.context = context;
     if (previous !== undefined && hasSameCache(previous, context))
       return;
-    const scheduler = this.getRef(Scheduler);
-    if (scheduler !== this.currentScheduler) {
-      this.currentScheduler = scheduler;
+    const root = context.cacheRoot;
+    const cache = root._fiberCache ??= makeFiberContextCache(context);
+    if (this.cache !== undefined && this.cache.scheduler !== cache.scheduler) {
       this._dispatcher = undefined;
     }
-    this.currentSpan = getOrUndefinedUnsafe(context, ParentSpanKey);
-    this.currentLogLevel = this.getRef(CurrentLogLevel);
-    this.minimumLogLevel = this.getRef(MinimumLogLevel);
-    this.currentStackFrame = this.getRef(CurrentStackFrame);
-    this.maxOpsBeforeYield = this.getRef(MaxOpsBeforeYield);
-    this.currentPreventYield = this.getRef(PreventSchedulerYield);
-    this.runtimeMetrics = getOrUndefinedUnsafe(context, FiberRuntimeMetricsKey);
-    const currentTracer = getOrUndefinedUnsafe(context, TracerKey);
-    this.currentTracerContext = currentTracer ? currentTracer["context"] : undefined;
+    this.cache = cache;
   }
   get currentSpanLocal() {
-    return this.currentSpan?._tag === "Span" ? this.currentSpan : undefined;
+    const span = this.cache.span;
+    return span?._tag === "Span" ? span : undefined;
   }
 }
+var makeFiberContextCache = (context) => {
+  const currentTracer = getOrUndefinedUnsafe(context, TracerKey);
+  return {
+    scheduler: get(context, Scheduler),
+    tracer: currentTracer,
+    tracerContext: currentTracer ? currentTracer["context"] : undefined,
+    tracerEnabled: get(context, TracerEnabled),
+    span: getOrUndefinedUnsafe(context, ParentSpanKey),
+    logLevel: get(context, CurrentLogLevel),
+    minimumLogLevel: get(context, MinimumLogLevel),
+    stackFrame: get(context, CurrentStackFrame),
+    runtimeMetrics: getOrUndefinedUnsafe(context, FiberRuntimeMetricsKey),
+    maxOpsBeforeYield: get(context, MaxOpsBeforeYield),
+    preventYield: get(context, PreventSchedulerYield)
+  };
+};
 var deferredInterruptCont = {
   [contA](_value, fiber) {
     return failCause(fiber._interruptedCause);
@@ -2650,10 +2704,10 @@ var fiberMiddleware = {
   interruptChildren: undefined
 };
 var fiberStackAnnotations = (fiber) => {
-  if (!fiber.currentStackFrame)
+  if (!fiber.cache.stackFrame)
     return;
   const annotations = new Map;
-  annotations.set(InterruptorStackTrace.key, fiber.currentStackFrame);
+  annotations.set(InterruptorStackTrace.key, fiber.cache.stackFrame);
   return makeUnsafe(annotations);
 };
 var fiberInterruptChildren = (fiber) => {
@@ -2792,41 +2846,50 @@ var tryPromise = (options) => {
   }, f.length !== 0);
 };
 var withFiberId = (f) => withFiber((fiber) => f(fiber.id));
-var callbackOptions = /* @__PURE__ */ makePrimitive({
-  op: "Async",
-  single: false,
-  [evaluate](fiber) {
-    const register = internalCall(() => this[args][0].bind(fiber.currentScheduler));
-    let resumed = false;
-    let yielded = false;
-    const controller = this[args][1] ? new AbortController : undefined;
-    const onCancel = register((effect) => {
-      if (resumed)
-        return;
-      resumed = true;
-      if (yielded) {
-        fiber.evaluate(effect);
-      } else {
-        yielded = effect;
+var callbackOptions = /* @__PURE__ */ function() {
+  const Proto = /* @__PURE__ */ makePrimitiveProto({
+    op: "Async",
+    [evaluate](fiber) {
+      const register = internalCall(() => this.register.bind(fiber.cache.scheduler));
+      let resumed = false;
+      let yielded = false;
+      const controller = this.withSignal ? new AbortController : undefined;
+      const onCancel = register((effect) => {
+        if (resumed)
+          return;
+        resumed = true;
+        if (yielded) {
+          fiber.evaluate(effect);
+        } else {
+          yielded = effect;
+        }
+      }, controller?.signal);
+      if (yielded !== false)
+        return yielded;
+      yielded = true;
+      fiber._yielded = () => {
+        resumed = true;
+      };
+      if (controller === undefined && onCancel === undefined) {
+        return Yield;
       }
-    }, controller?.signal);
-    if (yielded !== false)
-      return yielded;
-    yielded = true;
-    fiber._yielded = () => {
-      resumed = true;
-    };
-    if (controller === undefined && onCancel === undefined) {
+      fiber._stack.push(asyncFinalizer(() => {
+        resumed = true;
+        controller?.abort();
+        return onCancel ?? exitVoid;
+      }));
       return Yield;
     }
-    fiber._stack.push(asyncFinalizer(() => {
-      resumed = true;
-      controller?.abort();
-      return onCancel ?? exitVoid;
-    }));
-    return Yield;
-  }
-});
+  });
+  const AsyncImpl = function(register, withSignal) {
+    this.register = register;
+    this.withSignal = withSignal;
+  };
+  AsyncImpl.prototype = Proto;
+  return function(register, withSignal) {
+    return new AsyncImpl(register, withSignal);
+  };
+}();
 var asyncFinalizer = /* @__PURE__ */ makePrimitive({
   op: "AsyncFinalizer",
   [contAll](fiber) {
@@ -2841,7 +2904,14 @@ var asyncFinalizer = /* @__PURE__ */ makePrimitive({
 });
 var callback = (register) => callbackOptions(register, register.length >= 2);
 var never = /* @__PURE__ */ callback(constVoid);
-var gen = (...args) => suspend(() => fromIteratorUnsafe(args.length === 1 ? args[0]() : args[1].call(args[0].self)));
+var gen = (...args) => {
+  if (args.length === 1) {
+    const body = args[0];
+    return suspend(() => fromIteratorUnsafe(body()));
+  }
+  const [options, body] = args;
+  return suspend(() => fromIteratorUnsafe(body.call(options.self)));
+};
 var fnUntraced = (body, ...pipeables) => {
   const fn = pipeables.length === 0 ? function() {
     return suspend(() => fromIteratorUnsafe(body.apply(this, arguments)));
@@ -2864,9 +2934,12 @@ var fn = function() {
   const name = nameFirst ? arguments[0] : "Effect.fn";
   const spanOptions = nameFirst ? arguments[1] : undefined;
   const prevLimit = getStackTraceLimit();
-  setStackTraceLimit(2);
-  const defError = new globalThis.Error;
-  setStackTraceLimit(prevLimit);
+  let defError;
+  if (prevLimit !== 0) {
+    setStackTraceLimit(2);
+    defError = new globalThis.Error;
+    setStackTraceLimit(prevLimit);
+  }
   if (nameFirst) {
     return (body, ...pipeables) => makeFn(name, body, defError, pipeables, nameFirst, spanOptions);
   }
@@ -2886,15 +2959,18 @@ var makeFn = (name, bodyOrOptions, defError, pipeables, addSpan, spanOptions) =>
       return result;
     }
     const prevLimit = getStackTraceLimit();
-    setStackTraceLimit(2);
-    const callError = new globalThis.Error;
-    setStackTraceLimit(prevLimit);
+    let callError;
+    if (prevLimit !== 0) {
+      setStackTraceLimit(2);
+      callError = new globalThis.Error;
+      setStackTraceLimit(prevLimit);
+    }
     return updateService(addSpan ? useSpan(name, spanOptions, (span) => provideParentSpan(result, span)) : result, CurrentStackFrame, (prev) => ({
       name,
-      stack: fnStackCleaner(() => callError.stack),
+      stack: callError ? fnStackCleaner(() => callError.stack) : constUndefined,
       parent: {
         name: `${name} (definition)`,
-        stack: fnStackCleaner(() => defError.stack),
+        stack: defError ? fnStackCleaner(() => defError.stack) : constUndefined,
         parent: prev
       }
     }));
@@ -2905,7 +2981,7 @@ var fnUntracedEager = (body, ...pipeables) => defineFunctionLength(body.length, 
 } : function() {
   let effect = fromIteratorEagerUnsafe(() => body.apply(this, arguments));
   for (const pipeable of pipeables) {
-    effect = pipeable(effect);
+    effect = pipeable(effect, ...arguments);
   }
   return effect;
 });
@@ -2940,36 +3016,79 @@ var fromIteratorEagerUnsafe = (evaluate) => {
     return die(error);
   }
 };
-var fromIteratorUnsafe = /* @__PURE__ */ makePrimitive({
-  op: "Iterator",
-  single: false,
-  [contA](value, fiber) {
-    const iter = this[args][0];
-    while (true) {
-      const state = iter.next(value);
-      if (state.done)
-        return succeed3(state.value);
-      if (!effectIsExit(state.value)) {
-        fiber._stack.push(this);
-        return state.value;
-      } else if (state.value._tag === "Failure") {
-        return state.value;
+var fromIteratorUnsafe = /* @__PURE__ */ function() {
+  const Proto = /* @__PURE__ */ makePrimitiveProto({
+    op: "Iterator",
+    [contA](value, fiber) {
+      const iter = this.iterator;
+      while (true) {
+        const state = iter.next(value);
+        if (state.done)
+          return succeed3(state.value);
+        if (!effectIsExit(state.value)) {
+          fiber._stack.push(this);
+          return state.value;
+        } else if (state.value._tag === "Failure") {
+          return state.value;
+        }
+        value = state.value.value;
       }
-      value = state.value.value;
+    },
+    [evaluate](fiber) {
+      return this[contA](this.initial, fiber);
     }
-  },
-  [evaluate](fiber) {
-    return this[contA](this[args][1], fiber);
-  }
+  });
+  const IteratorImpl = function(iterator, initial) {
+    this.iterator = iterator;
+    this.initial = initial;
+  };
+  IteratorImpl.prototype = Proto;
+  return function(iterator, initial) {
+    return new IteratorImpl(iterator, initial);
+  };
+}();
+var as = /* @__PURE__ */ dual(2, (self, value) => new ContImpl(self, returnPayload, succeed3(value)));
+var evaluateCont = function(fiber) {
+  fiber._stack.push(this);
+  return this[args];
+};
+var OnSuccessProto = /* @__PURE__ */ makePrimitiveProto({
+  op: "OnSuccess",
+  [evaluate]: evaluateCont
 });
-var as = /* @__PURE__ */ dual(2, (self, value) => {
-  const b = succeed3(value);
-  return flatMap2(self, (_) => b);
-});
+var OnSuccessImpl = function(self, f) {
+  this[args] = self;
+  this[contA] = f;
+};
+OnSuccessImpl.prototype = OnSuccessProto;
+var ContImpl = function(self, cont, payload) {
+  this[args] = self;
+  this[contA] = cont;
+  this.payload = payload;
+};
+ContImpl.prototype = OnSuccessProto;
+var returnPayload = function() {
+  return this.payload;
+};
+var mapCont = function(value) {
+  const f = this.payload;
+  return succeed3(internalCall(() => f(value)));
+};
+var andThenCont = function(value) {
+  const f = this.payload;
+  return internalCall(() => f(value));
+};
+var tapCont = function(value) {
+  const f = this.payload;
+  return new ContImpl(internalCall(() => f(value)), returnPayload, exitSucceed(value));
+};
+var tapEffectCont = function(value) {
+  return new ContImpl(this.payload, returnPayload, exitSucceed(value));
+};
 var asSome = (self) => map4(self, some2);
-var andThen = /* @__PURE__ */ dual(2, (self, f) => flatMap2(self, (a) => isEffect(f) ? f : internalCall(() => f(a))));
-var tap = /* @__PURE__ */ dual(2, (self, f) => flatMap2(self, (a) => as(isEffect(f) ? f : internalCall(() => f(a)), a)));
-var asVoid = (self) => flatMap2(self, (_) => exitVoid);
+var andThen = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? returnPayload : andThenCont, f));
+var tap = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? tapEffectCont : tapCont, f));
+var asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
 var raceAllFirst = (all, options) => withFiber((parent) => callback((resume) => {
   let done = false;
   const fibers = new Set;
@@ -3000,27 +3119,15 @@ var raceAllFirst = (all, options) => withFiber((parent) => callback((resume) => 
   return fiberInterruptAll(fibers);
 }));
 var raceFirst = /* @__PURE__ */ dual((args) => isEffect(args[1]), (self, that, options) => raceAllFirst([self, that], options));
-var flatMap2 = /* @__PURE__ */ dual(2, (self, f) => {
-  const onSuccess = Object.create(OnSuccessProto);
-  onSuccess[args] = self;
-  onSuccess[contA] = f.length !== 1 ? (a) => f(a) : f;
-  return onSuccess;
-});
-var OnSuccessProto = /* @__PURE__ */ makePrimitiveProto({
-  op: "OnSuccess",
-  [evaluate](fiber) {
-    fiber._stack.push(this);
-    return this[args];
-  }
-});
-var effectIsExit = (effect) => (ExitTypeId in effect);
+var flatMap2 = /* @__PURE__ */ dual(2, (self, f) => new OnSuccessImpl(self, f.length !== 1 ? (a) => f(a) : f));
+var effectIsExit = (effect) => effect[ExitTypeId] !== undefined;
 var flatMapEager = /* @__PURE__ */ dual(2, (self, f) => {
   if (effectIsExit(self)) {
     return self._tag === "Success" ? f(self.value) : self;
   }
   return flatMap2(self, f);
 });
-var map4 = /* @__PURE__ */ dual(2, (self, f) => flatMap2(self, (a) => succeed3(internalCall(() => f(a)))));
+var map4 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
 var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map4(self, f));
 var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError(self, f));
 var exitInterrupt = (fiberId) => exitFailCause(causeInterrupt(fiberId));
@@ -3084,19 +3191,16 @@ var forever = /* @__PURE__ */ dual((args) => isEffect(args[0]), (self, options) 
   body: constant(options?.disableYield ? self : flatMap2(self, (_) => yieldNow)),
   step: constVoid
 }));
-var catchCause = /* @__PURE__ */ dual(2, (self, f) => {
-  const onFailure = Object.create(OnFailureProto);
-  onFailure[args] = self;
-  onFailure[contE] = f.length !== 1 ? (cause) => f(cause) : f;
-  return onFailure;
-});
+var catchCause = /* @__PURE__ */ dual(2, (self, f) => new OnFailureImpl(self, f.length !== 1 ? (cause) => f(cause) : f));
 var OnFailureProto = /* @__PURE__ */ makePrimitiveProto({
   op: "OnFailure",
-  [evaluate](fiber) {
-    fiber._stack.push(this);
-    return this[args];
-  }
+  [evaluate]: evaluateCont
 });
+var OnFailureImpl = function(self, f) {
+  this[args] = self;
+  this[contE] = f;
+};
+OnFailureImpl.prototype = OnFailureProto;
 var catchCauseFilter = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause(self, (cause) => {
   const eb = filter(cause);
   return isFailure2(eb) ? failCause(eb.failure) : internalCall(() => f(eb.success, cause));
@@ -3138,20 +3242,17 @@ var result = (self) => matchEager(self, {
   onFailure: fail2,
   onSuccess: succeed2
 });
-var matchCauseEffect = /* @__PURE__ */ dual(2, (self, options) => {
-  const primitive = Object.create(OnSuccessAndFailureProto);
-  primitive[args] = self;
-  primitive[contA] = options.onSuccess.length !== 1 ? (a) => options.onSuccess(a) : options.onSuccess;
-  primitive[contE] = options.onFailure.length !== 1 ? (cause) => options.onFailure(cause) : options.onFailure;
-  return primitive;
-});
+var matchCauseEffect = /* @__PURE__ */ dual(2, (self, options) => new OnSuccessAndFailureImpl(self, options.onSuccess.length !== 1 ? (a) => options.onSuccess(a) : options.onSuccess, options.onFailure.length !== 1 ? (cause) => options.onFailure(cause) : options.onFailure));
 var OnSuccessAndFailureProto = /* @__PURE__ */ makePrimitiveProto({
   op: "OnSuccessAndFailure",
-  [evaluate](fiber) {
-    fiber._stack.push(this);
-    return this[args];
-  }
+  [evaluate]: evaluateCont
 });
+var OnSuccessAndFailureImpl = function(self, onSuccess, onFailure) {
+  this[args] = self;
+  this[contA] = onSuccess;
+  this[contE] = onFailure;
+};
+OnSuccessAndFailureImpl.prototype = OnSuccessAndFailureProto;
 var matchEffect = /* @__PURE__ */ dual(2, (self, options) => matchCauseEffect(self, {
   onFailure: (cause) => {
     const fail = cause.reasons.find(isFailReason);
@@ -3188,7 +3289,8 @@ var exitPrimitive = /* @__PURE__ */ makePrimitive({
     return succeed3(exit ?? exitFailCause(cause));
   }
 });
-var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => raceFirst(self, flatMap2(sleep(options.duration), options.orElse)));
+var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => flatMap2(timeoutOption(self, options.duration), (option) => isNone2(option) ? options.orElse() : succeed3(option.value)));
+var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as(sleep(duration), none2())));
 var ScopeTypeId = "~effect/Scope";
 var ScopeCloseableTypeId = "~effect/Scope/Closeable";
 var scopeTag = /* @__PURE__ */ Service("effect/Scope");
@@ -3318,30 +3420,40 @@ var scopedWith = (f) => suspend(() => {
 });
 var acquireRelease = (acquire, release, options) => contextWith((context) => uninterruptibleMask((restore) => flatMap2(scope, (scope) => tap(options?.interruptible ? restore(acquire) : acquire, (a) => scopeAddFinalizerExit(scope, (exit) => provideContext(release(a, exit), context))))));
 var addFinalizer = (finalizer) => flatMap2(scope, (scope) => contextWith((context) => scopeAddFinalizerExit(scope, (exit) => provideContext(finalizer(exit), context))));
-var onExitPrimitive = /* @__PURE__ */ makePrimitive({
-  op: "OnExit",
-  single: false,
-  [evaluate](fiber) {
-    fiber._stack.push(this);
-    return this[args][0];
-  },
-  [contAll](fiber) {
-    if (fiber.interruptible && this[args][2] !== true) {
-      fiber._stack.push(setInterruptibleTrue);
-      fiber.interruptible = false;
+var onExitPrimitive = /* @__PURE__ */ function() {
+  const Proto = /* @__PURE__ */ makePrimitiveProto({
+    op: "OnExit",
+    [evaluate](fiber) {
+      fiber._stack.push(this);
+      return this.effect;
+    },
+    [contAll](fiber) {
+      if (fiber.interruptible && this.interruptible !== true) {
+        fiber._stack.push(setInterruptibleTrue);
+        fiber.interruptible = false;
+      }
+    },
+    [contA](value, _, exit) {
+      exit ??= exitSucceed(value);
+      const eff = this.onExit(exit);
+      return eff ? flatMap2(eff, (_) => exit) : exit;
+    },
+    [contE](cause, _, exit) {
+      exit ??= exitFailCause(cause);
+      const eff = this.onExit(exit);
+      return eff ? flatMap2(combineFinalizerCause(exit, eff), (_) => exit) : exit;
     }
-  },
-  [contA](value, _, exit) {
-    exit ??= exitSucceed(value);
-    const eff = this[args][1](exit);
-    return eff ? flatMap2(eff, (_) => exit) : exit;
-  },
-  [contE](cause, _, exit) {
-    exit ??= exitFailCause(cause);
-    const eff = this[args][1](exit);
-    return eff ? flatMap2(combineFinalizerCause(exit, eff), (_) => exit) : exit;
-  }
-});
+  });
+  const OnExitImpl = function(effect, onExit, interruptible) {
+    this.effect = effect;
+    this.onExit = onExit;
+    this.interruptible = interruptible;
+  };
+  OnExitImpl.prototype = Proto;
+  return function(effect, onExit, interruptible) {
+    return new OnExitImpl(effect, onExit, interruptible);
+  };
+}();
 var onExit = /* @__PURE__ */ dual(2, onExitPrimitive);
 var ensuring = /* @__PURE__ */ dual(2, (self, finalizer) => onExit(self, (_) => finalizer));
 var onExitFilter = /* @__PURE__ */ dual(3, (self, filter, f) => onExit(self, (exit) => {
@@ -3421,8 +3533,7 @@ var whileLoop = /* @__PURE__ */ makePrimitive({
   }
 });
 var forEach = /* @__PURE__ */ dual((args) => typeof args[1] === "function", (iterable, f, options) => suspend(() => {
-  const concurrencyOption = options?.concurrency ?? 1;
-  const concurrency = concurrencyOption === "unbounded" ? Number.POSITIVE_INFINITY : Math.max(1, concurrencyOption);
+  const concurrency = resolveConcurrency(options?.concurrency);
   if (concurrency === 1) {
     return forEachSequential(iterable, f, options);
   }
@@ -3455,10 +3566,11 @@ var forEachSequential = (iterable, f, options) => suspend(() => {
     }
   }), out);
 });
-var iterateEagerImpl = (options) => {
+var resolveConcurrency = (concurrency) => concurrency === "unbounded" ? Number.POSITIVE_INFINITY : Math.max(1, concurrency ?? 1);
+var iterateEager = () => (options) => {
   const onItem = options.onItem;
   const step = options.step;
-  const runSequential = (state, items, index, end) => {
+  const runSequential = (state, items, index = 0, end = items.length) => {
     for (;index < end; index++) {
       const item = items[index];
       const effect = onItem(state, item, index);
@@ -3470,14 +3582,15 @@ var iterateEagerImpl = (options) => {
         return terminal._tag === "Failure" ? terminal : undefined;
     }
   };
+  return runSequential;
+};
+var iterateConcurrentImpl = (options) => {
+  const onItem = options.onItem;
+  const step = options.step;
   return (state, items, opts) => {
     let index = 0;
-    const end = opts?.end ?? items.length;
-    const concurrency = opts?.concurrency ?? 1;
-    if (concurrency === 1) {
-      return runSequential(state, items, 0, end);
-    }
-    const orderedStep = opts?.orderedStep === true;
+    const end = opts.end ?? items.length;
+    const concurrency = opts.concurrency;
     let done = false;
     let parentFiber;
     let fibers;
@@ -3485,8 +3598,6 @@ var iterateEagerImpl = (options) => {
     let interrupted = false;
     let terminal;
     let effect;
-    let nextIndex = index;
-    const exits = orderedStep ? new Array(end) : undefined;
     const failDefect = (error) => {
       const defect = exitDie(error);
       terminal = defect;
@@ -3494,30 +3605,13 @@ var iterateEagerImpl = (options) => {
       interrupted = true;
       return fibers && fibers.size > 0 ? flatMap2(uninterruptible(fiberInterruptAll(Array.from(fibers))), () => defect) : defect;
     };
-    const runStep = (item, exit, currentIndex) => {
-      if (!orderedStep)
-        return step(state, item, exit, currentIndex);
-      if (terminal)
-        return terminal;
-      exits[currentIndex] = exit;
-      while (nextIndex < end) {
-        const nextExit = exits[nextIndex];
-        if (nextExit === undefined)
-          return;
-        exits[nextIndex] = undefined;
-        const index = nextIndex++;
-        const result = step(state, items[index], nextExit, index);
-        if (result)
-          return result;
-      }
-    };
     const go = () => {
       let paused = false;
       for (;!terminal && index < end; index++) {
         const item = items[index];
         const eff = effect ?? onItem(state, item, index);
         if (effectIsExit(eff)) {
-          terminal = runStep(item, eff, index);
+          terminal = step(state, item, eff, index);
           if (terminal)
             break;
         } else if (!parentFiber) {
@@ -3544,7 +3638,7 @@ var iterateEagerImpl = (options) => {
           effect = undefined;
           const fiber = forkUnsafe(parentFiber, eff, true, true, "inherit");
           if (fiber._exit) {
-            terminal = runStep(item, fiber._exit, index);
+            terminal = step(state, item, fiber._exit, index);
             if (terminal)
               break;
             continue;
@@ -3567,7 +3661,7 @@ var iterateEagerImpl = (options) => {
                   }
                 }
               } else {
-                const result = runStep(item, exit, currentIndex);
+                const result = step(state, item, exit, currentIndex);
                 if (result) {
                   terminal = result._tag === "Failure" ? exitFailCause(causeFromReasons(result.cause.reasons.slice())) : result;
                   go();
@@ -3612,8 +3706,8 @@ var iterateEagerImpl = (options) => {
     return go();
   };
 };
-var iterateEager = () => iterateEagerImpl;
-var forEachConcurrent = /* @__PURE__ */ iterateEagerImpl({
+var iterateConcurrent = () => (options) => iterateConcurrentImpl(options);
+var forEachConcurrent = /* @__PURE__ */ iterateConcurrentImpl({
   onItem(state, item, index) {
     return state.f(item, index);
   },
@@ -3640,7 +3734,7 @@ var forkUnsafe = (parent, effect, immediate = false, daemon = false, uninterrupt
   }
   if (!daemon && !child._exit) {
     parentRuntime.children().add(child);
-    child.addObserver(() => parentRuntime._children.delete(child));
+    child._parent = parentRuntime;
   }
   return child;
 };
@@ -3822,7 +3916,7 @@ var filterDisablePropagation = (span) => {
 };
 var makeSpanUnsafe = (fiber, name, options) => {
   const disablePropagation = !fiber.getRef(TracerEnabled) || options?.annotations && get(options.annotations, DisablePropagation);
-  const parent = options?.parent !== undefined ? some2(options.parent) : options?.root ? none2() : filterDisablePropagation(fiber.currentSpan);
+  const parent = options?.parent !== undefined ? some2(options.parent) : options?.root ? none2() : filterDisablePropagation(fiber.cache.span);
   let span;
   if (disablePropagation) {
     span = noopSpan({
@@ -3843,7 +3937,7 @@ var makeSpanUnsafe = (fiber, name, options) => {
       parent,
       annotations: options?.annotations ?? empty(),
       links,
-      startTime: timingEnabled ? clock.currentTimeNanosUnsafe() : BigInt(0),
+      startTime: timingEnabled ? clock.currentTimeNanosUnsafe() : bigint02,
       kind: options?.kind ?? "internal",
       root: options?.root ?? isNone2(parent),
       sampled: options?.sampled ?? (isSome2(parent) && parent.value.sampled === false ? false : !isLogLevelGreaterThan(fiber.getRef(MinimumTraceLevel), level))
@@ -3871,7 +3965,7 @@ var useSpan = (name, ...args) => {
     const span = makeSpanUnsafe(fiber, name, options);
     const clock = fiber.getRef(ClockRef);
     const timingEnabled = fiber.getRef(TracerTimingEnabled);
-    return onExit(internalCall(() => evaluate(span)), (exit) => endSpan(span, exit, clock, timingEnabled));
+    return onExit(suspend(() => internalCall(() => evaluate(span))), (exit) => endSpan(span, exit, clock, timingEnabled));
   });
 };
 var provideParentSpan = /* @__PURE__ */ provideService(ParentSpan);
@@ -3966,7 +4060,7 @@ class UnknownError extends (/* @__PURE__ */ TaggedError("UnknownError")) {
     });
   }
 }
-var ConsoleRef = /* @__PURE__ */ Reference("effect/Console/CurrentConsole", {
+var ConsoleRef = /* @__PURE__ */ Reference("effect/Console", {
   defaultValue: () => globalThis.console
 });
 var logLevelToOrder = (level) => {
@@ -3991,7 +4085,7 @@ var logLevelToOrder = (level) => {
 };
 var LogLevelOrder = /* @__PURE__ */ mapInput(Number2, logLevelToOrder);
 var isLogLevelGreaterThan = /* @__PURE__ */ isGreaterThan(LogLevelOrder);
-var CurrentLoggers = /* @__PURE__ */ Reference("effect/Loggers/CurrentLoggers", {
+var CurrentLoggers = /* @__PURE__ */ Reference("effect/Logger/CurrentLoggers", {
   defaultValue: () => new Set([defaultLogger, tracerLogger])
 });
 var LogToStderr = /* @__PURE__ */ Reference("effect/Logger/LogToStderr", {
@@ -4035,8 +4129,8 @@ var logWithLevel = (level) => (...message) => {
     cause = causeEmpty;
   }
   return withFiber((fiber) => {
-    const logLevel = level ?? fiber.currentLogLevel;
-    if (isLogLevelGreaterThan(fiber.minimumLogLevel, logLevel)) {
+    const logLevel = level ?? fiber.cache.logLevel;
+    if (isLogLevelGreaterThan(fiber.cache.minimumLogLevel, logLevel)) {
       return void_;
     }
     const clock = fiber.getRef(ClockRef);
@@ -4112,7 +4206,7 @@ var tracerLogger = /* @__PURE__ */ loggerMake(({
 }) => {
   const clock = fiber.getRef(ClockRef);
   const annotations = fiber.getRef(CurrentLogAnnotations);
-  const span = fiber.currentSpan;
+  const span = fiber.cache.span;
   if (span === undefined || span._tag === "ExternalSpan")
     return;
   const attributes = {};
@@ -4149,12 +4243,12 @@ var DeferredProto = {
     return pipeArguments(this, arguments);
   }
 };
-var makeUnsafe2 = () => {
-  const self = Object.create(DeferredProto);
-  self.resumes = undefined;
-  self.effect = undefined;
-  return self;
+var DeferredImpl = function() {
+  this.resumes = undefined;
+  this.effect = undefined;
 };
+DeferredImpl.prototype = DeferredProto;
+var makeUnsafe2 = () => new DeferredImpl;
 var _await = (self) => callback((resume) => {
   if (self.effect)
     return resume(self.effect);
@@ -4330,6 +4424,22 @@ var Done2 = Done;
 var done3 = done;
 var UnknownError2 = UnknownError;
 
+// node_modules/effect/dist/internal/random.js
+var nextBetween = (min, max, draw) => {
+  const value = draw * (max - min) + min;
+  if (value !== max || min >= max || !Number.isFinite(max)) {
+    return value;
+  }
+  if (max === 0) {
+    return -Number.MIN_VALUE;
+  }
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, max);
+  const bits = view.getBigUint64(0);
+  view.setBigUint64(0, max > 0 ? bits - BigInt(1) : bits + BigInt(1));
+  return view.getFloat64(0);
+};
+
 // node_modules/effect/dist/Pull.js
 var catchDone = /* @__PURE__ */ dual(2, (effect, f) => catchCauseFilter(effect, filterDoneLeftover, (l) => f(l)));
 var isDoneCause = (cause) => cause.reasons.some(isDoneFailure);
@@ -4450,8 +4560,132 @@ var mapEager2 = mapEager;
 var mapErrorEager2 = mapErrorEager;
 var flatMapEager2 = flatMapEager;
 var fnUntracedEager2 = fnUntracedEager;
+// node_modules/effect/dist/ByteSize.js
+var bigint03 = /* @__PURE__ */ BigInt(0);
+var bigint12 = /* @__PURE__ */ BigInt(1);
+var decimalBase = /* @__PURE__ */ BigInt(1000);
+var binaryBase = /* @__PURE__ */ BigInt(1024);
+var decimalUnits = [{
+  symbol: "B",
+  factor: bigint12,
+  names: ["B", "byte", "bytes"]
+}, {
+  symbol: "kB",
+  factor: decimalBase,
+  names: ["kB", "kilobyte", "kilobytes"]
+}, {
+  symbol: "MB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(2),
+  names: ["MB", "megabyte", "megabytes"]
+}, {
+  symbol: "GB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(3),
+  names: ["GB", "gigabyte", "gigabytes"]
+}, {
+  symbol: "TB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(4),
+  names: ["TB", "terabyte", "terabytes"]
+}, {
+  symbol: "PB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(5),
+  names: ["PB", "petabyte", "petabytes"]
+}, {
+  symbol: "EB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(6),
+  names: ["EB", "exabyte", "exabytes"]
+}, {
+  symbol: "ZB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(7),
+  names: ["ZB", "zettabyte", "zettabytes"]
+}, {
+  symbol: "YB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(8),
+  names: ["YB", "yottabyte", "yottabytes"]
+}, {
+  symbol: "RB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(9),
+  names: ["RB", "ronnabyte", "ronnabytes"]
+}, {
+  symbol: "QB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(10),
+  names: ["QB", "quettabyte", "quettabytes"]
+}];
+var binaryUnits = [decimalUnits[0], {
+  symbol: "KiB",
+  factor: binaryBase,
+  names: ["KiB", "kibibyte", "kibibytes"]
+}, {
+  symbol: "MiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(2),
+  names: ["MiB", "mebibyte", "mebibytes"]
+}, {
+  symbol: "GiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(3),
+  names: ["GiB", "gibibyte", "gibibytes"]
+}, {
+  symbol: "TiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(4),
+  names: ["TiB", "tebibyte", "tebibytes"]
+}, {
+  symbol: "PiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(5),
+  names: ["PiB", "pebibyte", "pebibytes"]
+}, {
+  symbol: "EiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(6),
+  names: ["EiB", "exbibyte", "exbibytes"]
+}, {
+  symbol: "ZiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(7),
+  names: ["ZiB", "zebibyte", "zebibytes"]
+}, {
+  symbol: "YiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(8),
+  names: ["YiB", "yobibyte", "yobibytes"]
+}];
+var allUnits = [...decimalUnits, .../* @__PURE__ */ binaryUnits.slice(1)];
+var unitsByName = /* @__PURE__ */ new Map(/* @__PURE__ */ allUnits.flatMap((unit) => unit.names.map((name) => [name, unit])));
+var make5 = (value) => value;
+var invalid2 = (message) => {
+  throw new Error(`Invalid ByteSize: ${message}`);
+};
+var fromNumber = (input) => {
+  if (!Number.isSafeInteger(input) || input < 0) {
+    return invalid2(`expected a non-negative safe integer, received ${input}`);
+  }
+  return make5(BigInt(input));
+};
+var parse = (input) => {
+  const match = /^\s*(\d+)(?:\.(\d+))?\s*([A-Za-z]+)\s*$/.exec(input);
+  if (match === null)
+    return invalid2(`unsupported syntax ${JSON.stringify(input)}`);
+  const unit = unitsByName.get(match[3]);
+  if (unit === undefined)
+    return invalid2(`unsupported unit ${JSON.stringify(match[3])}`);
+  const fraction = match[2] ?? "";
+  const scale = BigInt(10) ** BigInt(fraction.length);
+  const numerator = BigInt(match[1] + fraction) * unit.factor;
+  if (numerator % scale !== bigint03) {
+    return invalid2(`${JSON.stringify(input)} does not represent an integral number of bytes`);
+  }
+  return make5(numerator / scale);
+};
+var fromInputUnsafe2 = (input) => {
+  switch (typeof input) {
+    case "bigint":
+      if (input < bigint03)
+        return invalid2(`expected a non-negative bigint, received ${input}`);
+      return make5(input);
+    case "number":
+      return fromNumber(input);
+    case "string":
+      return parse(input);
+  }
+  return invalid2(`unsupported input ${input}`);
+};
+
 // node_modules/effect/dist/PlatformError.js
-var TypeId7 = "~effect/platform/PlatformError";
+var TypeId7 = "~effect/PlatformError";
 
 class BadArgument extends (/* @__PURE__ */ TaggedError2("BadArgument")) {
   get message() {
@@ -4493,7 +4727,7 @@ var runIn = fiberRunIn;
 
 // node_modules/effect/dist/Latch.js
 var makeUnsafe4 = makeLatchUnsafe;
-var make5 = makeLatch;
+var make6 = makeLatch;
 
 // node_modules/effect/dist/MutableRef.js
 var TypeId8 = "~effect/MutableRef";
@@ -4507,7 +4741,7 @@ var MutableRefProto = {
     };
   }
 };
-var make6 = (value) => {
+var make7 = (value) => {
   const ref = Object.create(MutableRefProto);
   ref.current = value;
   return ref;
@@ -4515,7 +4749,7 @@ var make6 = (value) => {
 
 // node_modules/effect/dist/MutableList.js
 var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
-var make7 = () => ({
+var make8 = () => ({
   head: undefined,
   tail: undefined,
   length: 0
@@ -4541,6 +4775,7 @@ var clear = (self) => {
   self.length = 0;
 };
 var takeN = (self, n) => {
+  n = normalize(n);
   if (n <= 0 || !self.head)
     return [];
   n = Math.min(n, self.length);
@@ -4610,12 +4845,12 @@ var QueueProto = {
     };
   }
 };
-var make8 = (options) => withFiber((fiber) => {
+var make9 = (options) => withFiber((fiber) => {
   const self = Object.create(QueueProto);
   self.dispatcher = fiber.currentDispatcher;
   self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
   self.strategy = options?.strategy ?? "suspend";
-  self.messages = make7();
+  self.messages = make8();
   self.scheduleRunning = false;
   self.state = {
     _tag: "Open",
@@ -4625,7 +4860,7 @@ var make8 = (options) => withFiber((fiber) => {
   };
   return succeed3(self);
 });
-var bounded = (capacity) => make8({
+var bounded = (capacity) => make9({
   capacity
 });
 var offer = (self, message) => suspend(() => {
@@ -4710,7 +4945,11 @@ var shutdown = (self) => sync(() => {
   return true;
 });
 var takeAll2 = (self) => takeBetween(self, 1, Number.POSITIVE_INFINITY);
-var takeBetween = (self, min, max) => suspend(() => takeBetweenUnsafe(self, min, max) ?? andThen(awaitTake(self), takeBetween(self, 1, max)));
+var takeBetween = (self, min, max) => {
+  min = normalize(min);
+  max = normalize(max);
+  return suspend(() => takeBetweenUnsafe(self, min, max) ?? andThen(awaitTake(self), takeBetween(self, 1, max)));
+};
 var take2 = (self) => suspend(() => takeUnsafe(self) ?? andThen(awaitTake(self), take2(self)));
 var poll = (self) => suspend(() => {
   const result = takeUnsafe(self);
@@ -4731,10 +4970,7 @@ var takeUnsafe = (self) => {
     releaseCapacity(self);
     return exitSucceed(message);
   } else if (self.capacity <= 0 && self.state.offers.size > 0) {
-    self.capacity = 1;
-    releaseCapacity(self);
-    self.capacity = 0;
-    const message = take(self.messages);
+    const message = takeOfferUnsafe(self.state.offers);
     releaseCapacity(self);
     return exitSucceed(message);
   }
@@ -4746,7 +4982,6 @@ var exitTrue = /* @__PURE__ */ exitSucceed(true);
 var exitFailDone = /* @__PURE__ */ exitFail(/* @__PURE__ */ Done());
 var exitInterrupt2 = /* @__PURE__ */ exitInterrupt();
 var releaseTakers = (self) => {
-  self.scheduleRunning = false;
   if (self.state._tag === "Done" || self.state.takers.size === 0) {
     return;
   }
@@ -4763,18 +4998,18 @@ var scheduleReleaseTaker = (self) => {
     return;
   }
   self.scheduleRunning = true;
-  self.dispatcher.scheduleTask(() => releaseTakers(self), 0);
+  self.dispatcher.scheduleTask(() => {
+    self.scheduleRunning = false;
+    releaseTakers(self);
+  }, 0);
 };
 var takeBetweenUnsafe = (self, min, max) => {
   if (self.state._tag === "Done") {
     return self.state.exit;
   } else if (max <= 0 || min <= 0) {
     return exitSucceed([]);
-  } else if (self.capacity <= 0 && self.state.offers.size > 0) {
-    self.capacity = 1;
-    releaseCapacity(self);
-    self.capacity = 0;
-    const messages = [take(self.messages)];
+  } else if (self.capacity <= 0 && self.messages.length === 0 && self.state.offers.size > 0) {
+    const messages = [takeOfferUnsafe(self.state.offers)];
     releaseCapacity(self);
     return exitSucceed(messages);
   }
@@ -4803,6 +5038,20 @@ var offerRemainingSingle = (self, message) => {
     });
   });
 };
+var takeOfferUnsafe = (offers) => {
+  const entry = offers.values().next().value;
+  if (entry._tag === "Single") {
+    offers.delete(entry);
+    entry.resume(exitTrue);
+    return entry.message;
+  }
+  const message = entry.remaining[entry.offset++];
+  if (entry.offset === entry.remaining.length) {
+    offers.delete(entry);
+    entry.resume(exitSucceed([]));
+  }
+  return message;
+};
 var releaseCapacity = (self) => {
   if (self.state._tag === "Done") {
     return isDoneCause(self.state.exit.cause);
@@ -4813,15 +5062,14 @@ var releaseCapacity = (self) => {
     }
     return false;
   }
-  let n = self.capacity - self.messages.length;
   for (const entry of self.state.offers) {
-    if (n === 0)
+    let n = self.capacity - self.messages.length;
+    if (n <= 0)
       break;
     else if (entry._tag === "Single") {
       append2(self.messages, entry.message);
-      n--;
-      entry.resume(exitTrue);
       self.state.offers.delete(entry);
+      entry.resume(exitTrue);
     } else {
       for (;entry.offset < entry.remaining.length; entry.offset++) {
         if (n === 0)
@@ -4829,8 +5077,8 @@ var releaseCapacity = (self) => {
         append2(self.messages, entry.remaining[entry.offset]);
         n--;
       }
-      entry.resume(exitSucceed([]));
       self.state.offers.delete(entry);
+      entry.resume(exitSucceed([]));
     }
   }
   return false;
@@ -4997,7 +5245,7 @@ var fromTransformBracket = (f) => fromTransform(fnUntraced2(function* (upstream,
   return onError2(pull, onCause);
 }));
 var toTransform = (channel) => channel.transform;
-var asyncQueue = (scope, f, options) => make8({
+var asyncQueue = (scope, f, options) => make9({
   capacity: options?.bufferSize,
   strategy: options?.strategy
 }).pipe(tap2((queue) => addFinalizer2(scope, shutdown(queue))), tap2((queue) => forkIn2(provide(f(queue), scope), scope)));
@@ -5107,7 +5355,7 @@ var mergeAll3 = /* @__PURE__ */ dual(2, (channels, {
 }) => fromTransformBracket(fnUntraced2(function* (upstream, scope, forkedScope) {
   const concurrencyN = concurrency === "unbounded" ? Number.MAX_SAFE_INTEGER : Math.max(1, concurrency);
   const semaphore = switch_ ? undefined : makeUnsafe5(concurrencyN);
-  const doneLatch = yield* make5(true);
+  const doneLatch = yield* make6(true);
   const fibers = new Set;
   const queue = yield* bounded(bufferSize);
   yield* addFinalizer2(forkedScope, shutdown(queue));
@@ -5215,12 +5463,9 @@ var splitLines = () => fromTransform((upstream, _scope) => sync3(() => {
 `);
         if (midCRLF) {
           if (indexOfLF === 0) {
-            pushLine("");
             from = 1;
             indexOfLF = str.indexOf(`
 `, from);
-          } else {
-            pushLine("");
           }
           midCRLF = false;
         }
@@ -5231,11 +5476,12 @@ var splitLines = () => fromTransform((upstream, _scope) => sync3(() => {
             indexOfLF = str.indexOf(`
 `, from);
           } else {
+            pushLine(str.substring(from, indexOfCR));
             if (str.length === indexOfCR + 1) {
               midCRLF = true;
+              from = str.length;
               indexOfCR = -1;
             } else {
-              pushLine(str.substring(from, indexOfCR));
               from = indexOfCR + (indexOfLF === indexOfCR + 1 ? 2 : 1);
               indexOfCR = str.indexOf("\r", from);
               indexOfLF = str.indexOf(`
@@ -5243,7 +5489,7 @@ var splitLines = () => fromTransform((upstream, _scope) => sync3(() => {
             }
           }
         }
-        stringBuilder = stringBuilder + str.substring(from, str.length - (midCRLF ? 1 : 0));
+        stringBuilder = stringBuilder + str.substring(from);
       }
     }
     return isReadonlyArrayNonEmpty(chunkBuilder) ? chunkBuilder : null;
@@ -5257,7 +5503,7 @@ var splitLines = () => fromTransform((upstream, _scope) => sync3(() => {
       onFailure: failCause3,
       onDone: (leftover) => {
         done = some2(leftover);
-        if (stringBuilder.length > 0 || midCRLF) {
+        if (stringBuilder.length > 0) {
           const last = stringBuilder;
           stringBuilder = "";
           midCRLF = false;
@@ -5309,17 +5555,16 @@ var streamVariance = {
   _E: identity,
   _A: identity
 };
-var StreamProto = {
+var Stream = function(channel) {
+  this.channel = channel;
+};
+Stream.prototype = {
   [TypeId11]: streamVariance,
   pipe() {
     return pipeArguments(this, arguments);
   }
 };
-var fromChannel = (channel) => {
-  const self = Object.create(StreamProto);
-  self.channel = channel;
-  return self;
-};
+var fromChannel = (channel) => new Stream(channel);
 
 // node_modules/effect/dist/Sink.js
 var TypeId12 = "~effect/Sink";
@@ -5389,7 +5634,7 @@ class RcRefImpl {
     this.idleTimeToLive = idleTimeToLive;
   }
 }
-var make9 = (options) => withFiber2((fiber) => {
+var make10 = (options) => withFiber2((fiber) => {
   const context = fiber.context;
   const scope = get(context, Scope);
   const ref = new RcRefImpl(options.acquire, context, scope, options.idleTimeToLive ? fromInputUnsafe(options.idleTimeToLive) : undefined);
@@ -5414,7 +5659,10 @@ var getState = (self) => uninterruptibleMask2(function loop(restore) {
         if (self.state._tag !== "Empty") {
           return loop(restore);
         }
-        return restore(provideContext2(self.acquire, add(self.context, Scope, scope))).pipe(map6((value) => {
+        return restore(provideContext2(self.acquire, add(self.context, Scope, scope))).pipe(flatMap3((value) => {
+          if (self.state._tag === "Closed") {
+            return interrupt2;
+          }
           const state = {
             _tag: "Acquired",
             value,
@@ -5424,7 +5672,7 @@ var getState = (self) => uninterruptibleMask2(function loop(restore) {
             invalidated: false
           };
           self.state = state;
-          return state;
+          return succeed6(state);
         }), onExit2((exit) => isFailure3(exit) ? close(scope, exit) : void_3));
       }));
     }
@@ -5440,16 +5688,16 @@ var get2 = /* @__PURE__ */ fnUntraced2(function* (self_) {
     if (state.refCount > 0) {
       return void_3;
     }
-    if (self.idleTimeToLive === undefined) {
-      self.state = stateEmpty;
-      return close(state.scope, void_2);
-    } else if (state.invalidated) {
+    if (self.idleTimeToLive === undefined || state.invalidated) {
+      if (self.state === state) {
+        self.state = stateEmpty;
+      }
       return close(state.scope, void_2);
     } else if (!isFinite2) {
       return void_3;
     }
     state.fiber = sleep2(self.idleTimeToLive).pipe(flatMap3(() => {
-      if (self.state._tag === "Acquired" && self.state.refCount === 0) {
+      if (self.state === state && state.refCount === 0) {
         self.state = stateEmpty;
         return close(state.scope, void_2);
       }
@@ -5463,7 +5711,7 @@ var get2 = /* @__PURE__ */ fnUntraced2(function* (self_) {
 });
 
 // node_modules/effect/dist/RcRef.js
-var make10 = make9;
+var make11 = make10;
 var get3 = get2;
 
 // node_modules/effect/dist/Stream.js
@@ -5542,12 +5790,9 @@ var runForEach2 = /* @__PURE__ */ dual(2, (self, f) => runForEach(self.channel, 
 var mkString = (self) => runFold(self.channel, () => "", (acc, chunk) => acc + chunk.join(""));
 
 // node_modules/effect/dist/FileSystem.js
-var TypeId15 = "~effect/platform/FileSystem";
-var Size = (bytes) => typeof bytes === "bigint" ? bytes : BigInt(bytes);
-var bigint1024 = /* @__PURE__ */ BigInt(1024);
-var bigintPiB = bigint1024 * bigint1024 * bigint1024 * bigint1024 * bigint1024;
-var FileSystem = /* @__PURE__ */ Service("effect/platform/FileSystem");
-var make11 = (impl) => FileSystem.of({
+var TypeId15 = "~effect/FileSystem";
+var FileSystem = /* @__PURE__ */ Service("effect/FileSystem");
+var make12 = (impl) => FileSystem.of({
   ...impl,
   [TypeId15]: TypeId15,
   exists: (path) => pipe(impl.access(path), as2(true), catchTag2("PlatformError", (e) => e.reason._tag === "NotFound" ? succeed6(false) : fail6(e))),
@@ -5564,18 +5809,19 @@ var make11 = (impl) => FileSystem.of({
     const file = yield* impl.open(path, {
       flag: "r"
     });
-    if (options?.offset) {
-      yield* file.seek(options.offset, "start");
+    const offset = options?.offset === undefined ? undefined : fromInputUnsafe2(options.offset);
+    if (offset) {
+      yield* file.seek(offset, "start");
     }
-    const bytesToRead = options?.bytesToRead !== undefined ? Size(options.bytesToRead) : undefined;
+    const bytesToRead = options?.bytesToRead === undefined ? undefined : fromInputUnsafe2(options.bytesToRead);
     let totalBytesRead = BigInt(0);
-    const chunkSize = Size(options?.chunkSize ?? 64 * 1024);
+    const chunkSize = Number(BigInt(options?.chunkSize ?? 64 * 1024));
     const readChunk = file.readAlloc(chunkSize);
     return fromPull2(succeed6(flatMap3(suspend2(() => {
       if (bytesToRead !== undefined && bytesToRead <= totalBytesRead) {
         return done3();
       }
-      return bytesToRead !== undefined && bytesToRead - totalBytesRead < chunkSize ? file.readAlloc(bytesToRead - totalBytesRead) : readChunk;
+      return bytesToRead !== undefined && bytesToRead - totalBytesRead < chunkSize ? file.readAlloc(Number(bytesToRead - totalBytesRead)) : readChunk;
     }), match({
       onNone: () => done3(),
       onSome: (buf) => {
@@ -5585,8 +5831,8 @@ var make11 = (impl) => FileSystem.of({
     }))));
   }, unwrap3),
   sink: (path, options) => pipe(impl.open(path, {
-    flag: "w",
-    ...options
+    ...options,
+    flag: options?.flag ?? "w"
   }), map6((file) => forEach3((_) => file.writeAll(_))), unwrap2),
   writeFileString: (path, data, options) => flatMap3(try_2({
     try: () => new TextEncoder().encode(data),
@@ -5598,8 +5844,8 @@ var make11 = (impl) => FileSystem.of({
     })
   }), (_) => impl.writeFile(path, _, options))
 });
-var FileTypeId = "~effect/platform/FileSystem/File";
-class WatchBackend extends (/* @__PURE__ */ Service()("effect/platform/FileSystem/WatchBackend")) {
+var FileTypeId = "~effect/FileSystem/File";
+class WatchBackend extends (/* @__PURE__ */ Service()("effect/FileSystem/WatchBackend")) {
 }
 // node_modules/effect/dist/Ref.js
 var TypeId16 = "~effect/Ref";
@@ -5617,10 +5863,10 @@ var RefProto = {
 };
 var makeUnsafe6 = (value) => {
   const self = Object.create(RefProto);
-  self.ref = make6(value);
+  self.ref = make7(value);
   return self;
 };
-var make12 = (value) => sync3(() => makeUnsafe6(value));
+var make13 = (value) => sync3(() => makeUnsafe6(value));
 var get4 = (self) => sync3(() => self.ref.current);
 var update = /* @__PURE__ */ dual(2, (self, f) => sync3(() => {
   self.ref.current = f(self.ref.current);
@@ -5656,7 +5902,7 @@ function hasInput(issue) {
   return Object.hasOwn(issue, "input");
 }
 
-class Base {
+class IssueNodeImpl {
   [TypeId17] = TypeId17;
   constructor(input, options) {
     if (options?.reportInput === true && input !== missing) {
@@ -5664,8 +5910,7 @@ class Base {
     }
   }
 }
-
-class Filter extends Base {
+var Filter = class extends IssueNodeImpl {
   _tag = "Filter";
   filter;
   issue;
@@ -5674,9 +5919,8 @@ class Filter extends Base {
     this.filter = filter;
     this.issue = issue;
   }
-}
-
-class Encoding extends Base {
+};
+var Encoding = class extends IssueNodeImpl {
   _tag = "Encoding";
   ast;
   issue;
@@ -5685,9 +5929,8 @@ class Encoding extends Base {
     this.ast = ast;
     this.issue = issue;
   }
-}
-
-class Pointer extends Base {
+};
+var Pointer = class extends IssueNodeImpl {
   _tag = "Pointer";
   path;
   issue;
@@ -5696,27 +5939,24 @@ class Pointer extends Base {
     this.path = path;
     this.issue = issue;
   }
-}
-
-class MissingKey extends Base {
+};
+var MissingKey = class extends IssueNodeImpl {
   _tag = "MissingKey";
   annotations;
   constructor(annotations) {
     super();
     this.annotations = annotations;
   }
-}
-
-class UnexpectedKey extends Base {
+};
+var UnexpectedKey = class extends IssueNodeImpl {
   _tag = "UnexpectedKey";
   ast;
   constructor(ast, input, options) {
     super(input, options);
     this.ast = ast;
   }
-}
-
-class Composite extends Base {
+};
+var Composite = class extends IssueNodeImpl {
   _tag = "Composite";
   ast;
   issues;
@@ -5725,26 +5965,24 @@ class Composite extends Base {
     this.ast = ast;
     this.issues = issues;
   }
-}
-
-class InvalidType extends Base {
+};
+var InvalidType = class extends IssueNodeImpl {
   _tag = "InvalidType";
   ast;
   constructor(ast, input, options) {
     super(input, options);
     this.ast = ast;
   }
-}
-
-class InvalidValue extends Base {
+};
+var InvalidValue = class extends IssueNodeImpl {
   _tag = "InvalidValue";
   annotations;
   constructor(annotations, input, options) {
     super(input, options);
     this.annotations = annotations;
   }
-}
-class AnyOf extends Base {
+};
+var AnyOf = class extends IssueNodeImpl {
   _tag = "AnyOf";
   ast;
   issues;
@@ -5753,9 +5991,8 @@ class AnyOf extends Base {
     this.ast = ast;
     this.issues = issues;
   }
-}
-
-class OneOf extends Base {
+};
+var OneOf = class extends IssueNodeImpl {
   _tag = "OneOf";
   ast;
   successes;
@@ -5764,7 +6001,7 @@ class OneOf extends Base {
     this.ast = ast;
     this.successes = successes;
   }
-}
+};
 function makeFilterIssue(entry, input, options) {
   if (isIssue(entry)) {
     return entry;
@@ -5921,7 +6158,7 @@ function getSchemaIssueOrThrow(cause, message) {
 }
 
 // node_modules/effect/dist/SchemaGetter.js
-class Getter extends Class {
+var Getter = class extends Class {
   run;
   constructor(run) {
     super();
@@ -5939,7 +6176,7 @@ class Getter extends Class {
     }
     return new Getter((oe, options) => this.run(oe, options).pipe(flatMapEager2((ot) => other.run(ot, options))));
   }
-}
+};
 var passthrough_ = /* @__PURE__ */ new Getter(succeed6);
 function isPassthrough(getter) {
   return getter.run === passthrough_.run;
@@ -5953,7 +6190,7 @@ function onSome(f) {
 function transform(f) {
   return transformOptional(map(f));
 }
-function transformOrFail(f) {
+function transformEffect(f) {
   return onSome((e, options) => f(e, options).pipe(mapEager2(some2)));
 }
 function transformOptional(f) {
@@ -5997,15 +6234,14 @@ function encodeBase642() {
   return transform(encodeBase64);
 }
 function decodeBase642() {
-  return transformOrFail((input, options) => mapErrorEager2(fromResult2(decodeBase64(input)), () => new InvalidValue({
+  return transformEffect((input, options) => mapErrorEager2(fromResult2(decodeBase64(input)), () => new InvalidValue({
     expected: "a valid Base64 string"
   }, input, options)));
 }
 
 // node_modules/effect/dist/SchemaTransformation.js
 var TypeId18 = "~effect/SchemaTransformation/Transformation";
-
-class Transformation {
+var Transformation = class {
   [TypeId18] = TypeId18;
   _tag = "Transformation";
   decode;
@@ -6020,18 +6256,18 @@ class Transformation {
   compose(other) {
     return new Transformation(this.decode.compose(other.decode), other.encode.compose(this.encode));
   }
-}
+};
 function isTransformation(u) {
   return hasProperty(u, TypeId18) && u[TypeId18] === TypeId18;
 }
-var make13 = (options) => {
+var make14 = (options) => {
   if (isTransformation(options)) {
     return options;
   }
   return new Transformation(options.decode, options.encode);
 };
-function transformOrFail2(options) {
-  return new Transformation(transformOrFail(options.decode), transformOrFail(options.encode));
+function transformEffect2(options) {
+  return new Transformation(transformEffect(options.decode), transformEffect(options.encode));
 }
 function transform2(options) {
   return new Transformation(transform(options.decode), transform(options.encode));
@@ -6095,7 +6331,7 @@ var defectFromJson = (options) => transform2({
   decode: decodeDefect,
   encode: makeEncodeDefect(options)
 });
-var urlFromString = /* @__PURE__ */ transformOrFail2({
+var urlFromString = /* @__PURE__ */ transformEffect2({
   decode: (s, options) => URL.canParse(s) ? succeed6(new URL(s)) : fail6(new InvalidValue({
     expected: "a valid URL string"
   }, s, options)),
@@ -6118,18 +6354,16 @@ var isArrays = /* @__PURE__ */ makeGuard("Arrays");
 var isObjects = /* @__PURE__ */ makeGuard("Objects");
 var isUnion = /* @__PURE__ */ makeGuard("Union");
 var isSuspend = /* @__PURE__ */ makeGuard("Suspend");
-
-class Link {
+var Link = class {
   to;
   transformation;
   constructor(to, transformation) {
     this.to = to;
     this.transformation = transformation;
   }
-}
+};
 var defaultParseOptions = {};
-
-class Context {
+var Context = class {
   isOptional;
   isMutable;
   constructorDefault;
@@ -6140,10 +6374,10 @@ class Context {
     this.constructorDefault = constructorDefault;
     this.annotations = annotations;
   }
-}
+};
 var TypeId19 = "~effect/Schema";
 
-class Base2 {
+class ASTNodeImpl {
   [TypeId19] = TypeId19;
   annotations;
   checks;
@@ -6159,8 +6393,7 @@ class Base2 {
     return `<${this._tag}>`;
   }
 }
-
-class Declaration extends Base2 {
+var Declaration = class extends ASTNodeImpl {
   _tag = "Declaration";
   typeParameters;
   run;
@@ -6197,8 +6430,8 @@ class Declaration extends Base2 {
       return expected;
     return "<Declaration>";
   }
-}
-class Unknown extends Base2 {
+};
+var Unknown = class extends ASTNodeImpl {
   _tag = "Unknown";
   getParser() {
     return fromRefinement(this, isUnknown);
@@ -6206,9 +6439,9 @@ class Unknown extends Base2 {
   getExpected() {
     return "unknown";
   }
-}
+};
 var unknown = /* @__PURE__ */ new Unknown;
-class Literal extends Base2 {
+var Literal = class extends ASTNodeImpl {
   _tag = "Literal";
   literal;
   constructor(literal, annotations, checks, encoding, context) {
@@ -6233,13 +6466,12 @@ class Literal extends Base2 {
   getExpected() {
     return typeof this.literal === "string" ? JSON.stringify(this.literal) : globalThis.String(this.literal);
   }
-}
+};
 function literalToString(ast) {
   const literalAsString = globalThis.String(ast.literal);
   return replaceEncoding(ast, [new Link(new Literal(literalAsString), new Transformation(transform(() => ast.literal), transform(() => literalAsString)))]);
 }
-
-class String3 extends Base2 {
+var String3 = class extends ASTNodeImpl {
   _tag = "String";
   getParser() {
     return fromRefinement(this, isString);
@@ -6251,10 +6483,9 @@ class String3 extends Base2 {
   getExpected() {
     return "string";
   }
-}
+};
 var string2 = /* @__PURE__ */ new String3;
-
-class Number4 extends Base2 {
+var Number4 = class extends ASTNodeImpl {
   _tag = "Number";
   getParser() {
     return fromRefinement(this, isNumber);
@@ -6288,13 +6519,12 @@ class Number4 extends Base2 {
   getExpected() {
     return "number";
   }
-}
+};
 function hasCheck(checks, id) {
   return checks.some((check) => check.annotations?.representation?.id === id || check._tag === "FilterGroup" && hasCheck(check.checks, id));
 }
 var number2 = /* @__PURE__ */ new Number4;
-
-class Boolean extends Base2 {
+var Boolean = class extends ASTNodeImpl {
   _tag = "Boolean";
   getParser() {
     return fromRefinement(this, isBoolean);
@@ -6302,9 +6532,9 @@ class Boolean extends Base2 {
   getExpected() {
     return "boolean";
   }
-}
+};
 var boolean = /* @__PURE__ */ new Boolean;
-class Arrays extends Base2 {
+var Arrays = class extends ASTNodeImpl {
   _tag = "Arrays";
   isMutable;
   elements;
@@ -6375,10 +6605,11 @@ class Arrays extends Base2 {
         issues: undefined,
         options
       };
-      const concurrency = resolveConcurrency(options?.concurrency);
-      const eff = parseArray(state, input, {
-        concurrency: concurrency?.concurrency,
-        end: ast.rest.length === 0 ? elementLen : Math.max(len, elementLen + tailLen)
+      const end = ast.rest.length === 0 ? elementLen : Math.max(len, elementLen + tailLen);
+      const concurrency = options.concurrency === undefined ? 1 : resolveConcurrency(options.concurrency);
+      const eff = concurrency === 1 ? parseArray(state, input, 0, end) : parseArrayConcurrent(state, input, {
+        concurrency,
+        end
       });
       if (eff)
         yield* eff;
@@ -6416,8 +6647,8 @@ class Arrays extends Base2 {
   getExpected() {
     return "array";
   }
-}
-var parseArray = /* @__PURE__ */ iterateEager()({
+};
+var parseArrayOptions = {
   onItem(s, item, i) {
     const value = i < s.len ? item : missing;
     return s.getParser(s.tailThreshold, i).parser(value, s.options);
@@ -6444,13 +6675,9 @@ var parseArray = /* @__PURE__ */ iterateEager()({
       }
     }
   }
-});
-var resolveConcurrency = (value) => {
-  value = value === "unbounded" ? Infinity : value ?? 1;
-  return value > 1 ? {
-    concurrency: value
-  } : undefined;
 };
+var parseArray = /* @__PURE__ */ iterateEager()(parseArrayOptions);
+var parseArrayConcurrent = /* @__PURE__ */ iterateConcurrent()(parseArrayOptions);
 var wrapPropertyKeyIssue = (s, ast, key, exit) => {
   if (exit.cause.reasons.length === 0) {
     return exit;
@@ -6490,15 +6717,14 @@ function getIndexSignatureKeys(input, parameter, options = defaultParseOptions) 
   }
   return go(parameterFromPropertyKey(toEncoded(parameter)));
 }
-
-class PropertySignature {
+var PropertySignature = class {
   name;
   type;
   constructor(name, type) {
     this.name = name;
     this.type = type;
   }
-}
+};
 function isIndexSignatureParameterSide(ast) {
   switch (ast._tag) {
     case "String":
@@ -6515,8 +6741,7 @@ function isIndexSignatureParameterSide(ast) {
 function isIndexSignatureParameter(ast) {
   return isIndexSignatureParameterSide(ast) && isIndexSignatureParameterSide(toEncoded(ast));
 }
-
-class IndexSignature {
+var IndexSignature = class {
   parameter;
   type;
   constructor(parameter, type) {
@@ -6529,9 +6754,8 @@ class IndexSignature {
       throw new Error("Cannot use `Schema.optionalKey` with index signatures, use `Schema.optional` instead.");
     }
   }
-}
-
-class Objects extends Base2 {
+};
+var Objects = class extends ASTNodeImpl {
   _tag = "Objects";
   propertySignatures;
   indexSignatures;
@@ -6550,7 +6774,7 @@ class Objects extends Base2 {
     const ast = this;
     const expectedKeys = [];
     for (const ps of ast.propertySignatures) {
-      expectedKeys.push(ps.name);
+      expectedKeys.push(typeof ps.name === "number" ? globalThis.String(ps.name) : ps.name);
     }
     const hasProperties = expectedKeys.length;
     const indexCount = ast.indexSignatures.length;
@@ -6566,7 +6790,7 @@ class Objects extends Base2 {
       }
       const value = exitValue === sameExit ? inputValue : exitValue[args];
       if (k2 !== missing && value !== missing) {
-        if (hasProperties && (expectedKeysSet.has(key) || expectedKeysSet.has(k2)))
+        if (hasProperties && (expectedKeysSet.has(key) || expectedKeysSet.has(typeof k2 === "number" ? globalThis.String(k2) : k2)))
           return void_2;
         assignProperty(s.out, k2, value);
       }
@@ -6593,9 +6817,9 @@ class Objects extends Base2 {
       const result = index.parserValue(inputValue, s.options);
       return effectIsExit(result) ? finishIndex(s, key, key, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, key, inputValue, exit));
     };
-    const parseIndexes = indexCount ? iterateEager()({
-      onItem: (s, [key, index]) => parseIndex(s, key, index),
-      step: (_s, _, exit) => exit._tag === "Failure" ? exit : undefined
+    const parseIndexes = indexCount ? iterateConcurrent()({
+      onItem: (s, [key, index]) => index.is.parameter === string2 ? parseStringIndex(s, key, index) : parseIndex(s, key, index),
+      step: (_s, _item, exit) => exit._tag === "Failure" ? exit : undefined
     }) : undefined;
     const compileMembers = () => {
       if (!properties) {
@@ -6631,44 +6855,48 @@ class Objects extends Base2 {
       };
       const errorsAllOption = options.errors === "all";
       const onExcessPropertyError = options.onExcessProperty === "error";
-      const onExcessPropertyPreserve = options.onExcessProperty === "preserve";
-      let inputKeys;
-      if (!indexCount && (onExcessPropertyError || onExcessPropertyPreserve)) {
+      const concurrency = options.concurrency === undefined ? 1 : resolveConcurrency(options.concurrency);
+      const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record, index.parameter, options)) : undefined;
+      if (onExcessPropertyError) {
         expectedKeysSet ??= new Set(expectedKeys);
-        inputKeys = Reflect.ownKeys(record);
+        const coveredKeys = indexKeys ? new Set(expectedKeysSet) : expectedKeysSet;
+        if (indexKeys) {
+          for (const keys of indexKeys) {
+            for (const key of keys)
+              coveredKeys.add(key);
+          }
+        }
+        const inputKeys = Reflect.ownKeys(record);
         for (let i = 0;i < inputKeys.length; i++) {
           const key = inputKeys[i];
-          if (!expectedKeysSet.has(key)) {
-            if (onExcessPropertyError) {
-              const unexpected = new UnexpectedKey(ast, record[key], options);
-              const issue = new Pointer([key], unexpected);
-              if (errorsAllOption) {
-                if (state.issues) {
-                  state.issues.push(issue);
-                } else {
-                  state.issues = [issue];
-                }
-                continue;
+          if (!coveredKeys.has(key)) {
+            const unexpected = new UnexpectedKey(ast, record[key], options);
+            const issue = new Pointer([key], unexpected);
+            if (errorsAllOption) {
+              if (state.issues) {
+                state.issues.push(issue);
               } else {
-                return yield* fail6(new Composite(ast, [issue], input, options));
+                state.issues = [issue];
               }
+              continue;
             } else {
-              assignProperty(out, key, record[key]);
+              return yield* fail6(new Composite(ast, [issue], input, options));
             }
           }
         }
       }
-      const concurrency = resolveConcurrency(options?.concurrency);
       if (hasProperties) {
-        const eff = parseProperties(state, properties, concurrency);
+        const eff = concurrency === 1 ? parseProperties(state, properties) : parsePropertiesConcurrent(state, properties, {
+          concurrency
+        });
         if (eff)
           yield* eff;
       }
-      if (indexCount && !concurrency) {
+      if (indexCount && concurrency === 1) {
         for (let i = 0;i < indexCount; i++) {
           const index = indexes[i];
           const parse = index.is.parameter === string2 ? parseStringIndex : parseIndex;
-          const keys = index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options);
+          const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
           for (let j = 0;j < keys.length; j++) {
             const eff = parse(state, keys[j], index);
             if (!effectIsExit(eff))
@@ -6681,27 +6909,19 @@ class Objects extends Base2 {
         const keyPairs = empty2();
         for (let i = 0;i < indexCount; i++) {
           const index = indexes[i];
-          const keys = getIndexSignatureKeys(record, index.is.parameter, options);
+          const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
           for (let j = 0;j < keys.length; j++) {
             keyPairs.push([keys[j], index]);
           }
         }
-        const eff = parseIndexes(state, keyPairs, concurrency);
+        const eff = parseIndexes(state, keyPairs, {
+          concurrency
+        });
         if (eff)
           yield* eff;
       }
       if (state.issues) {
         return yield* fail6(new Composite(ast, state.issues, input, options));
-      }
-      if (options.propertyOrder === "original") {
-        const keys = (inputKeys ?? Reflect.ownKeys(record)).concat(expectedKeys);
-        const preserved = {};
-        for (const key of keys) {
-          if (Object.hasOwn(out, key)) {
-            assignProperty(preserved, key, out[key]);
-          }
-        }
-        return preserved;
       }
       return out;
     });
@@ -6721,7 +6941,7 @@ class Objects extends Base2 {
     return (input, options) => {
       if (input === missing)
         return missingExit;
-      if (options.errors === "all" || options.onExcessProperty !== undefined || options.propertyOrder === "original" || options.concurrency !== undefined) {
+      if (options.errors === "all" || options.onExcessProperty !== undefined || options.concurrency !== undefined && resolveConcurrency(options.concurrency) !== 1) {
         return fallback(input, options);
       }
       if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
@@ -6741,7 +6961,7 @@ class Objects extends Base2 {
         for (let index = 0;index < props.length; index++) {
           const property = props[index];
           const name = property.name;
-          const hasKey = Object.hasOwn(record, name);
+          const hasKey = hasPropertySignature(record, name);
           const value = hasKey ? record[name] : missing;
           const exit = property.parser(value, options);
           if (!effectIsExit(exit)) {
@@ -6785,7 +7005,7 @@ class Objects extends Base2 {
       return "object | array";
     return "object";
   }
-}
+};
 function stepProperty(s, p, exit) {
   if (exit._tag === "Failure") {
     return wrapPropertyKeyIssue(s, s.ast, p.name, exit);
@@ -6811,9 +7031,9 @@ function stepProperty(s, p, exit) {
     }
   }
 }
-var parseProperties = /* @__PURE__ */ iterateEager()({
+var parsePropertiesOptions = {
   onItem(s, p) {
-    if (!Object.hasOwn(s.input, p.name)) {
+    if (!hasPropertySignature(s.input, p.name)) {
       return p.parser(missing, s.options);
     }
     const value = s.input[p.name];
@@ -6821,7 +7041,9 @@ var parseProperties = /* @__PURE__ */ iterateEager()({
     return p.parser(value, s.options);
   },
   step: stepProperty
-});
+};
+var parseProperties = /* @__PURE__ */ iterateEager()(parsePropertiesOptions);
+var parsePropertiesConcurrent = /* @__PURE__ */ iterateConcurrent()(parsePropertiesOptions);
 function combineChecks(a, b) {
   if (!a)
     return b;
@@ -6840,8 +7062,8 @@ function getAST(self) {
 function tuple(elements, checks = undefined) {
   return new Arrays(false, elements.map((e) => e.ast), [], undefined, checks);
 }
-function union2(members, mode, checks) {
-  return new Union(members.map(getAST), mode, undefined, checks);
+function union(members, options, checks) {
+  return new Union(members.map(getAST), options, undefined, checks);
 }
 var toCandidate = /* @__PURE__ */ memoizeIdempotent((ast) => {
   while (true) {
@@ -6947,6 +7169,7 @@ function collectSentinels(ast) {
 }
 var candidateIndexCache = /* @__PURE__ */ new WeakMap;
 var emptyCandidates = /* @__PURE__ */ Object.freeze([]);
+var hasPropertySignature = (input, key) => key === "__proto__" ? Object.hasOwn(input, key) : (key in input);
 function getIndex(types) {
   let index = candidateIndexCache.get(types);
   if (index)
@@ -7008,7 +7231,7 @@ function getIndex(types) {
     }
     index = (input, isConstructor) => {
       if (isObjectKeyword(input)) {
-        const value = Object.hasOwn(input, key) ? input[key] : undefined;
+        const value = hasPropertySignature(input, key) ? input[key] : undefined;
         if (value !== undefined)
           return candidates.get(value) ?? emptyCandidates;
         if (isConstructor)
@@ -7032,7 +7255,7 @@ function getIndex(types) {
       let directKey;
       if (commonSentinel) {
         const [key, [byValue]] = commonSentinel;
-        const hasKey = Object.hasOwn(input, key);
+        const hasKey = hasPropertySignature(input, key);
         const value = hasKey ? input[key] : undefined;
         if (hasKey && (!isConstructor || value !== undefined)) {
           const match = byValue.get(value);
@@ -7045,7 +7268,7 @@ function getIndex(types) {
       }
       if (directKey === undefined) {
         for (const [key, [byValue, all]] of bySentinel) {
-          const hasKey = Object.hasOwn(input, key);
+          const hasKey = hasPropertySignature(input, key);
           const value = hasKey ? input[key] : undefined;
           if (hasKey && (!isConstructor || value !== undefined)) {
             const match = byValue.get(value);
@@ -7062,7 +7285,7 @@ function getIndex(types) {
       for (const [key, [byValue, all]] of bySentinel) {
         if (key === directKey)
           continue;
-        const hasKey = Object.hasOwn(input, key);
+        const hasKey = hasPropertySignature(input, key);
         const value = hasKey ? input[key] : undefined;
         if (hasKey && (!isConstructor || value !== undefined)) {
           const match = byValue.get(value);
@@ -7092,16 +7315,15 @@ function filterLiterals(input) {
 function getCandidates(input, types, isConstructor = false) {
   return getIndex(types)(input, isConstructor);
 }
-
-class Union extends Base2 {
+var Union = class extends ASTNodeImpl {
   _tag = "Union";
   types;
-  mode;
+  options;
   encodingChecks;
-  constructor(types, mode, annotations, checks, encoding, context, encodingChecks) {
+  constructor(types, options, annotations, checks, encoding, context, encodingChecks) {
     super(annotations, checks, encoding, context);
     this.types = types;
-    this.mode = mode;
+    this.options = options;
     this.encodingChecks = encodingChecks;
   }
   getParser(compile, compileConstructorDefault) {
@@ -7111,6 +7333,9 @@ class Union extends Base2 {
         return missingExit;
       }
       const candidates = getCandidates(input, ast.types, compileConstructorDefault !== undefined);
+      if (candidates.length === 0) {
+        return fail6(new AnyOf(ast, [], input, options));
+      }
       if (candidates.length === 1) {
         const result = compile(candidates[0])(input, options);
         if (result._tag === "Success")
@@ -7122,15 +7347,11 @@ class Union extends Base2 {
         compile,
         input,
         out: undefined,
-        successes: ast.mode === "oneOf" ? [] : undefined,
+        successes: ast.options?.mode === "oneOf" ? [] : undefined,
         issues: undefined,
         options
       };
-      const concurrency = resolveConcurrency(options?.concurrency);
-      const eff = parseUnion(state, candidates, concurrency ? {
-        ...concurrency,
-        orderedStep: true
-      } : undefined);
+      const eff = parseUnion(state, candidates);
       if (!eff) {
         if (state.out)
           return state.out;
@@ -7147,7 +7368,7 @@ class Union extends Base2 {
   }
   _rebuild(recur, checks, encodingChecks) {
     const types = mapOrSame(this.types, recur);
-    return types === this.types && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Union(types, this.mode, this.annotations, checks, undefined, this.context, encodingChecks);
+    return types === this.types && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Union(types, this.options, this.annotations, checks, undefined, this.context, encodingChecks);
   }
   recur(recur) {
     return this._rebuild(recur, this.checks, this.encodingChecks);
@@ -7191,7 +7412,7 @@ class Union extends Base2 {
     });
     return Array.from(new Set(types)).join(" | ");
   }
-}
+};
 function failSingleUnionCandidate(ast, cause, input, options) {
   const issue = getSchemaIssue(cause);
   if (!issue)
@@ -7227,14 +7448,14 @@ var parseUnion = /* @__PURE__ */ iterateEager()({
     }
   }
 });
-var nonFiniteLiterals = /* @__PURE__ */ new Union([/* @__PURE__ */ new Literal("Infinity"), /* @__PURE__ */ new Literal("-Infinity"), /* @__PURE__ */ new Literal("NaN")], "anyOf");
+var nonFiniteLiterals = /* @__PURE__ */ new Union([/* @__PURE__ */ new Literal("Infinity"), /* @__PURE__ */ new Literal("-Infinity"), /* @__PURE__ */ new Literal("NaN")]);
 function formatIsMutable(isMutable) {
   return isMutable ? "" : "readonly ";
 }
 function formatIsOptional(isOptional) {
   return isOptional ? "?" : "";
 }
-class Filter2 extends Class {
+var Filter2 = class extends Class {
   _tag = "Filter";
   run;
   annotations;
@@ -7257,9 +7478,8 @@ class Filter2 extends Class {
   and(other, annotations) {
     return new FilterGroup([this, other], annotations);
   }
-}
-
-class FilterGroup extends Class {
+};
+var FilterGroup = class extends Class {
   _tag = "FilterGroup";
   checks;
   annotations;
@@ -7277,7 +7497,7 @@ class FilterGroup extends Class {
   and(other, annotations) {
     return new FilterGroup([this, other], annotations);
   }
-}
+};
 function makeFilter(filter, annotations, aborted = false) {
   return new Filter2((input, ast, options) => normalizeFilterOutput(ast, filter(input, ast, options), input, options), annotations, aborted);
 }
@@ -7294,17 +7514,14 @@ function isFinite2(annotations) {
     toCode: () => ({
       runtime: "Schema.isFinite()"
     }),
-    arbitrary: {
-      constraint: {
-        noInfinity: true,
-        noNaN: true
-      }
+    arbitraryConstraint: {
+      number: "finite"
     },
     ...annotations
   });
 }
 var finite = /* @__PURE__ */ appendChecks(number2, [/* @__PURE__ */ isFinite2()]);
-var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finite, nonFiniteLiterals], "anyOf"), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
+var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finite, nonFiniteLiterals]), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
 function isPattern(regExp, annotations) {
   const source = regExp.source;
   const pattern = new globalThis.RegExp(source, regExp.flags);
@@ -7323,10 +7540,11 @@ function isPattern(regExp, annotations) {
     toJsonSchema: () => ({
       pattern: source
     }),
-    arbitrary: {
-      constraint: {
-        patterns: [regExp.source]
-      }
+    arbitraryConstraint: {
+      patterns: [{
+        source: regExp.source,
+        flags: regExp.flags
+      }]
     },
     ...annotations
   });
@@ -7516,7 +7734,7 @@ function containsUndefined(ast) {
   }
 }
 function fromConst(ast, value) {
-  const succeed = succeed9(value);
+  const succeed = value === 0 ? sameExit : succeed9(value);
   return (input, options) => {
     if (input === missing)
       return missingExit;
@@ -7561,10 +7779,10 @@ function isStringFinite(annotations) {
 }
 var finiteString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringFinite()]);
 var finiteToString = /* @__PURE__ */ new Link(finiteString, numberFromString);
-var numberToString = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finiteString, nonFiniteLiterals], "anyOf"), numberFromString);
+var numberToString = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finiteString, nonFiniteLiterals]), numberFromString);
 var BIGINT_PATTERN = "-?\\d+";
 var isStringBigIntRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${BIGINT_PATTERN}$`);
-var REGEXP_PATTERN = "Symbol\\((.*)\\)";
+var REGEXP_PATTERN = "Symbol\\(([\\s\\S]*)\\)";
 var isStringSymbolRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${REGEXP_PATTERN}$`);
 function collectIssues(checks, value, issues, ast, options) {
   for (let i = 0;i < checks.length; i++) {
@@ -7663,8 +7881,7 @@ var Json = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => is
   toCodecJson: () => {
     return;
   },
-  toCodecStringTree: () => unknownToStringTree,
-  toArbitrary: () => (fc) => fc.jsonValue()
+  toCodecStringTree: () => unknownToStringTree
 });
 function isStringTree(u) {
   return isTree(u, isStringTreeLeaf);
@@ -7700,7 +7917,7 @@ function makeOption(schema) {
     return none2();
   };
 }
-function make14(schema) {
+function make15(schema) {
   const parser = makeEffect(schema);
   return (input, options) => {
     const exit = runSyncExit2(parser(input, options));
@@ -7795,12 +8012,8 @@ function makeParser(ast, compile, compileConstructorDefault, constructorDefault)
   const checks = ast.checks;
   const links = constructorDefault ? ast.encoding ? [...ast.encoding, constructorDefault] : [constructorDefault] : ast.encoding;
   const encodingChecks = ast.encodingChecks;
-  const astOptions = (checks ? checks[checks.length - 1].annotations : ast.annotations)?.["parseOptions"];
   if (!links && !checks && !encodingChecks) {
-    if (!astOptions) {
-      return parser;
-    }
-    return (input, options) => parser(input, mergeParseOptions(options, astOptions));
+    return parser;
   }
   let encodingParsers;
   const parseLocal = (input, options) => {
@@ -7854,12 +8067,9 @@ function makeParser(ast, compile, compileConstructorDefault, constructorDefault)
     return result;
   };
   if (!links) {
-    return astOptions ? (input, options) => parseLocal(input, mergeParseOptions(options, astOptions)) : parseLocal;
+    return parseLocal;
   }
   return (input, options) => {
-    if (astOptions) {
-      options = mergeParseOptions(options, astOptions);
-    }
     const parsers = encodingParsers ??= links.map((link) => compile(link.to));
     let current = input;
     let result = parsers[parsers.length - 1](input, options);
@@ -7891,7 +8101,7 @@ function makeParser(ast, compile, compileConstructorDefault, constructorDefault)
   };
 }
 
-// node_modules/effect/dist/internal/schema/schema.js
+// node_modules/effect/dist/internal/schema/make.js
 var TypeId20 = "~effect/Schema/Schema";
 var SchemaProto = {
   [TypeId20]: TypeId20,
@@ -7908,15 +8118,15 @@ var SchemaProto = {
     return this.rebuild(appendChecks(this.ast, checks));
   }
 };
-function make15(ast, options) {
+function make16(ast, options) {
   function Schema() {}
   const self = Object.defineProperties(Object.setPrototypeOf(Schema, SchemaProto), Object.getOwnPropertyDescriptors({
     ...options
   }));
   self.ast = ast;
-  self.rebuild = (ast) => make15(ast, options);
+  self.rebuild = (ast) => make16(ast, options);
   self.makeEffect = makeEffect(self);
-  self.make = make14(self);
+  self.make = make15(self);
   self.makeOption = makeOption(self);
   return self;
 }
@@ -7924,18 +8134,22 @@ function make15(ast, options) {
 // node_modules/effect/dist/Struct.js
 var lambda = (f) => f;
 
+// node_modules/effect/dist/internal/schemaError.js
+var SchemaErrorTypeId = "~effect/Schema/SchemaError";
+function isSchemaError(u) {
+  return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
+}
+
 // node_modules/effect/dist/Schema.js
 var TypeId21 = TypeId20;
 function declareConstructor() {
   return (typeParameters, run, annotations) => {
-    return make16(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make16(ast))), annotations));
+    return make17(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make17(ast))), annotations));
   };
 }
 function declare(is, annotations) {
   return declareConstructor()([], () => (input, ast, options) => is(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options)), annotations);
 }
-var SchemaErrorTypeId = "~effect/SchemaError/SchemaError";
-
 class SchemaError extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
   [SchemaErrorTypeId] = SchemaErrorTypeId;
   constructor(issue) {
@@ -7956,15 +8170,8 @@ class SchemaError extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
     return `SchemaError(${this.message})`;
   }
 }
-function isSchemaError(u) {
-  return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
-}
-var is2 = is;
-function decodeUnknownEffect2(schema, options) {
-  const parser = decodeUnknownEffect(schema, options);
-  return (input, options) => {
-    return fromIssueEffect(parser(input, options));
-  };
+function isSchemaError2(u) {
+  return isSchemaError(u);
 }
 function fromIssueEffect(self) {
   if (effectIsExit(self)) {
@@ -7972,22 +8179,28 @@ function fromIssueEffect(self) {
   }
   return catchCause2(self, (cause) => failCauseSync2(() => map5(cause, (issue) => new SchemaError(issue))));
 }
-var decodeEffect2 = decodeUnknownEffect2;
 function fromIssueExit(exit) {
   return isSuccess3(exit) ? exit : failCause2(map5(exit.cause, (issue) => new SchemaError(issue)));
 }
-var make16 = make15;
+function decodeUnknownEffect2(schema, options) {
+  const parser = decodeUnknownEffect(schema, options);
+  return (input, options) => {
+    return fromIssueEffect(parser(input, options));
+  };
+}
+var decodeEffect2 = decodeUnknownEffect2;
+var make17 = make16;
 function isSchema(u) {
   return hasProperty(u, TypeId21) && u[TypeId21] === TypeId21;
 }
-var optionalKey2 = /* @__PURE__ */ lambda((schema) => make16(optionalKey(schema.ast), {
+var optionalKey2 = /* @__PURE__ */ lambda((schema) => make17(optionalKey(schema.ast), {
   schema
 }));
-var toType2 = /* @__PURE__ */ lambda((schema) => make16(toType(schema.ast), {
+var toType2 = /* @__PURE__ */ lambda((schema) => make17(toType(schema.ast), {
   schema
 }));
 function Literal2(literal) {
-  const out = make16(new Literal(literal), {
+  const out = make17(new Literal(literal), {
     literal,
     transform(to) {
       return out.pipe(decodeTo2(Literal2(to), {
@@ -7998,12 +8211,12 @@ function Literal2(literal) {
   });
   return out;
 }
-var Unknown2 = /* @__PURE__ */ make16(unknown);
-var String4 = /* @__PURE__ */ make16(string2);
-var Number5 = /* @__PURE__ */ make16(number2);
-var Boolean2 = /* @__PURE__ */ make16(boolean);
+var Unknown2 = /* @__PURE__ */ make17(unknown);
+var String4 = /* @__PURE__ */ make17(string2);
+var Number5 = /* @__PURE__ */ make17(number2);
+var Boolean2 = /* @__PURE__ */ make17(boolean);
 function makeStruct(ast, fields) {
-  return make16(ast, {
+  return make17(ast, {
     fields,
     mapFields(f, options) {
       const fields = f(this.fields);
@@ -8015,7 +8228,7 @@ function Struct(fields) {
   return makeStruct(struct(fields, undefined), fields);
 }
 function makeTuple(ast, elements) {
-  return make16(ast, {
+  return make17(ast, {
     elements,
     mapElements(f, options) {
       const elements = f(this.elements);
@@ -8026,24 +8239,24 @@ function makeTuple(ast, elements) {
 function Tuple(elements) {
   return makeTuple(tuple(elements), elements);
 }
-var ArraySchema = /* @__PURE__ */ lambda((schema) => make16(new Arrays(false, [], [schema.ast]), {
+var ArraySchema = /* @__PURE__ */ lambda((schema) => make17(new Arrays(false, [], [schema.ast]), {
   value: schema
 }));
 function makeUnion(ast, members) {
-  return make16(ast, {
+  return make17(ast, {
     members,
     mapMembers(f, options) {
       const members = f(this.members);
-      return makeUnion(union2(members, this.ast.mode, options?.unsafePreserveChecks ? this.ast.checks : undefined), members);
+      return makeUnion(union(members, this.ast.options, options?.unsafePreserveChecks ? this.ast.checks : undefined), members);
     }
   });
 }
 function Union2(members, options) {
-  return makeUnion(union2(members, options?.mode ?? "anyOf", undefined), members);
+  return makeUnion(union(members, options, undefined), members);
 }
 function Literals(literals) {
   const members = literals.map(Literal2);
-  return make16(union2(members, "anyOf", undefined), {
+  return make17(union(members, undefined, undefined), {
     literals,
     members,
     mapMembers(f) {
@@ -8059,14 +8272,14 @@ function Literals(literals) {
 }
 function decodeTo2(to, transformation) {
   return (from) => {
-    return make16(decodeTo(from.ast, to.ast, transformation ? make13(transformation) : passthrough2()), {
+    return make17(decodeTo(from.ast, to.ast, transformation ? make14(transformation) : passthrough2()), {
       from,
       to
     });
   };
 }
 function withConstructorDefault2(defaultValue) {
-  return (schema) => make16(withConstructorDefault(schema.ast, defaultValue), {
+  return (schema) => make17(withConstructorDefault(schema.ast, defaultValue), {
     schema
   });
 }
@@ -8111,7 +8324,7 @@ function toTaggedUnion(tag) {
           discriminantKeys.add(key);
           discriminants.push(literal);
           assignProperty(cases, literal, schema);
-          assignProperty(guards, literal, is2(toType2(schema)));
+          assignProperty(guards, literal, is(toType2(schema)));
           return;
         }
       }
@@ -8166,7 +8379,7 @@ function TaggedUnion(casesByTag) {
     match,
     matchOrElse
   } = toTaggedUnion("_tag")(union);
-  return make16(union.ast, {
+  return make17(union.ast, {
     cases,
     isAnyOf,
     guards,
@@ -8179,7 +8392,7 @@ function instanceOf(constructor, annotations) {
 }
 function link() {
   return (encodeTo, transformation) => {
-    return new Link(encodeTo.ast, make13(transformation));
+    return new Link(encodeTo.ast, make14(transformation));
   };
 }
 var makeFilter2 = makeFilter;
@@ -8211,7 +8424,7 @@ function isBase64(annotations) {
     ...annotations
   });
 }
-var Finite = /* @__PURE__ */ make16(finite);
+var Finite = /* @__PURE__ */ make17(finite);
 function isInt(annotations) {
   return makeFilter2((n) => globalThis.Number.isSafeInteger(n), {
     expected: "an integer",
@@ -8225,10 +8438,8 @@ function isInt(annotations) {
     toCode: () => ({
       runtime: "Schema.isInt()"
     }),
-    arbitrary: {
-      constraint: {
-        integer: true
-      }
+    arbitraryConstraint: {
+      number: "integer"
     },
     ...annotations
   });
@@ -8278,7 +8489,7 @@ var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
   toCodecJson: () => link()(Struct({
     source: String4,
     flags: String4
-  }), transformOrFail2({
+  }), transformEffect2({
     decode: (e, options) => try_2({
       try: () => new globalThis.RegExp(e.source, e.flags),
       catch: () => new InvalidValue({
@@ -8289,12 +8500,7 @@ var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
       source: regExp.source,
       flags: regExp.flags
     })
-  })),
-  toArbitrary: () => (fc) => fc.tuple(fc.constantFrom(".", ".*", "\\d+", "\\w+", "[a-z]+", "[A-Z]+", "[0-9]+", "^[a-zA-Z0-9]+$", "^\\d{4}-\\d{2}-\\d{2}$"), fc.uniqueArray(fc.constantFrom("g", "i", "m", "s", "u", "y"), {
-    minLength: 0,
-    maxLength: 6
-  }).map((flags) => flags.join(""))).map(([source, flags]) => new globalThis.RegExp(source, flags)),
-  toEquivalence: () => (a, b) => a.source === b.source && a.flags === b.flags
+  }))
 });
 var URLString = /* @__PURE__ */ String4.annotate({
   expected: "a string that will be decoded as a URL"
@@ -8309,9 +8515,7 @@ var URL2 = /* @__PURE__ */ instanceOf(globalThis.URL, {
     Type: `globalThis.URL`
   }),
   expected: "URL",
-  toCodecJson: () => link()(URLString, urlFromString),
-  toArbitrary: () => (fc) => fc.webUrl().map((s) => new globalThis.URL(s)),
-  toEquivalence: () => (a, b) => a.toString() === b.toString()
+  toCodecJson: () => link()(URLString, urlFromString)
 });
 var JsonString = /* @__PURE__ */ String4.annotate({
   expected: "a string that will be decoded as JSON",
@@ -8335,7 +8539,7 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
     type: String4,
     name: String4,
     lastModified: Int
-  }), transformOrFail2({
+  }), transformEffect2({
     decode: (e, options) => match3(decodeBase64(e.data), {
       onFailure: () => fail6(new InvalidValue({
         expected: "a valid Base64 string"
@@ -8380,7 +8584,7 @@ var FormData2 = /* @__PURE__ */ instanceOf(globalThis.FormData, {
   }), Struct({
     _tag: tag("File"),
     value: File
-  })])])), transformOrFail2({
+  })])])), transformEffect2({
     decode: (e) => {
       const out = new globalThis.FormData;
       for (const [key, entry] of e) {
@@ -8437,9 +8641,14 @@ var Uint8Array2 = /* @__PURE__ */ instanceOf(globalThis.Uint8Array, {
     Type: `globalThis.Uint8Array`
   }),
   expected: "Uint8Array",
-  toCodecJson: () => link()(Base64String, uint8ArrayFromBase64String),
-  toArbitrary: () => (fc) => fc.uint8Array()
+  toCodecJson: () => link()(Base64String, uint8ArrayFromBase64String)
 });
+var arbitraryMinimumDateTimestamp = -8640000000000000;
+var arbitraryMaximumDateTimestamp = 8640000000000000;
+var arbitraryMinimumZonedDateTimeTimestamp = arbitraryMinimumDateTimestamp + 14 * 60 * 60 * 1000;
+var arbitraryMaximumZonedDateTimeTimestamp = arbitraryMaximumDateTimestamp - 14 * 60 * 60 * 1000;
+var arbitraryMinimumTimeZoneOffset = -12 * 60 * 60 * 1000;
+var arbitraryMaximumTimeZoneOffset = 14 * 60 * 60 * 1000;
 var immerable = /* @__PURE__ */ globalThis.Symbol.for("immer-draftable");
 var payloadToken = {};
 function makeClass(Inherited, identifier, struct2, annotations, proto) {
@@ -8476,7 +8685,7 @@ function makeClass(Inherited, identifier, struct2, annotations, proto) {
       return getClassSchema(this).rebuild(ast);
     }
     static make(input, options) {
-      return new this(input, options);
+      return make15(getClassSchema(this))(input ?? {}, options);
     }
     static makeOption(input, options) {
       return makeOption(getClassSchema(this))(input ?? {}, options);
@@ -8535,7 +8744,7 @@ function getClassSchemaFactory(from, identifier, annotations) {
     const ClassTypeId = getClassTypeId(identifier);
     const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
     const transformation = getClassTransformation(self);
-    const to = make16(new Declaration([from.ast], () => (input, ast, options) => {
+    const to = make17(new Declaration([from.ast], () => (input, ast, options) => {
       return isClassValue(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options));
     }, {
       identifier,
@@ -8544,10 +8753,7 @@ function getClassSchemaFactory(from, identifier, annotations) {
         link: new Link(from, transformation)
       }),
       toCodec: ([from]) => new Link(from.ast, transformation),
-      toArbitrary: ([from]) => () => ({
-        arbitrary: from.arbitrary.map((args) => new self(args)),
-        terminal: from.terminal?.map((args) => new self(args))
-      }),
+      toEquivalence: ([from]) => from,
       toFormatter: ([from]) => (t) => `${self.identifier}(${from(t)})`,
       [SENTINELS_ANNOTATION_KEY]: collectSentinels(from.ast),
       ...annotations
@@ -8576,7 +8782,7 @@ var TaggedError3 = (identifier) => {
     return Error4(identifier ?? tagValue)(struct, annotations);
   };
 };
-var Json2 = /* @__PURE__ */ make16(/* @__PURE__ */ annotate(Json, {
+var Json2 = /* @__PURE__ */ make17(/* @__PURE__ */ annotate(Json, {
   toCode: () => ({
     runtime: "Schema.Json",
     Type: "Schema.Json"
@@ -8594,7 +8800,7 @@ function nominal() {
 // node_modules/effect/dist/unstable/process/ChildProcessSpawner.js
 var ExitCode = /* @__PURE__ */ nominal();
 var ProcessId = /* @__PURE__ */ nominal();
-var HandleTypeId = "~effect/ChildProcessSpawner/ChildProcessHandle";
+var HandleTypeId = "~effect/process/ChildProcessSpawner/ChildProcessHandle";
 var HandleProto = {
   [HandleTypeId]: HandleTypeId,
   ...BaseProto,
@@ -8608,7 +8814,7 @@ var HandleProto = {
 var makeHandle = (params) => Object.setPrototypeOf({
   ...params
 }, HandleProto);
-var make17 = (spawn) => {
+var make18 = (spawn) => {
   const streamString = (command, options) => spawn(command).pipe(map6((handle) => decodeText(options?.includeStderr === true ? handle.all : handle.stdout)), unwrap3);
   const streamLines = (command, options) => splitLines2(streamString(command, options));
   return ChildProcessSpawner.of({
@@ -8625,7 +8831,7 @@ class ChildProcessSpawner extends (/* @__PURE__ */ Service()("effect/process/Chi
 }
 
 // node_modules/effect/dist/unstable/process/ChildProcess.js
-var TypeId22 = "~effect/unstable/process/ChildProcess";
+var TypeId22 = "~effect/process/ChildProcess";
 var Proto2 = {
   .../* @__PURE__ */ Prototype2({
     label: "Command",
@@ -8641,7 +8847,7 @@ var makeStandardCommand = (command, args, options) => Object.assign(Object.creat
   args,
   options
 });
-var make18 = function make(...args) {
+var make19 = function make(...args) {
   if (isTemplateString(args[0])) {
     const [templates, ...expressions] = args;
     const tokens = parseTemplates(templates, expressions);
@@ -8733,7 +8939,11 @@ var splitByWhitespaces = (template, rawTemplate) => {
         templateIndex -= 1;
         rawIndex += 1;
       } else if (nextRawCharacter === "u" && rawTemplate[rawIndex + 2] === "{") {
-        rawIndex = rawTemplate.indexOf("}", rawIndex + 3);
+        const end = rawTemplate.indexOf("}", rawIndex + 3);
+        if (parseInt(rawTemplate.slice(rawIndex + 3, end), 16) > 65535) {
+          templateIndex += 1;
+        }
+        rawIndex = end;
       } else {
         rawIndex += ESCAPE_LENGTH[nextRawCharacter] ?? 1;
       }
@@ -8786,7 +8996,7 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
   const spawner = yield* ChildProcessSpawner;
   const open = fn2("Gh.stream")(function* (args, options) {
     const executable = options.executable ?? "gh";
-    const handle = yield* spawner.spawn(make18(executable, args, {
+    const handle = yield* spawner.spawn(make19(executable, args, {
       cwd: options.cwd,
       env: {
         ...defaults.env,
@@ -8943,7 +9153,7 @@ var runMain = /* @__PURE__ */ makeRunMain(({
 // node_modules/@effect/platform-node/dist/NodeRuntime.js
 var runMain2 = runMain;
 // node_modules/effect/dist/Path.js
-var TypeId23 = "~effect/platform/Path";
+var TypeId23 = "~effect/Path";
 var Path2 = /* @__PURE__ */ Service("effect/Path");
 function normalizeStringPosix(path, allowAboveRoot) {
   let res = "";
@@ -9529,7 +9739,7 @@ var fromReadableChannel = (options) => fromTransform((_, scope) => readableToPul
 var readableToPullUnsafe = (options) => {
   const readable = options.readable;
   const closeOnDone = options.closeOnDone ?? true;
-  const exit = options.exit ?? make6(undefined);
+  const exit = options.exit ?? make7(undefined);
   const latch = makeUnsafe4(false);
   function onReadable() {
     latch.openUnsafe();
@@ -9592,7 +9802,7 @@ var toPlatformError = (method, error, command) => {
 var taskkill = (childProcess, onExit = () => {}) => NodeChildProcess.execFile("taskkill", ["/pid", String(childProcess.pid), "/T", "/F"], {
   windowsHide: true
 }, onExit);
-var make19 = /* @__PURE__ */ gen2(function* () {
+var make20 = /* @__PURE__ */ gen2(function* () {
   const fs = yield* FileSystem;
   const path = yield* Path2;
   const resolveWorkingDirectory = fnUntraced2(function* (options) {
@@ -9967,7 +10177,7 @@ var make19 = /* @__PURE__ */ gen2(function* () {
           const sourceStream = unwrap3(succeed6(getSourceStream(handles[handles.length - 1], options.from)));
           const toOption = options.to ?? "stdin";
           if (toOption === "stdin") {
-            handles.push(yield* spawnCommand(make18(command.command, command.args, {
+            handles.push(yield* spawnCommand(make19(command.command, command.args, {
               ...command.options,
               stdin: {
                 ...stdinConfig,
@@ -9979,7 +10189,7 @@ var make19 = /* @__PURE__ */ gen2(function* () {
             if (isNotUndefined(fd)) {
               const fdName2 = fdName(fd);
               const existingFds = command.options.additionalFds ?? {};
-              handles.push(yield* spawnCommand(make18(command.command, command.args, {
+              handles.push(yield* spawnCommand(make19(command.command, command.args, {
                 ...command.options,
                 additionalFds: {
                   ...existingFds,
@@ -9990,7 +10200,7 @@ var make19 = /* @__PURE__ */ gen2(function* () {
                 }
               })));
             } else {
-              handles.push(yield* spawnCommand(make18(command.command, command.args, {
+              handles.push(yield* spawnCommand(make19(command.command, command.args, {
                 ...command.options,
                 stdin: {
                   ...stdinConfig,
@@ -10029,9 +10239,9 @@ var make19 = /* @__PURE__ */ gen2(function* () {
       }
     }
   });
-  return make17(spawnCommand);
+  return make18(spawnCommand);
 });
-var layer2 = /* @__PURE__ */ effect(ChildProcessSpawner, make19);
+var layer2 = /* @__PURE__ */ effect(ChildProcessSpawner, make20);
 var flattenCommand = (command) => {
   const commands = [];
   const pipeOptions = [];
@@ -10090,9 +10300,9 @@ function v7Bytes(timestampMillis, bytes = randomBytes()) {
 var v7String = (timestampMillis, bytes) => stringify(bytes === undefined ? v7Bytes(timestampMillis) : v7Bytes(timestampMillis, bytes));
 
 // node_modules/effect/dist/Crypto.js
-var TypeId24 = "~effect/platform/Crypto";
+var TypeId24 = "~effect/Crypto";
 var Crypto2 = /* @__PURE__ */ Service("effect/Crypto");
-var make20 = (impl) => {
+var make21 = (impl) => {
   const randomBytesUnsafe = impl.randomBytes;
   const randomBytes = (size) => map6(validateSize("randomBytes", size), randomBytesUnsafe);
   const readUint53 = (bytes) => (bytes[0] & 31) * 2 ** 48 + bytes[1] * 2 ** 40 + bytes[2] * 2 ** 32 + bytes[3] * 2 ** 24 + bytes[4] * 2 ** 16 + bytes[5] * 2 ** 8 + bytes[6];
@@ -10118,7 +10328,7 @@ var make20 = (impl) => {
     random: sync3(() => nextDoubleUnsafe()),
     randomBoolean: sync3(() => nextDoubleUnsafe() > 0.5),
     randomInt: sync3(() => nextIntUnsafe()),
-    randomBetween: (min, max) => sync3(() => nextDoubleUnsafe() * (max - min) + min),
+    randomBetween: (min, max) => sync3(() => nextBetween(min, max, nextDoubleUnsafe())),
     randomIntBetween(min, max, options) {
       const extra = options?.halfOpen === true ? 0 : 1;
       return sync3(() => {
@@ -10171,11 +10381,11 @@ var digest = (algorithm, data) => try_2({
     cause
   })
 });
-var make21 = /* @__PURE__ */ make20({
+var make22 = /* @__PURE__ */ make21({
   randomBytes: NodeCrypto.randomBytes,
   digest
 });
-var layer3 = /* @__PURE__ */ succeed5(Crypto2, make21);
+var layer3 = /* @__PURE__ */ succeed5(Crypto2, make22);
 
 // node_modules/@effect/platform-node/dist/NodeCrypto.js
 var layer4 = layer3;
@@ -10299,14 +10509,14 @@ var makeFile = /* @__PURE__ */ (() => {
       return nodeSync(this.fd);
     }
     seek(offset, from) {
-      const offsetSize = Size(offset);
+      const offsetSize = undefined(offset);
       return sync3(() => {
         if (from === "start") {
           this.position = offsetSize;
         } else if (from === "current") {
           this.position = this.position + offsetSize;
         }
-        return Size(this.position);
+        return undefined(this.position);
       });
     }
     read(buffer) {
@@ -10316,7 +10526,7 @@ var makeFile = /* @__PURE__ */ (() => {
           buffer,
           position
         }), (bytesRead) => {
-          const sizeRead = Size(bytesRead);
+          const sizeRead = undefined(bytesRead);
           this.position = position + sizeRead;
           return sizeRead;
         });
@@ -10358,7 +10568,7 @@ var makeFile = /* @__PURE__ */ (() => {
       return suspend2(() => {
         const position = this.position;
         return map6(nodeWrite(this.fd, buffer, undefined, undefined, this.append ? undefined : Number(position)), (bytesWritten) => {
-          const sizeWritten = Size(bytesWritten);
+          const sizeWritten = undefined(bytesWritten);
           if (!this.append) {
             this.position = position + sizeWritten;
           }
@@ -10453,8 +10663,8 @@ var makeFileInfo = (stat) => ({
   nlink: fromNullishOr(stat.nlink),
   uid: fromNullishOr(stat.uid),
   gid: fromNullishOr(stat.gid),
-  size: Size(stat.size),
-  blksize: stat.blksize !== undefined ? some2(Size(stat.blksize)) : none2(),
+  size: undefined(stat.size),
+  blksize: stat.blksize !== undefined ? some2(undefined(stat.blksize)) : none2(),
   blocks: fromNullishOr(stat.blocks)
 });
 var stat2 = /* @__PURE__ */ (() => {
@@ -10534,7 +10744,7 @@ var writeFile2 = (path, data, options) => callback2((resume, signal) => {
     resume(fail6(handleBadArgument("writeFile")(err)));
   }
 });
-var makeFileSystem = /* @__PURE__ */ map6(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make11({
+var makeFileSystem = /* @__PURE__ */ map6(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make12({
   access: access2,
   chmod: chmod2,
   chown: chown2,
@@ -10615,7 +10825,7 @@ var layer8 = layer7;
 // node_modules/effect/dist/Stdio.js
 var TypeId25 = "~effect/Stdio";
 var Stdio2 = /* @__PURE__ */ Service(TypeId25);
-var make22 = (options) => ({
+var make23 = (options) => ({
   [TypeId25]: TypeId25,
   stdinIsTerminal: succeed6(false),
   stdoutIsTerminal: succeed6(false),
@@ -10623,7 +10833,7 @@ var make22 = (options) => ({
 });
 
 // node_modules/@effect/platform-node-shared/dist/NodeStdio.js
-var layer9 = /* @__PURE__ */ succeed5(Stdio2, /* @__PURE__ */ make22({
+var layer9 = /* @__PURE__ */ succeed5(Stdio2, /* @__PURE__ */ make23({
   args: /* @__PURE__ */ sync3(() => process.argv.slice(2)),
   stdinIsTerminal: /* @__PURE__ */ sync3(() => process.stdin.isTTY === true),
   stdoutIsTerminal: /* @__PURE__ */ sync3(() => process.stdout.isTTY === true),
@@ -10663,26 +10873,26 @@ var layer9 = /* @__PURE__ */ succeed5(Stdio2, /* @__PURE__ */ make22({
 var layer10 = layer9;
 
 // node_modules/effect/dist/Terminal.js
-var TypeId26 = "~effect/platform/Terminal";
-var QuitErrorTypeId = "effect/platform/Terminal/QuitError";
+var TypeId26 = "~effect/Terminal";
+var QuitErrorTypeId = "~effect/Terminal/QuitError";
 
 class QuitError extends (/* @__PURE__ */ Error4("QuitError")({
   _tag: /* @__PURE__ */ tag("QuitError")
 })) {
   [QuitErrorTypeId] = QuitErrorTypeId;
 }
-var Terminal2 = /* @__PURE__ */ Service("effect/platform/Terminal");
-var make23 = (impl) => Terminal2.of({
+var Terminal2 = /* @__PURE__ */ Service("effect/Terminal");
+var make24 = (impl) => Terminal2.of({
   ...impl,
   [TypeId26]: TypeId26
 });
 
 // node_modules/@effect/platform-node-shared/dist/NodeTerminal.js
 import * as readline from "node:readline";
-var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
+var make25 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
   const stdin = process.stdin;
   const stdout = process.stdout;
-  const lines = yield* make8();
+  const lines = yield* make9();
   let inputEnded = stdin.readableEnded;
   let readlineActive = false;
   const onStdinEnd = () => {
@@ -10693,7 +10903,7 @@ var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
   };
   stdin.once("end", onStdinEnd);
   yield* addFinalizer3(() => sync3(() => stdin.off("end", onStdinEnd)));
-  const rlRef = yield* make10({
+  const rlRef = yield* make11({
     acquire: acquireRelease2(sync3(() => {
       const rl = readline.createInterface({
         input: stdin,
@@ -10737,7 +10947,7 @@ var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
   const columns = sync3(() => stdout.columns ?? 0);
   const rows = sync3(() => stdout.rows ?? 0);
   const readInput = gen2(function* () {
-    const queue = yield* make8();
+    const queue = yield* make9();
     const handleKeypress = (s, k) => {
       const userInput = {
         input: fromUndefinedOr(s),
@@ -10784,7 +10994,7 @@ var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
       cause: err
     }))));
   }));
-  return make23({
+  return make24({
     columns,
     rows,
     readInput,
@@ -10792,7 +11002,7 @@ var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
     display
   });
 });
-var layer11 = /* @__PURE__ */ effect(Terminal2, /* @__PURE__ */ make24(defaultShouldQuit));
+var layer11 = /* @__PURE__ */ effect(Terminal2, /* @__PURE__ */ make25(defaultShouldQuit));
 function defaultShouldQuit(input) {
   return input.key.ctrl && (input.key.name === "c" || input.key.name === "d");
 }
@@ -10847,7 +11057,7 @@ var layer14 = sync2(Service2, () => {
 class TestService extends Service()("@timmo001/workflows/Annotations/Test") {
 }
 var testLayer = effectContext(gen2(function* () {
-  const recorded = yield* make12([]);
+  const recorded = yield* make13([]);
   const write = (line) => update(recorded, (lines) => [...lines, line]);
   const service = TestService.of({
     error: fn2("Annotations.Test.error")(function* (message, properties) {
@@ -10893,7 +11103,7 @@ class Service3 extends Service()("@timmo001/workflows/CommandExecutor") {
 }
 var layer15 = effect(Service3, gen2(function* () {
   const spawner = yield* ChildProcessSpawner;
-  const make = (command, args, options) => make18(command, args, {
+  const make = (command, args, options) => make19(command, args, {
     cwd: options?.cwd,
     env: options?.env,
     extendEnv: true
@@ -10932,7 +11142,7 @@ var layer15 = effect(Service3, gen2(function* () {
   const stream = fn2("CommandExecutor.stream")(function* (command, args, options) {
     const label = options?.label ?? `${command} ${args.join(" ")}`.trim();
     return yield* scoped2(gen2(function* () {
-      const handle = yield* spawner.spawn(make18(command, args, {
+      const handle = yield* spawner.spawn(make19(command, args, {
         cwd: options?.cwd,
         env: options?.env,
         extendEnv: true,
@@ -10963,7 +11173,7 @@ var toActionFailure = (error) => {
   if (error instanceof ActionFailure) {
     return error;
   }
-  if (isSchemaError(error)) {
+  if (isSchemaError2(error)) {
     return new ActionFailure({
       message: String(error),
       title: "Invalid action inputs"
@@ -10986,7 +11196,7 @@ var runAction = (program, layer) => {
 };
 
 // src/action/GitHubCommand.ts
-var make25 = fn2("GitHubCommand.make")(function* (label) {
+var make26 = fn2("GitHubCommand.make")(function* (label) {
   const gh = yield* Gh;
   let stderrTail = "";
   const writeStderr = (text) => sync3(() => {
@@ -11229,7 +11439,7 @@ var dispatch = fn2("BuildArchPackage.dispatch")(function* (inputs) {
   const artifactName = yield* requireInput(inputs.artifactName, "artifact-name");
   const sourceRunId = yield* requireInput(inputs.sourceRunId, "source-run-id");
   const payload = JSON.stringify(dispatchPayload(artifactName, inputs.sourceRepository, sourceRunId, inputs.sourceSha));
-  const github = yield* make25('bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -');
+  const github = yield* make26('bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -');
   yield* github.stream([
     "api",
     "--method",
