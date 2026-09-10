@@ -3237,8 +3237,6 @@ var exitPrimitive = /* @__PURE__ */ makePrimitive({
     return succeed3(exit ?? exitFailCause(cause));
   }
 });
-var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => flatMap2(timeoutOption(self, options.duration), (option) => isNone2(option) ? options.orElse() : succeed3(option.value)));
-var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as(sleep(duration), none2())));
 var ScopeTypeId = "~effect/Scope";
 var ScopeCloseableTypeId = "~effect/Scope/Closeable";
 var scopeTag = /* @__PURE__ */ Service("effect/Scope");
@@ -4442,7 +4440,6 @@ var tap2 = tap;
 var exit2 = exit;
 var map6 = map4;
 var as2 = as;
-var asVoid2 = asVoid;
 var catch_2 = catch_;
 var catchTag2 = catchTag;
 var catchCause2 = catchCause;
@@ -4450,7 +4447,6 @@ var mapError2 = mapError;
 var orDie2 = orDie;
 var tapCause2 = tapCause;
 var ignore2 = ignore;
-var timeoutOrElse2 = timeoutOrElse;
 var sleep2 = sleep;
 var raceFirst2 = raceFirst;
 var matchEffect3 = matchEffect;
@@ -4692,6 +4688,7 @@ var fromInputUnsafe2 = (input) => {
   }
   return invalid2(`unsupported input ${input}`);
 };
+var bytes = (value) => typeof value === "bigint" ? fromInputUnsafe2(value) : fromNumber(value);
 
 // node_modules/effect/dist/PlatformError.js
 var TypeId7 = "~effect/PlatformError";
@@ -8291,33 +8288,52 @@ var fromWritableChannel = (options) => fromTransform((pull) => {
 });
 var pullIntoWritable = (options) => options.pull.pipe(flatMap3((chunk) => {
   let i = 0;
-  return callback2(function loop(resume) {
-    for (;i < chunk.length; ) {
-      const success = options.writable.write(chunk[i++], options.encoding);
-      if (!success) {
-        options.writable.once("drain", () => loop(resume));
-        return;
+  return callback2((resume) => {
+    let cancelled = false;
+    const loop = () => {
+      for (;i < chunk.length; ) {
+        if (cancelled) {
+          return;
+        }
+        const success = options.writable.write(chunk[i++], options.encoding);
+        if (!success) {
+          if (!cancelled) {
+            options.writable.once("drain", loop);
+          }
+          return;
+        }
       }
-    }
-    resume(void_3);
+      if (!cancelled) {
+        resume(void_3);
+      }
+    };
+    loop();
+    return sync3(() => {
+      cancelled = true;
+      options.writable.off("drain", loop);
+    });
   });
 }), forever2({
   disableYield: true
-}), raceFirst2(callback2((resume) => {
+}), options.endOnDone !== false ? catchDone((_) => {
+  if ("closed" in options.writable && options.writable.closed) {
+    return done2(_);
+  }
+  return callback2((resume) => {
+    const onFinish = () => resume(done2(_));
+    options.writable.once("finish", onFinish);
+    options.writable.end();
+    return sync3(() => {
+      options.writable.off("finish", onFinish);
+    });
+  });
+}) : identity, raceFirst2(callback2((resume) => {
   const onError = (error) => resume(fail6(options.onError(error)));
   options.writable.once("error", onError);
   return sync3(() => {
     options.writable.off("error", onError);
   });
-})), options.endOnDone !== false ? catchDone((_) => {
-  if ("closed" in options.writable && options.writable.closed) {
-    return done2(_);
-  }
-  return callback2((resume) => {
-    options.writable.once("finish", () => resume(done2(_)));
-    options.writable.end();
-  });
-}) : identity);
+})));
 
 // node_modules/@effect/platform-node-shared/dist/NodeStream.js
 var fromReadable = (options) => fromChannel3(fromReadableChannel(options));
@@ -8332,7 +8348,7 @@ var readableToPullUnsafe = (options) => {
   const readable = options.readable;
   const closeOnDone = options.closeOnDone ?? true;
   const exit = options.exit ?? make6(undefined);
-  const latch = makeUnsafe4(false);
+  const latch = options.latch ?? makeUnsafe4(false);
   function onReadable() {
     latch.openUnsafe();
   }
@@ -8390,6 +8406,22 @@ var toPlatformError = (method, error, command) => {
     return acc.length === 0 ? cmd : `${acc} | ${cmd}`;
   }, "");
   return handleErrnoException("ChildProcess", method)(error, [commandStr]);
+};
+var processGroupGraceMillis = 1000;
+var processGroupPollIntervalMillis = 10;
+var isProcessAlive = (childProcess, exitSignal) => {
+  if (!isDoneUnsafe(exitSignal)) {
+    return true;
+  }
+  if (globalThis.process.platform === "win32") {
+    return false;
+  }
+  try {
+    globalThis.process.kill(-childProcess.pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 };
 var taskkill = (childProcess, onExit = () => {}) => NodeChildProcess.execFile("taskkill", ["/pid", String(childProcess.pid), "/T", "/F"], {
   windowsHide: true
@@ -8645,13 +8677,40 @@ var make15 = /* @__PURE__ */ gen2(function* () {
     }
     return void_3;
   });
-  const withTimeout = (childProcess, command, options) => (kill) => {
-    const killSignal = options?.killSignal ?? "SIGTERM";
-    return isUndefined(options?.forceKillAfter) ? kill(command, childProcess, killSignal) : timeoutOrElse2(kill(command, childProcess, killSignal), {
-      duration: options.forceKillAfter,
-      orElse: () => kill(command, childProcess, "SIGKILL")
-    });
-  };
+  const awaitProcessExit = (childProcess, exitSignal, timeoutMillis) => callback2((resume) => {
+    const deadline = Date.now() + timeoutMillis;
+    let timer;
+    const stop = () => {
+      clearTimeout(timer);
+      childProcess.removeListener("exit", poll);
+    };
+    const poll = () => {
+      clearTimeout(timer);
+      if (Date.now() >= deadline || !isProcessAlive(childProcess, exitSignal)) {
+        stop();
+        resume(void_3);
+        return;
+      }
+      timer = setTimeout(poll, processGroupPollIntervalMillis);
+    };
+    childProcess.on("exit", poll);
+    poll();
+    return sync3(stop);
+  });
+  const terminateProcessGroup = fnUntraced2(function* (command, childProcess, exitSignal, options) {
+    const signalGroup = (signal) => killProcessGroup(command, childProcess, signal).pipe(catch_2(() => killProcess(command, childProcess, signal)));
+    yield* signalGroup(options?.killSignal ?? "SIGTERM");
+    if (isUndefined(options?.forceKillAfter)) {
+      yield* awaitProcessExit(childProcess, exitSignal, processGroupGraceMillis);
+    } else {
+      yield* awaitProcessExit(childProcess, exitSignal, toMillis(options.forceKillAfter));
+      if (isProcessAlive(childProcess, exitSignal)) {
+        yield* signalGroup("SIGKILL");
+        yield* awaitProcessExit(childProcess, exitSignal, processGroupGraceMillis);
+      }
+    }
+    yield* _await(exitSignal);
+  });
   const getSourceStream = (handle, from) => {
     const fromOption = from ?? "stdout";
     switch (fromOption) {
@@ -8687,18 +8746,17 @@ var make15 = /* @__PURE__ */ gen2(function* () {
           stdio
         }, process.platform)), fnUntraced2(function* ([childProcess, exitSignal]) {
           const exited = yield* isDone3(exitSignal);
-          const killWithTimeout = withTimeout(childProcess, cmd, cmd.options);
           if (exited) {
             const [code] = yield* _await(exitSignal);
             if (code !== 0 && isNotNull(code)) {
-              return yield* ignore2(killWithTimeout(killProcessGroup));
+              yield* ignore2(killProcessGroup(cmd, childProcess, cmd.options.killSignal ?? "SIGTERM"));
             }
-            return yield* void_3;
+            return;
           }
           if (!isReferenced) {
-            return yield* void_3;
+            return;
           }
-          return yield* killWithTimeout((command, childProcess, signal) => killProcessGroup(command, childProcess, signal).pipe(catch_2(() => killProcess(command, childProcess, signal)), andThen2(_await(exitSignal)))).pipe(ignore2);
+          yield* ignore2(terminateProcessGroup(cmd, childProcess, exitSignal, cmd.options));
         }));
         const pid = ProcessId(childProcess.pid);
         childProcess.on("exit", (code) => {
@@ -8737,10 +8795,7 @@ var make15 = /* @__PURE__ */ gen2(function* () {
           const error = new globalThis.Error(`Process interrupted due to receipt of signal: '${signal}'`);
           return fail6(toPlatformError("exitCode", error, cmd));
         });
-        const kill = (options) => {
-          const killWithTimeout = withTimeout(childProcess, cmd, options);
-          return killWithTimeout((command, childProcess, signal) => killProcessGroup(command, childProcess, signal).pipe(catch_2(() => killProcess(command, childProcess, signal)), andThen2(_await(exitSignal)))).pipe(asVoid2);
-        };
+        const kill = (options) => terminateProcessGroup(cmd, childProcess, exitSignal, options);
         return makeHandle({
           pid,
           exitCode,
@@ -8820,7 +8875,7 @@ var make15 = /* @__PURE__ */ gen2(function* () {
           exitCode: handle.exitCode,
           isRunning: handle.isRunning,
           kill,
-          stdin: handle.stdin,
+          stdin: handles[0].stdin,
           stdout: handle.stdout,
           stderr: handle.stderr,
           all: handle.all,
@@ -8992,6 +9047,18 @@ var handleBadArgument = (method) => (err) => badArgument({
   method,
   description: err.message ?? String(err)
 });
+var bigintToNumber = (value, field) => {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number)) {
+    throw new RangeError(`${field} exceeds the safe integer range: ${value}`);
+  }
+  return number;
+};
+var bigintToNumberOption = (value, field) => map(fromNullishOr(value), (value) => bigintToNumber(value, field));
+var positionToNumber = (position, method) => try_2({
+  try: () => bigintToNumber(position, "position"),
+  catch: handleBadArgument(method)
+});
 var access2 = /* @__PURE__ */ (() => {
   const nodeAccess = /* @__PURE__ */ effectify(NFS.access, /* @__PURE__ */ handleErrnoException("FileSystem", "access"), /* @__PURE__ */ handleBadArgument("access"));
   return (path, options) => {
@@ -9095,20 +9162,25 @@ var makeFile = /* @__PURE__ */ (() => {
       this.append = append;
     }
     get stat() {
-      return map6(nodeStat(this.fd), makeFileInfo);
+      return flatMap3(nodeStat(this.fd, {
+        bigint: true
+      }), makeFileInfo);
     }
     get sync() {
       return nodeSync(this.fd);
     }
     seek(offset, from) {
-      const offsetSize = undefined(offset);
-      return sync3(() => {
-        if (from === "start") {
-          this.position = offsetSize;
-        } else if (from === "current") {
-          this.position = this.position + offsetSize;
+      return suspend2(() => {
+        const position = from === "start" ? offset : this.position + offset;
+        if (position < BigInt(0)) {
+          return fail6(badArgument({
+            module: "FileSystem",
+            method: "seek",
+            description: "Cannot seek before the start of the file"
+          }));
         }
-        return undefined(this.position);
+        this.position = position;
+        return succeed6(position);
       });
     }
     read(buffer) {
@@ -9118,36 +9190,41 @@ var makeFile = /* @__PURE__ */ (() => {
           buffer,
           position
         }), (bytesRead) => {
-          const sizeRead = undefined(bytesRead);
-          this.position = position + sizeRead;
-          return sizeRead;
+          this.position = position + BigInt(bytesRead);
+          return bytesRead;
         });
       });
     }
     readAlloc(size) {
-      const sizeNumber = Number(size);
       return suspend2(() => {
-        const buffer = Buffer.allocUnsafeSlow(sizeNumber);
-        const position = this.position;
-        return map6(nodeReadAlloc(this.fd, {
-          buffer,
-          position
-        }), (bytesRead) => {
-          if (bytesRead === 0) {
-            return none2();
+        try {
+          if (!Number.isInteger(size) || size < 0) {
+            throw new RangeError("size must be a non-negative integer");
           }
-          this.position = position + BigInt(bytesRead);
-          if (bytesRead === sizeNumber) {
-            return some2(buffer);
-          }
-          const dst = Buffer.allocUnsafeSlow(bytesRead);
-          buffer.copy(dst, 0, 0, bytesRead);
-          return some2(dst);
-        });
+          const buffer = Buffer.allocUnsafeSlow(size);
+          const position = this.position;
+          return map6(nodeReadAlloc(this.fd, {
+            buffer,
+            position
+          }), (bytesRead) => {
+            if (bytesRead === 0) {
+              return none2();
+            }
+            this.position = position + BigInt(bytesRead);
+            if (bytesRead === size) {
+              return some2(buffer);
+            }
+            const dst = Buffer.allocUnsafeSlow(bytesRead);
+            buffer.copy(dst, 0, 0, bytesRead);
+            return some2(dst);
+          });
+        } catch (cause) {
+          return fail6(handleBadArgument("readAlloc")(cause));
+        }
       });
     }
     truncate(length) {
-      return map6(nodeTruncate(this.fd, length ? Number(length) : undefined), () => {
+      return map6(nodeTruncate(this.fd, length || undefined), () => {
         if (!this.append) {
           const len = BigInt(length ?? 0);
           if (this.position > len) {
@@ -9159,19 +9236,18 @@ var makeFile = /* @__PURE__ */ (() => {
     write(buffer) {
       return suspend2(() => {
         const position = this.position;
-        return map6(nodeWrite(this.fd, buffer, undefined, undefined, this.append ? undefined : Number(position)), (bytesWritten) => {
-          const sizeWritten = undefined(bytesWritten);
+        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "write"), (nodePosition) => map6(nodeWrite(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
           if (!this.append) {
-            this.position = position + sizeWritten;
+            this.position = position + BigInt(bytesWritten);
           }
-          return sizeWritten;
-        });
+          return bytesWritten;
+        }));
       });
     }
     writeAllChunk(buffer) {
       return suspend2(() => {
         const position = this.position;
-        return flatMap3(nodeWriteAll(this.fd, buffer, undefined, undefined, this.append ? undefined : Number(position)), (bytesWritten) => {
+        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "writeAll"), (nodePosition) => flatMap3(nodeWriteAll(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
           if (bytesWritten === 0) {
             return fail6(systemError({
               module: "FileSystem",
@@ -9185,11 +9261,11 @@ var makeFile = /* @__PURE__ */ (() => {
             this.position = position + BigInt(bytesWritten);
           }
           return bytesWritten < buffer.length ? this.writeAllChunk(buffer.subarray(bytesWritten)) : void_3;
-        });
+        }));
       });
     }
     writeAll(buffer) {
-      return this.writeAllChunk(buffer);
+      return buffer.length === 0 ? void_3 : this.writeAllChunk(buffer);
     }
   }
   return (fd, append) => new FileImpl(fd, append);
@@ -9243,25 +9319,30 @@ var rename2 = /* @__PURE__ */ (() => {
   const nodeRename = /* @__PURE__ */ effectify(NFS.rename, /* @__PURE__ */ handleErrnoException("FileSystem", "rename"), /* @__PURE__ */ handleBadArgument("rename"));
   return (oldPath, newPath) => nodeRename(oldPath, newPath);
 })();
-var makeFileInfo = (stat) => ({
-  type: stat.isFile() ? "File" : stat.isDirectory() ? "Directory" : stat.isSymbolicLink() ? "SymbolicLink" : stat.isBlockDevice() ? "BlockDevice" : stat.isCharacterDevice() ? "CharacterDevice" : stat.isFIFO() ? "FIFO" : stat.isSocket() ? "Socket" : "Unknown",
-  mtime: fromNullishOr(stat.mtime),
-  atime: fromNullishOr(stat.atime),
-  birthtime: fromNullishOr(stat.birthtime),
-  dev: stat.dev,
-  rdev: fromNullishOr(stat.rdev),
-  ino: fromNullishOr(stat.ino),
-  mode: stat.mode,
-  nlink: fromNullishOr(stat.nlink),
-  uid: fromNullishOr(stat.uid),
-  gid: fromNullishOr(stat.gid),
-  size: undefined(stat.size),
-  blksize: stat.blksize !== undefined ? some2(undefined(stat.blksize)) : none2(),
-  blocks: fromNullishOr(stat.blocks)
+var makeFileInfo = (stat) => try_2({
+  try: () => ({
+    type: stat.isFile() ? "File" : stat.isDirectory() ? "Directory" : stat.isSymbolicLink() ? "SymbolicLink" : stat.isBlockDevice() ? "BlockDevice" : stat.isCharacterDevice() ? "CharacterDevice" : stat.isFIFO() ? "FIFO" : stat.isSocket() ? "Socket" : "Unknown",
+    mtime: fromNullishOr(stat.mtime),
+    atime: fromNullishOr(stat.atime),
+    birthtime: fromNullishOr(stat.birthtime),
+    dev: bigintToNumber(stat.dev, "dev"),
+    rdev: bigintToNumberOption(stat.rdev, "rdev"),
+    ino: bigintToNumberOption(stat.ino, "ino"),
+    mode: bigintToNumber(stat.mode, "mode"),
+    nlink: bigintToNumberOption(stat.nlink, "nlink"),
+    uid: bigintToNumberOption(stat.uid, "uid"),
+    gid: bigintToNumberOption(stat.gid, "gid"),
+    size: bytes(stat.size),
+    blksize: stat.blksize !== undefined ? some2(bytes(stat.blksize)) : none2(),
+    blocks: bigintToNumberOption(stat.blocks, "blocks")
+  }),
+  catch: handleBadArgument("stat")
 });
 var stat2 = /* @__PURE__ */ (() => {
   const nodeStat = /* @__PURE__ */ effectify(NFS.stat, /* @__PURE__ */ handleErrnoException("FileSystem", "stat"), /* @__PURE__ */ handleBadArgument("stat"));
-  return (path) => map6(nodeStat(path), makeFileInfo);
+  return (path) => flatMap3(nodeStat(path, {
+    bigint: true
+  }), makeFileInfo);
 })();
 var symlink2 = /* @__PURE__ */ (() => {
   const nodeSymlink = /* @__PURE__ */ effectify(NFS.symlink, /* @__PURE__ */ handleErrnoException("FileSystem", "symlink"), /* @__PURE__ */ handleBadArgument("symlink"));
@@ -9269,13 +9350,14 @@ var symlink2 = /* @__PURE__ */ (() => {
 })();
 var truncate2 = /* @__PURE__ */ (() => {
   const nodeTruncate = /* @__PURE__ */ effectify(NFS.truncate, /* @__PURE__ */ handleErrnoException("FileSystem", "truncate"), /* @__PURE__ */ handleBadArgument("truncate"));
-  return (path, length) => nodeTruncate(path, length !== undefined ? Number(length) : undefined);
+  return (path, length) => nodeTruncate(path, length);
 })();
 var utimes2 = /* @__PURE__ */ (() => {
   const nodeUtimes = /* @__PURE__ */ effectify(NFS.utimes, /* @__PURE__ */ handleErrnoException("FileSystem", "utime"), /* @__PURE__ */ handleBadArgument("utime"));
   return (path, atime, mtime) => nodeUtimes(path, atime, mtime);
 })();
-var watchNode = (path, options) => callback3((queue) => acquireRelease2(sync3(() => {
+var watchNode = (path, info, options) => callback3((queue) => acquireRelease2(sync3(() => {
+  const directory = info.type === "Directory" ? path : Path2.dirname(path);
   const watcher = NFS.watch(path, {
     recursive: options?.recursive ?? false
   }, (event, path) => {
@@ -9283,7 +9365,7 @@ var watchNode = (path, options) => callback3((queue) => acquireRelease2(sync3(()
       return;
     switch (event) {
       case "rename": {
-        runFork2(matchEffect3(stat2(path), {
+        runFork2(matchEffect3(stat2(Path2.resolve(directory, path)), {
           onSuccess: (_) => offer(queue, {
             _tag: "Create",
             path
@@ -9318,7 +9400,7 @@ var watchNode = (path, options) => callback3((queue) => acquireRelease2(sync3(()
   });
   return watcher;
 }), (watcher) => sync3(() => watcher.close())));
-var watch2 = (backend, path, options) => stat2(path).pipe(map6((stat) => backend.pipe(flatMap((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, options)))), unwrap3);
+var watch2 = (backend, path, options) => stat2(path).pipe(map6((stat) => backend.pipe(flatMap((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap3);
 var writeFile2 = (path, data, options) => callback2((resume, signal) => {
   try {
     NFS.writeFile(path, data, {
