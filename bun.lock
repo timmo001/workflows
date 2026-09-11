@@ -5,7 +5,7 @@
     "": {
       "name": "@timmo001/workflows-actions",
       "dependencies": {
-        "@effect/platform-node": "4.0.0-rc.114",
+        "@effect/platform-node": "4.0.0-rc.115",
         "@timmo001/effect-gh": "github:timmo001/effect-gh#232e1d328758cbcce4de615dbb3bbdc9be146871",
         "effect": "4.0.0-rc.113",
       },
@@ -23,9 +23,9 @@
     },
   },
   "packages": {
-    "@effect/platform-node": ["@effect/platform-node@4.0.0-rc.114", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-rc.114", "undici": "^8.10.2" }, "peerDependencies": { "effect": "^4.0.0-rc.114", "redis": ">=5.0.0 <7.0.0" } }, "sha512-eqPvK8XswUw+FVe7CVqiyYUz4NHPz/1DiNsXi8GwIrsMOLT2wLteaAUID4grjDX7XWK1ONUVy4gS9IwBvp+EjA=="],
+    "@effect/platform-node": ["@effect/platform-node@4.0.0-rc.115", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-rc.115", "undici": "^8.10.2" }, "peerDependencies": { "effect": "^4.0.0-rc.115", "redis": ">=5.0.0 <7.0.0" } }, "sha512-mW03Wjq2FiTL5oi9yOkaKpCyUNBaduKgTk7qMHNELvC21Jq2qOAfdsfH+p+s2zmpB9w2RSa+ApODv4WjO9wQfw=="],
 
-    "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-rc.114", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.21.3" }, "peerDependencies": { "effect": "^4.0.0-rc.114" } }, "sha512-YVoL71bJpa8HmAZl63nvVgOI4UBg61Z+6U0qnNN2ZlUktxG7eu26Y/puRxEtMxivxEUHR5vKJsuqQ3PRK4fLQA=="],
+    "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-rc.115", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.21.3" }, "peerDependencies": { "effect": "^4.0.0-rc.115" } }, "sha512-rcBwhDIfb82akJoTv7Vwh8K5x9vC/XfuePS7JjOr+z+dORXzsmKqI1BUQF27ARCN9fTAbDh7I6YvBlWhLjnqNg=="],
 
     "@effect/tsgo": ["@effect/tsgo@0.44.0", "", { "optionalDependencies": { "@effect/tsgo-darwin-arm64": "0.44.0", "@effect/tsgo-darwin-x64": "0.44.0", "@effect/tsgo-linux-arm": "0.44.0", "@effect/tsgo-linux-arm64": "0.44.0", "@effect/tsgo-linux-x64": "0.44.0", "@effect/tsgo-win32-arm64": "0.44.0", "@effect/tsgo-win32-x64": "0.44.0" }, "bin": { "effect-tsgo": "dist/effect-tsgo.cjs" } }, "sha512-zgrk2hLqx3vX7pZObBOBAFfvJN0bEVncEKyY2cie07KUeG3rB9IPUm4+4eTh7o0eXLQuB5rzh+ZjEJSpoLKe9A=="],
 
