@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Schema } from "effect";
+import { Data, Effect, FileSystem, Predicate, Schema } from "effect";
 import { join } from "node:path";
 import { Annotations } from "../../action/Annotations.js";
 import { CommandExecutor } from "../../services/CommandExecutor.js";
@@ -6,12 +6,15 @@ import { CommandExecutor } from "../../services/CommandExecutor.js";
 export const Inputs = Schema.Struct({
   skillRoots: Schema.String,
 });
+
 export interface Inputs extends Schema.Schema.Type<typeof Inputs> {}
 
 export type ValidationResult =
   | { readonly _tag: "Valid"; readonly skillDirectory: string }
   | { readonly _tag: "MissingSkillFile"; readonly skillDirectory: string }
   | { readonly _tag: "SkillsRefFailure"; readonly skillDirectory: string };
+
+const ValidationResult = Data.taggedEnum<ValidationResult>();
 
 export const parseSkillRoots = (value: string) =>
   value.trim() === "" ? [] : value.trim().split(/\s+/);
@@ -20,6 +23,7 @@ const isDirectory = Effect.fn("ValidateAgentSkills.isDirectory")(function* (
   path: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
+
   return yield* fs.stat(path).pipe(
     Effect.map((info) => info.type === "Directory"),
     Effect.catch(() => Effect.succeed(false)),
@@ -30,6 +34,7 @@ const isFile = Effect.fn("ValidateAgentSkills.isFile")(function* (
   path: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
+
   return yield* fs.stat(path).pipe(
     Effect.map((info) => info.type === "File"),
     Effect.catch(() => Effect.succeed(false)),
@@ -44,12 +49,15 @@ export const discoverSkillDirectories = Effect.fn(
 
   for (const root of roots) {
     if (!(yield* isDirectory(root))) continue;
+
     const entries = yield* fs
       .readDirectory(root)
       .pipe(Effect.catch(() => Effect.succeed([])));
+
     for (const entry of entries.toSorted()) {
       if (entry.startsWith(".")) continue;
       const path = join(root, entry);
+
       if (yield* isDirectory(path)) directories.push(path);
     }
   }
@@ -67,6 +75,7 @@ export const validateSkill = Effect.fn("ValidateAgentSkills.validateSkill")(
   function* (skillDirectory: string) {
     const annotations = yield* Annotations.Service;
     const skillFile = join(skillDirectory, "SKILL.md");
+
     if (!(yield* isFile(skillFile))) {
       const message = `Skill directory missing SKILL.md: ${skillDirectory}`;
       yield* writeStderr(message);
@@ -74,13 +83,12 @@ export const validateSkill = Effect.fn("ValidateAgentSkills.validateSkill")(
         title: "Missing Agent Skill definition",
         file: skillFile,
       });
-      return {
-        _tag: "MissingSkillFile",
-        skillDirectory,
-      } satisfies ValidationResult;
+
+      return ValidationResult.MissingSkillFile({ skillDirectory });
     }
 
     const commands = yield* CommandExecutor.Service;
+
     const valid = yield* commands
       .stream("python", ["-m", "skills_ref.cli", "validate", skillDirectory], {
         label: `skills-ref validate ${skillDirectory}`,
@@ -91,6 +99,7 @@ export const validateSkill = Effect.fn("ValidateAgentSkills.validateSkill")(
           Effect.succeed(false),
         ),
       );
+
     if (!valid) {
       const message = `skills-ref validation failed: ${skillDirectory}`;
       yield* writeStderr(message);
@@ -98,13 +107,11 @@ export const validateSkill = Effect.fn("ValidateAgentSkills.validateSkill")(
         title: "Invalid Agent Skill",
         file: skillFile,
       });
-      return {
-        _tag: "SkillsRefFailure",
-        skillDirectory,
-      } satisfies ValidationResult;
+
+      return ValidationResult.SkillsRefFailure({ skillDirectory });
     }
 
-    return { _tag: "Valid", skillDirectory } satisfies ValidationResult;
+    return ValidationResult.Valid({ skillDirectory });
   },
 );
 
@@ -114,22 +121,29 @@ export const run = Effect.fn("ValidateAgentSkills.run")(function* (
   const skillDirectories = yield* discoverSkillDirectories(
     parseSkillRoots(inputs.skillRoots),
   );
+
   if (skillDirectories.length === 0) {
     yield* writeStdout("No skills found to validate.");
+
     return;
   }
 
   const results = yield* Effect.forEach(skillDirectories, validateSkill, {
     concurrency: 1,
   });
+
   const checked = results.filter(
-    (result) => result._tag !== "MissingSkillFile",
+    Predicate.not(Predicate.isTagged("MissingSkillFile")),
   ).length;
-  const failures = results.filter((result) => result._tag !== "Valid").length;
+
+  const failures = results.filter(
+    Predicate.not(Predicate.isTagged("Valid")),
+  ).length;
 
   if (failures > 0) {
     const message = `${failures} skill(s) failed validation.`;
     yield* writeStderr(message);
+
     return yield* new Annotations.ActionFailure({
       message,
       title: "Agent Skill validation failed",

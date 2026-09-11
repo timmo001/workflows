@@ -16,6 +16,7 @@ const program = Effect.gen(function* () {
     "artifactName",
     "sourceRunId",
   ]).pipe(Effect.mapError(ActionRuntime.toActionFailure));
+
   yield* run(inputs);
 });
 

@@ -13,6 +13,7 @@ export const Inputs = Schema.Struct({
   jsrCliVersion: Schema.optionalKey(Schema.String),
   releaseTag: Schema.optionalKey(Schema.String),
 });
+
 export interface Inputs extends Schema.Schema.Type<typeof Inputs> {}
 
 export const VersionManifest = Schema.Struct({
@@ -31,6 +32,7 @@ export const jsrDryRunArgs = (cliVersion: string) =>
 
 const failure = (message: string, title?: string) => {
   if (title === undefined) return new Annotations.ActionFailure({ message });
+
   return new Annotations.ActionFailure({ message, title });
 };
 
@@ -70,6 +72,7 @@ const readVersion = Effect.fn("ValidateJsPackage.readVersion")(function* (
   filename: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
+
   const text = yield* fs
     .readFileString(join(packagePath, filename))
     .pipe(
@@ -80,6 +83,7 @@ const readVersion = Effect.fn("ValidateJsPackage.readVersion")(function* (
         ),
       ),
     );
+
   const manifest = yield* Schema.decodeUnknownEffect(VersionManifestFromJson)(
     text,
   ).pipe(
@@ -87,6 +91,7 @@ const readVersion = Effect.fn("ValidateJsPackage.readVersion")(function* (
       failure(`Invalid ${filename}: ${error}`, `Invalid ${filename}`),
     ),
   );
+
   return manifest.version;
 });
 
@@ -115,20 +120,24 @@ export const run = Effect.fn("ValidateJsPackage.run")(function* (
   inputs: Inputs,
 ) {
   const packagePath = inputs.packagePath ?? ".";
+
   const checkCommand = yield* requireInput(
     inputs.checkCommand,
     "check-command",
   );
+
   switch (inputs.contract) {
     case "build": {
       const buildCommand = yield* requireInput(
         inputs.buildCommand,
         "build-command",
       );
+
       const jsrCliVersion = yield* requireInput(
         inputs.jsrCliVersion,
         "jsr-cli-version",
       );
+
       yield* runTrusted(checkCommand, "check package", packagePath);
       yield* runTrusted(buildCommand, "build package", packagePath);
       yield* runStream(
@@ -143,16 +152,20 @@ export const run = Effect.fn("ValidateJsPackage.run")(function* (
         "jsr publish --dry-run",
         packagePath,
       );
+
       return;
     }
+
     case "npm": {
       const buildCommand = yield* requireInput(
         inputs.buildCommand,
         "build-command",
       );
+
       const releaseTag = yield* requireInput(inputs.releaseTag, "release-tag");
       const packageVersion = yield* readVersion(packagePath, "package.json");
       const mismatched = compareReleaseTag(releaseTag, packageVersion);
+
       if (mismatched !== undefined) return yield* mismatched;
       yield* runTrusted(checkCommand, "check package", packagePath);
       yield* runTrusted(buildCommand, "build package", packagePath);
@@ -162,20 +175,26 @@ export const run = Effect.fn("ValidateJsPackage.run")(function* (
         "npm pack --dry-run",
         packagePath,
       );
+
       return;
     }
+
     case "jsr": {
       const releaseTag = yield* requireInput(inputs.releaseTag, "release-tag");
       const packageVersion = yield* readVersion(packagePath, "package.json");
       const jsrVersion = yield* readVersion(packagePath, "jsr.json");
+
       const mismatchedManifests = compareJsrVersions(
         packageVersion,
         jsrVersion,
       );
+
       if (mismatchedManifests !== undefined) {
         return yield* mismatchedManifests;
       }
+
       const mismatchedTag = compareReleaseTag(releaseTag, packageVersion);
+
       if (mismatchedTag !== undefined) return yield* mismatchedTag;
       yield* runTrusted(checkCommand, "check package", packagePath);
     }

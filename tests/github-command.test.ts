@@ -12,6 +12,7 @@ const fakeSpawner = Effect.fn("test.fakeSpawner")(function* (
   const spawned = yield* Deferred.make<void>();
   const commands: ChildProcess.Command[] = [];
   let releases = 0;
+
   const spawn = Effect.fn("test.spawn")(function* (
     command: ChildProcess.Command,
   ) {
@@ -29,9 +30,11 @@ const fakeSpawner = Effect.fn("test.fakeSpawner")(function* (
       unref: Effect.succeed(Effect.void),
       ...output(commands.length),
     });
+
     return yield* Effect.acquireRelease(
       Effect.sync(() => {
         commands.push(command);
+
         return handle;
       }).pipe(Effect.tap(() => Deferred.succeed(spawned, undefined))),
       () =>
@@ -40,6 +43,7 @@ const fakeSpawner = Effect.fn("test.fakeSpawner")(function* (
         }),
     );
   });
+
   return {
     spawned,
     commands,
@@ -62,10 +66,13 @@ it.effect(
       const stdout = vi
         .spyOn(process.stdout, "write")
         .mockImplementation(() => true);
+
       const stderr = vi
         .spyOn(process.stderr, "write")
         .mockImplementation(() => true);
+
       const warning = `${"e".repeat(20_000)} last warning\n`;
+
       const fake = yield* fakeSpawner((index) =>
         index === 0
           ? { stdout: text("hidden"), stderr: text(warning) }
@@ -74,18 +81,22 @@ it.effect(
               exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(17)),
             },
       );
+
       const github = yield* GitHubCommand.make("publish GitHub release").pipe(
         Effect.provide(layer().pipe(Layer.provide(fake.layer))),
       );
+
       const args = ["release", "view", "literal $(touch nope)"];
       yield* github.stream(args, {
         suppressStdout: true,
         cwd: "/work",
         env: { GH_TOKEN: "fixture-token" },
       });
+
       const failure = yield* github
         .stream(["release", "upload", "tag", "asset with spaces"])
         .pipe(Effect.flip);
+
       expect(failure.title).toBe("Command failed");
       expect(failure.message).toBe(warning.slice(-16 * 1024).trim());
       expect(stdout.mock.calls).toEqual([["upload output"]]);
@@ -110,12 +121,15 @@ it.effect("keeps the exit-code fallback when gh fails silently", () =>
     const fake = yield* fakeSpawner(() => ({
       exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(7)),
     }));
+
     const github = yield* GitHubCommand.make("publish GitHub release").pipe(
       Effect.provide(layer().pipe(Layer.provide(fake.layer))),
     );
+
     const failure = yield* github
       .stream(["release", "create", "tag"])
       .pipe(Effect.flip);
+
     expect(failure.message).toBe(
       "Command failed with exit code 7: publish GitHub release",
     );
@@ -130,12 +144,15 @@ it.effect("closes the SDK child scope on timeout without retrying", () =>
       stdout: Stream.never,
       exitCode: Effect.never,
     }));
+
     const github = yield* GitHubCommand.make("dispatch").pipe(
       Effect.provide(layer().pipe(Layer.provide(fake.layer))),
     );
+
     const fiber = yield* github
       .stream(["api", "endpoint"], { timeout: "5 seconds" })
       .pipe(Effect.flip, Effect.forkChild);
+
     yield* Deferred.await(fake.spawned);
     yield* TestClock.adjust("5 seconds");
     const failure = yield* Fiber.join(fiber);
@@ -154,10 +171,13 @@ it.effect(
         stdout: Stream.never,
         exitCode: Effect.never,
       }));
+
       const github = yield* GitHubCommand.make("publish GitHub release").pipe(
         Effect.provide(layer().pipe(Layer.provide(fake.layer))),
       );
+
       let failed = false;
+
       const fiber = yield* github
         .stream(["release", "upload", "tag", "asset"])
         .pipe(
@@ -168,6 +188,7 @@ it.effect(
           ),
           Effect.forkChild,
         );
+
       yield* Deferred.await(fake.spawned);
       yield* Fiber.interrupt(fiber);
       expect(failed).toBe(false);

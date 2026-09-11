@@ -9,12 +9,15 @@ export const setOutput = (
 ): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const path = githubOutputPath();
+
     if (path === undefined) {
       yield* Effect.sync(() => {
         process.stdout.write(`::set-output name=${name}::${value}\n`);
       });
+
       return;
     }
+
     const fs = yield* FileSystem.FileSystem;
     const delimiter = `ghadelim_${randomBytes(16).toString("hex")}`;
     yield* fs

@@ -1916,6 +1916,30 @@ var PreventSchedulerYield = /* @__PURE__ */ Reference("effect/Scheduler/PreventS
 });
 
 // node_modules/effect/dist/Data.js
+var taggedEnum = () => new Proxy({}, {
+  get(_target, tag, _receiver) {
+    if (tag === "$is") {
+      return isTagged;
+    } else if (tag === "$match") {
+      return taggedMatch;
+    }
+    return (props) => ({
+      ...props,
+      _tag: tag
+    });
+  }
+});
+function taggedMatch() {
+  if (arguments.length === 1) {
+    const cases = arguments[0];
+    return function(value) {
+      return cases[value._tag](value);
+    };
+  }
+  const value = arguments[0];
+  const cases = arguments[1];
+  return cases[value._tag](value);
+}
 var Error3 = Error2;
 var TaggedError2 = TaggedError;
 
@@ -10600,6 +10624,7 @@ var runAction = (program, layer) => {
 // src/actions/validate-json/workflow.ts
 import { join as join2 } from "node:path";
 var Json2 = String4.pipe(decodeTo2(Unknown2, fromJsonString()));
+var ValidationResult = taggedEnum();
 var parseLocation = (message) => {
   const match = /\(line (\d+) column (\d+)\)$/.exec(message);
   if (match === null)
@@ -10611,7 +10636,7 @@ var parseLocation = (message) => {
 };
 var validateJsonSource = (file, source) => {
   if (isSuccess3(decodeUnknownExit2(Json2)(source))) {
-    return { _tag: "Valid", file };
+    return ValidationResult.Valid({ file });
   }
   let message = "Invalid JSON";
   try {
@@ -10620,12 +10645,11 @@ var validateJsonSource = (file, source) => {
     if (error instanceof Error)
       message = error.message;
   }
-  return {
-    _tag: "Invalid",
+  return ValidationResult.Invalid({
     file,
     message,
     ...parseLocation(message)
-  };
+  });
 };
 var discoverJsonFiles = fn2("ValidateJson.discoverJsonFiles")(function* (root) {
   const fs = yield* FileSystem;
@@ -10654,11 +10678,10 @@ var discoverJsonFiles = fn2("ValidateJson.discoverJsonFiles")(function* (root) {
 });
 var validateFile = fn2("ValidateJson.validateFile")(function* (file) {
   const fs = yield* FileSystem;
-  return yield* fs.readFileString(file).pipe(map6((source) => validateJsonSource(file, source)), catch_2((error) => succeed6({
-    _tag: "Invalid",
+  return yield* fs.readFileString(file).pipe(map6((source) => validateJsonSource(file, source)), catch_2((error) => succeed6(ValidationResult.Invalid({
     file,
     message: `Unable to read JSON file: ${error}`
-  })));
+  }))));
 });
 var writeStdout = (message) => sync3(() => process.stdout.write(`${message}
 `));
@@ -10674,9 +10697,9 @@ var run3 = fn2("ValidateJson.run")(function* (root = ".") {
   const results = yield* forEach2(files, validateFile, {
     concurrency: 1
   });
-  const failures = results.filter((result) => result._tag === "Invalid");
+  const failures = results.filter(isTagged("Invalid"));
   for (const result of results) {
-    if (result._tag === "Valid") {
+    if (isTagged(result, "Valid")) {
       yield* writeStdout(`${result.file} OK`);
       continue;
     }

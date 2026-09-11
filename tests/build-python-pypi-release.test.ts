@@ -50,11 +50,13 @@ const pythonWithPackaging = () => {
       execFileSync(bin, ["-c", "import packaging.utils, packaging.version"], {
         stdio: "ignore",
       });
+
       return bin;
     } catch {
       continue;
     }
   }
+
   throw new Error("Python packaging is required for these tests");
 };
 
@@ -74,6 +76,7 @@ const initRepo = (root: string) => {
   git(["config", "user.email", "test@example.com"], root);
   git(["config", "user.name", "test"], root);
   git(["commit", "--allow-empty", "-m", "init"], root);
+
   return git(["rev-parse", "HEAD"], root);
 };
 
@@ -202,10 +205,12 @@ describe("build-python-pypi-release event contract", () => {
   it("runs the validate-event stage", async () => {
     const exit = await runStage(publishedRelease);
     expect(exit._tag).toBe("Success");
+
     const failed = await runStage({
       ...publishedRelease,
       eventName: "workflow_dispatch",
     });
+
     expect(failed._tag).toBe("Failure");
   });
 });
@@ -225,21 +230,26 @@ describe("build-python-pypi-release source immutability", () => {
   it("accepts a tag that peels to HEAD, including annotated tags", async () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-source-"));
     const previous = process.cwd();
+
     try {
       const sha = initRepo(root);
       git(["tag", "1.0.0"], root);
       process.chdir(root);
+
       const lightweight = await runStage({
         stage: "validate-source",
         releaseTag: "1.0.0",
       });
+
       expect(lightweight._tag).toBe("Success");
       git(["tag", "-d", "1.0.0"], root);
       git(["tag", "-a", "1.0.0", "-m", "release"], root);
+
       const annotated = await runStage({
         stage: "validate-source",
         releaseTag: "1.0.0",
       });
+
       expect(annotated._tag).toBe("Success");
       const tagObject = git(["rev-parse", "refs/tags/1.0.0"], root);
       expect(tagObject).not.toBe(sha);
@@ -253,15 +263,18 @@ describe("build-python-pypi-release source immutability", () => {
   it("rejects a tag that points at another commit", async () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-source-"));
     const previous = process.cwd();
+
     try {
       initRepo(root);
       git(["tag", "1.0.0"], root);
       git(["commit", "--allow-empty", "-m", "later"], root);
       process.chdir(root);
+
       const exit = await runStage({
         stage: "validate-source",
         releaseTag: "1.0.0",
       });
+
       expect(exit._tag).toBe("Failure");
     } finally {
       process.chdir(previous);
@@ -287,6 +300,7 @@ describe("build-python-pypi-release packaging parity", () => {
       ],
       { encoding: "utf8" },
     );
+
     expect(actual).toBe(expected);
   });
 
@@ -303,10 +317,13 @@ describe("build-python-pypi-release packaging parity", () => {
     ["not-a-version", false],
   ])("stable public version %s -> %s", (tag, stable) => {
     const runTag = () => runPython(validateTagScript, { RELEASE_TAG: tag });
+
     if (stable) {
       expect(runTag).not.toThrow();
+
       return;
     }
+
     expect(runTag).toThrow();
   });
 
@@ -319,6 +336,7 @@ describe("build-python-pypi-release packaging parity", () => {
       ],
       { encoding: "utf8" },
     );
+
     expect(equal).toBe("");
   });
 });
@@ -326,6 +344,7 @@ describe("build-python-pypi-release packaging parity", () => {
 describe("build-python-pypi-release distribution contract", () => {
   it("accepts one matching wheel and sdist, including normalised names", () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
+
     try {
       const dist = join(root, "dist");
       writeDistributions(dist, {
@@ -347,6 +366,7 @@ describe("build-python-pypi-release distribution contract", () => {
 
   it("accepts filename version 1.0 against release tag 1.0.0", () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
+
     try {
       const dist = join(root, "dist");
       writeDistributions(dist, {
@@ -368,6 +388,7 @@ describe("build-python-pypi-release distribution contract", () => {
 
   it("rejects extra files and missing distributions", () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
+
     try {
       const extra = join(root, "extra");
       writeDistributions(extra, {
@@ -403,6 +424,7 @@ describe("build-python-pypi-release distribution contract", () => {
 
   it("rejects filename and metadata identity mismatches", () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
+
     try {
       const filename = join(root, "filename");
       writeDistributions(filename, {
@@ -437,6 +459,7 @@ describe("build-python-pypi-release distribution contract", () => {
 
   it("rejects a second METADATA file", () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
+
     try {
       const dist = join(root, "dist");
       writeDistributions(dist, {
@@ -458,6 +481,7 @@ describe("build-python-pypi-release distribution contract", () => {
 
   it("ignores unsafe extra members without extracting them", () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
+
     try {
       const sentinel = join(root, "sentinel.txt");
       writeFileSync(sentinel, "safe\n");
@@ -487,6 +511,7 @@ describe("build-python-pypi-release distribution contract", () => {
 
   it("rejects traversal-only metadata without writing outside dist", () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
+
     try {
       const sentinel = join(root, "sentinel.txt");
       writeFileSync(sentinel, "safe\n");
@@ -517,6 +542,7 @@ describe("build-python-pypi-release distribution contract", () => {
 
   it("rejects a symlink PKG-INFO without following it", () => {
     const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
+
     try {
       const dist = join(root, "dist");
       mkdirSync(dist, { recursive: true });

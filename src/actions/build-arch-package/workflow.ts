@@ -21,10 +21,12 @@ export const Inputs = Schema.Struct({
   artifactName: Schema.optionalKey(Schema.String),
   sourceRunId: Schema.optionalKey(Schema.String),
 });
+
 export interface Inputs extends Schema.Schema.Type<typeof Inputs> {}
 
 const failure = (message: string, title?: string) => {
   if (title === undefined) return new Annotations.ActionFailure({ message });
+
   return new Annotations.ActionFailure({ message, title });
 };
 
@@ -37,15 +39,19 @@ export const validateIdentity = (inputs: Inputs) => {
   if (!/^timmo001\/[A-Za-z0-9._-]+$/.test(inputs.sourceRepository)) {
     return failure(`Unsupported source repository: ${inputs.sourceRepository}`);
   }
+
   if (!/^[a-f0-9]{40}$/.test(inputs.sourceSha)) {
     return failure("The source revision must be a full commit SHA.");
   }
+
   if (!/^[a-z0-9@_+][a-z0-9@._+-]*$/.test(inputs.packageName)) {
     return failure(`Invalid Arch package name: ${inputs.packageName}`);
   }
+
   if (inputs.packageName.endsWith("-debug")) {
     return failure("Debug packages cannot be published.");
   }
+
   if (
     inputs.pkgbuildPath !== undefined &&
     (inputs.pkgbuildPath.startsWith("/") ||
@@ -193,10 +199,12 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
   function* (inputs: Inputs) {
     const commands = yield* CommandExecutor.Service;
     const fs = yield* FileSystem.FileSystem;
+
     const allowlistUrl = yield* requireInput(
       inputs.allowlistUrl,
       "allowlist-url",
     );
+
     const repository = yield* commands
       .run("curl", [
         "--fail",
@@ -206,6 +214,7 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
         `https://api.github.com/repos/${inputs.sourceRepository}`,
       ])
       .pipe(mapCommand);
+
     const repositoryFile = yield* fs
       .makeTempFileScoped({ prefix: "repository-" })
       .pipe(
@@ -213,6 +222,7 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
           failure(String(error), "File operation failed"),
         ),
       );
+
     yield* fs
       .writeFileString(repositoryFile, repository)
       .pipe(
@@ -220,11 +230,14 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
           failure(String(error), "File operation failed"),
         ),
       );
+
     const visibility = yield* commands
       .run("jq", ["-r", ".visibility", repositoryFile])
       .pipe(mapCommand);
+
     if (visibility.trim() !== "public")
       return yield* failure("Source repository must be public.");
+
     const allowlist = yield* commands
       .run("curl", [
         "--fail",
@@ -234,6 +247,7 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
         allowlistUrl,
       ])
       .pipe(mapCommand);
+
     const allowlistFile = yield* fs
       .makeTempFileScoped({ prefix: "allowlist-" })
       .pipe(
@@ -241,6 +255,7 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
           failure(String(error), "File operation failed"),
         ),
       );
+
     yield* fs
       .writeFileString(allowlistFile, allowlist)
       .pipe(
@@ -248,6 +263,7 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
           failure(String(error), "File operation failed"),
         ),
       );
+
     const allowed = yield* commands
       .exitCode("jq", [
         "-e",
@@ -261,6 +277,7 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
         allowlistFile,
       ])
       .pipe(mapCommand);
+
     if (allowed !== 0)
       return yield* failure(
         `${inputs.packageName} is not allowlisted for ${inputs.sourceRepository} on x86_64.`,
@@ -270,10 +287,12 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
 
 const build = Effect.fn("BuildArchPackage.build")(function* (inputs: Inputs) {
   const commands = yield* CommandExecutor.Service;
+
   const pkgbuildPath = yield* requireInput(
     inputs.pkgbuildPath,
     "pkgbuild-path",
   );
+
   yield* commands
     .stream("bash", ["-c", buildScript], {
       label: "build Arch package",
@@ -293,6 +312,7 @@ const validate = Effect.fn("BuildArchPackage.validate")(function* (
 ) {
   const commands = yield* CommandExecutor.Service;
   const fs = yield* FileSystem.FileSystem;
+
   const artifact = yield* commands
     .run("bash", ["-c", inspectScript], {
       env: {
@@ -302,6 +322,7 @@ const validate = Effect.fn("BuildArchPackage.validate")(function* (
       },
     })
     .pipe(mapCommand);
+
   const filename = artifact.trim();
   const validated = `${process.env.RUNNER_TEMP}/validated`;
   yield* fs
@@ -351,7 +372,9 @@ const dispatch = Effect.fn("BuildArchPackage.dispatch")(function* (
     inputs.artifactName,
     "artifact-name",
   );
+
   const sourceRunId = yield* requireInput(inputs.sourceRunId, "source-run-id");
+
   const payload = JSON.stringify(
     dispatchPayload(
       artifactName,
@@ -360,9 +383,11 @@ const dispatch = Effect.fn("BuildArchPackage.dispatch")(function* (
       inputs.sourceSha,
     ),
   );
+
   const github = yield* GitHubCommand.make(
     'bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -',
   );
+
   yield* github.stream(
     [
       "api",
@@ -383,7 +408,9 @@ export const run = Effect.fn("BuildArchPackage.run")(function* (
   inputs: Inputs,
 ) {
   const invalid = validateIdentity(inputs);
+
   if (invalid !== undefined) return yield* invalid;
+
   switch (inputs.stage) {
     case "validate-contract":
       return yield* validateContract(inputs);

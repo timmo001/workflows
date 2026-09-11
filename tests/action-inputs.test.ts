@@ -11,6 +11,7 @@ afterEach(() => {
 describe("ActionInputs", () => {
   it("omits empty optional inputs before schema decoding", async () => {
     process.env[inputName] = "";
+
     const schema = Schema.Struct({
       optionalValue: Schema.optionalKey(Schema.String),
     });

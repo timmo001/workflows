@@ -10,6 +10,7 @@ afterEach(() => {
       delete process.env[key];
     }
   }
+
   Object.assign(process.env, originalEnv);
 });
 
@@ -26,23 +27,29 @@ describe("ActionInputs", () => {
 
   it("decodes required inputs through Schema", async () => {
     process.env.INPUT_MESSAGE = "foundation-ok";
+
     const Inputs = Schema.Struct({
       message: Schema.String,
     });
+
     const decoded = await Effect.runPromise(
       ActionInputs.decodeInputs(Inputs, ["message"]),
     );
+
     expect(decoded).toEqual({ message: "foundation-ok" });
   });
 
   it("fails when a required input is missing", async () => {
     delete process.env.INPUT_MESSAGE;
+
     const Inputs = Schema.Struct({
       message: Schema.String,
     });
+
     const exit = await Effect.runPromiseExit(
       ActionInputs.decodeInputs(Inputs, ["message"]),
     );
+
     expect(exit._tag).toBe("Failure");
   });
 });

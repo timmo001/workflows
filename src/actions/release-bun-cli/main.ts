@@ -22,6 +22,7 @@ const program = Effect.gen(function* () {
     "assetRoot",
     "nfpmVersion",
   ]).pipe(Effect.mapError(ActionRuntime.toActionFailure));
+
   yield* run(inputs);
 });
 

@@ -67,6 +67,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
     const make = (
       command: string,
       args: readonly string[],
@@ -77,15 +78,18 @@ export const layer = Layer.effect(
         env: options?.env,
         extendEnv: true,
       });
+
     const capture = Effect.fn("CommandExecutor.capture")(function* (
       command: string,
       args: readonly string[],
       options?: CommandOptions,
     ) {
       const label = `${command} ${args.join(" ")}`.trim();
+
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* spawner.spawn(make(command, args, options));
+
           const [stdout, stderr, exitCode] = yield* Effect.all(
             [
               collectText(handle.stdout),
@@ -94,6 +98,7 @@ export const layer = Layer.effect(
             ],
             { concurrency: "unbounded" },
           );
+
           return {
             stdout,
             stderr: stderr.trim(),
@@ -106,12 +111,14 @@ export const layer = Layer.effect(
         ),
       );
     });
+
     const run = Effect.fn("CommandExecutor.run")(function* (
       command: string,
       args: readonly string[],
       options?: CommandOptions,
     ) {
       const result = yield* capture(command, args, options);
+
       if (result.exitCode !== 0) {
         return yield* new CommandError({
           command: `${command} ${args.join(" ")}`.trim(),
@@ -119,8 +126,10 @@ export const layer = Layer.effect(
           stderr: result.stderr,
         });
       }
+
       return result.stdout;
     });
+
     const exitCode = Effect.fn("CommandExecutor.exitCode")(function* (
       command: string,
       args: readonly string[],
@@ -133,14 +142,17 @@ export const layer = Layer.effect(
             error(`${command} ${args.join(" ")}`.trim(), cause),
           ),
         );
+
       return Number(code);
     });
+
     const stream = Effect.fn("CommandExecutor.stream")(function* (
       command: string,
       args: readonly string[],
       options?: CommandOptions,
     ) {
       const label = options?.label ?? `${command} ${args.join(" ")}`.trim();
+
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* spawner.spawn(
@@ -151,13 +163,16 @@ export const layer = Layer.effect(
               stdin: "inherit",
             }),
           );
+
           let stderrTail = "";
+
           const stdout = handle.stdout.pipe(
             Stream.decodeText(),
             Stream.runForEach((chunk) =>
               Effect.sync(() => process.stdout.write(chunk)),
             ),
           );
+
           const stderr = handle.stderr.pipe(
             Stream.decodeText(),
             Stream.runForEach((chunk) =>
@@ -169,10 +184,12 @@ export const layer = Layer.effect(
               }),
             ),
           );
+
           const [, , code] = yield* Effect.all(
             [stdout, stderr, handle.exitCode],
             { concurrency: "unbounded" },
           );
+
           if (Number(code) !== 0) {
             return yield* new CommandError({
               command: label,
@@ -187,6 +204,7 @@ export const layer = Layer.effect(
         ),
       );
     });
+
     return Service.of({ capture, run, exitCode, stream });
   }),
 );

@@ -18,12 +18,14 @@ export const toActionFailure = (
   if (error instanceof Annotations.ActionFailure) {
     return error;
   }
+
   if (Schema.isSchemaError(error)) {
     return new Annotations.ActionFailure({
       message: String(error),
       title: "Invalid action inputs",
     });
   }
+
   return new Annotations.ActionFailure({
     message:
       error.stderr.length > 0
@@ -46,6 +48,7 @@ export const runAction = <A, R>(
           error.message,
           error.title === undefined ? undefined : { title: error.title },
         );
+
         return yield* Effect.fail(error);
       }).pipe(Effect.provide(Annotations.layer)),
     ),
@@ -55,6 +58,7 @@ export const runAction = <A, R>(
       }),
     ),
   );
+
   NodeRuntime.runMain(completed, { disableErrorReporting: true });
 };
 

@@ -130,6 +130,7 @@ apply`,
       ],
       { encoding: "utf8" },
     );
+
     expect(output).toContain(
       `alias::git+https://github.com/timmo001/example.git#commit=${validInputs.sourceSha}`,
     );
@@ -159,9 +160,11 @@ apply`,
 
   it("accepts full Git commit pins and rejects aliases and unsupported VCS", () => {
     const root = mkdtempSync(join(tmpdir(), "arch-package-policy-"));
+
     try {
       const check = (sources: string) => {
         writeFileSync(join(root, ".SRCINFO"), sources);
+
         return () =>
           execFileSync("bash", [
             "-c",
@@ -172,6 +175,7 @@ ${sourcePolicyScript}`,
             root,
           ]);
       };
+
       expect(
         check(
           `source = git+https://github.com/timmo001/example.git#commit=${validInputs.sourceSha}\nsource_x86_64 = https://example.invalid/helper.tar.gz\n`,
@@ -198,6 +202,7 @@ const commandLayer = CommandExecutor.layer.pipe(
 const validateFixture = (root: string) => {
   const previous = process.env.RUNNER_TEMP;
   process.env.RUNNER_TEMP = root;
+
   return Effect.runPromiseExit(
     Effect.scoped(
       run({
@@ -222,12 +227,14 @@ const makePackage = (root: string, name: string, pkgname = "example") => {
   writeFileSync(join(content, ".PKGINFO"), `pkgname = ${pkgname}\n`);
   const packagePath = join(root, name);
   execFileSync("bsdtar", ["-a", "-cf", packagePath, "-C", content, ".PKGINFO"]);
+
   return packagePath;
 };
 
 describe("build-arch-package candidate validation", () => {
   it("supports GNU long names with ustar magic and preserves transport order", async () => {
     const root = mkdtempSync(join(tmpdir(), "arch-package-test-"));
+
     try {
       const envelope = join(root, "candidate-envelope");
       mkdirSync(envelope);
@@ -285,12 +292,14 @@ describe("build-arch-package candidate validation", () => {
   it("rejects multi-member and non-file envelopes", async () => {
     for (const unsafe of ["multi", "directory"] as const) {
       const root = mkdtempSync(join(tmpdir(), "arch-package-test-"));
+
       try {
         const envelope = join(root, "candidate-envelope");
         mkdirSync(envelope);
         const packageName = "example-1-1-x86_64.pkg.tar.zst";
         makePackage(root, packageName);
         const members = [packageName];
+
         if (unsafe === "multi") {
           const second = "example-2-1-x86_64.pkg.tar.zst";
           members.push(second);
@@ -299,6 +308,7 @@ describe("build-arch-package candidate validation", () => {
           mkdirSync(join(root, "unsafe.pkg.tar.zst"));
           members[0] = "unsafe.pkg.tar.zst";
         }
+
         execFileSync("tar", [
           "--format=ustar",
           "-C",
@@ -318,6 +328,7 @@ describe("build-arch-package candidate validation", () => {
 
   it("rejects a package whose PKGINFO identity differs", async () => {
     const root = mkdtempSync(join(tmpdir(), "arch-package-test-"));
+
     try {
       const envelope = join(root, "candidate-envelope");
       mkdirSync(envelope);

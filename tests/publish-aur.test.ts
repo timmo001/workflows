@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import { Effect, Exit, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 import {
   type Inputs,
@@ -41,10 +41,12 @@ const writeValidatedPackage = (root: string, pkgbuild: string) => {
   writeFileSync(join(root, "PKGBUILD"), pkgbuild);
   writeFileSync(join(root, ".SRCINFO"), "pkgbase = example-git\n");
   writeFileSync(join(root, "MANIFEST"), "PKGBUILD\n.SRCINFO\n");
+
   const checksum = (path: string) =>
     execFileSync("sha256sum", [join(root, path)], { encoding: "utf8" })
       .split(" ", 1)[0]
       ?.trim();
+
   writeFileSync(
     join(root, "CHECKSUMS"),
     `${checksum("PKGBUILD")}\tPKGBUILD\n${checksum(".SRCINFO")}\t.SRCINFO\n`,
@@ -69,13 +71,14 @@ describe("publish-aur contract", () => {
 describe("publish-aur artifact protocol", () => {
   it("accepts matching manifest checksums and rejects tampering", async () => {
     const root = mkdtempSync(join(tmpdir(), "publish-aur-verify-"));
+
     try {
       const validated = join(root, "aur-validated");
       process.env.RUNNER_TEMP = root;
       writeValidatedPackage(validated, "pkgname=example-git\n");
-      expect(await runStage(validInputs)).toMatchObject({ _tag: "Success" });
+      expect(Exit.isSuccess(await runStage(validInputs))).toBe(true);
       writeFileSync(join(validated, "PKGBUILD"), "pkgname=tampered\n");
-      expect(await runStage(validInputs)).toMatchObject({ _tag: "Failure" });
+      expect(Exit.isFailure(await runStage(validInputs))).toBe(true);
     } finally {
       delete process.env.RUNNER_TEMP;
       rmSync(root, { recursive: true, force: true });
@@ -91,6 +94,7 @@ describe("publish-aur Git reconciliation", () => {
     "reports the expected changed output %#",
     async (validatedPkgbuild, expected) => {
       const root = mkdtempSync(join(tmpdir(), "publish-aur-prepare-"));
+
       try {
         const remote = join(root, "remote.git");
         const seed = join(root, "seed");
@@ -111,13 +115,15 @@ describe("publish-aur Git reconciliation", () => {
         process.env.RUNNER_TEMP = root;
         process.env.GITHUB_OUTPUT = output;
         expect(
-          await runStage({
-            stage: "prepare",
-            packageName: "example-git",
-            aurCloneUrl: remote,
-            actionPath,
-          }),
-        ).toMatchObject({ _tag: "Success" });
+          Exit.isSuccess(
+            await runStage({
+              stage: "prepare",
+              packageName: "example-git",
+              aurCloneUrl: remote,
+              actionPath,
+            }),
+          ),
+        ).toBe(true);
 
         expect(readFileSync(output, "utf8")).toBe(`changed=${expected}\n`);
         expect(git(["-C", clone, "log", "-1", "--format=%an <%ae>"])).toBe(

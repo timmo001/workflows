@@ -64,6 +64,7 @@ const runWith = (inputs: Inputs, layer: Layer.Layer<CommandExecutor.Service>) =>
 
 const runRecorded = (inputs: Inputs) => {
   const recorded: Array<RecordedCommand> = [];
+
   return {
     recorded,
     exit: runWith(inputs, recordingLayer(recorded)),
@@ -77,6 +78,7 @@ const failureMessage = (
 ) => {
   if (!Exit.isFailure(exit)) return undefined;
   const error = Cause.squash(exit.cause);
+
   return error instanceof Annotations.ActionFailure ? error.message : undefined;
 };
 
@@ -112,6 +114,7 @@ describe("validate-js-package version comparison", () => {
     const decoded = Schema.decodeUnknownSync(VersionManifestFromJson)(
       '{"name":"@scope/pkg","version":"1.2.3","scripts":{"build":"bun run build"}}',
     );
+
     expect(decoded).toEqual({ version: "1.2.3" });
   });
 });
@@ -142,6 +145,7 @@ describe("validate-js-package workflow YAML", () => {
       ".github/workflows/publish-npm-package.yml",
       "utf8",
     );
+
     expect(workflow).toContain("id-token: write");
     expect(workflow).toContain("run: npm publish --access public");
     expect(workflow).toContain("uses: $/.github/actions/validate-js-package");
@@ -152,6 +156,7 @@ describe("validate-js-package workflow YAML", () => {
       ".github/workflows/publish-jsr-package.yml",
       "utf8",
     );
+
     expect(workflow).toContain("id-token: write");
     expect(workflow).toContain('run: bunx "jsr@$JSR_CLI_VERSION" publish');
     expect(workflow).not.toContain("publish --dry-run");
@@ -163,6 +168,7 @@ describe("validate-js-package workflow YAML", () => {
       ".github/workflows/build-bun-package.yml",
       "utf8",
     );
+
     expect(workflow).toContain("contract: build");
     expect(workflow).not.toContain("npm publish");
     expect(workflow).not.toContain("id-token: write");
@@ -172,6 +178,7 @@ describe("validate-js-package workflow YAML", () => {
 describe("validate-js-package contracts", () => {
   it("runs the build check, build, and dry-run sequence", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-build-"));
+
     try {
       const { recorded, exit } = runRecorded({
         contract: "build",
@@ -180,6 +187,7 @@ describe("validate-js-package contracts", () => {
         buildCommand: "bun run build",
         jsrCliVersion: "0.14.3",
       });
+
       expect((await exit)._tag).toBe("Success");
       expect(recorded).toEqual([
         {
@@ -214,8 +222,10 @@ describe("validate-js-package contracts", () => {
 
   it("compares the npm release tag before running trusted commands", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-npm-"));
+
     try {
       writeManifest(root, "package.json", "1.2.3");
+
       const { recorded, exit } = runRecorded({
         contract: "npm",
         packagePath: root,
@@ -223,6 +233,7 @@ describe("validate-js-package contracts", () => {
         buildCommand: "bun run build",
         releaseTag: "9.9.9",
       });
+
       const result = await exit;
       expect(failureMessage(result)).toBe(
         "Release tag 9.9.9 does not match package version 1.2.3",
@@ -235,8 +246,10 @@ describe("validate-js-package contracts", () => {
 
   it("runs the npm check, build, and pack sequence after a tag match", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-npm-"));
+
     try {
       writeManifest(root, "package.json", "1.2.3");
+
       const { recorded, exit } = runRecorded({
         contract: "npm",
         packagePath: root,
@@ -244,6 +257,7 @@ describe("validate-js-package contracts", () => {
         buildCommand: "bun run build",
         releaseTag: "1.2.3",
       });
+
       expect((await exit)._tag).toBe("Success");
       expect(recorded.map((command) => command.command)).toEqual([
         "bash",
@@ -263,15 +277,18 @@ describe("validate-js-package contracts", () => {
 
   it("compares jsr.json before the release tag", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-jsr-"));
+
     try {
       writeManifest(root, "package.json", "1.2.3");
       writeManifest(root, "jsr.json", "1.2.4");
+
       const { recorded, exit } = runRecorded({
         contract: "jsr",
         packagePath: root,
         checkCommand: "bun run check",
         releaseTag: "1.2.3",
       });
+
       const result = await exit;
       expect(failureMessage(result)).toBe(
         "package.json and jsr.json versions differ",
@@ -284,15 +301,18 @@ describe("validate-js-package contracts", () => {
 
   it("rejects a JSR tag mismatch after the manifests agree", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-jsr-"));
+
     try {
       writeManifest(root, "package.json", "1.2.3");
       writeManifest(root, "jsr.json", "1.2.3");
+
       const { recorded, exit } = runRecorded({
         contract: "jsr",
         packagePath: root,
         checkCommand: "bun run check",
         releaseTag: "9.9.9",
       });
+
       const result = await exit;
       expect(failureMessage(result)).toBe(
         "Release tag 9.9.9 does not match package version 1.2.3",
@@ -305,15 +325,18 @@ describe("validate-js-package contracts", () => {
 
   it("runs only the JSR check command after versions match", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-jsr-"));
+
     try {
       writeManifest(root, "package.json", "1.2.3");
       writeManifest(root, "jsr.json", "1.2.3");
+
       const { recorded, exit } = runRecorded({
         contract: "jsr",
         packagePath: root,
         checkCommand: "bun run check",
         releaseTag: "1.2.3",
       });
+
       expect((await exit)._tag).toBe("Success");
       expect(recorded).toEqual([
         {
@@ -330,8 +353,10 @@ describe("validate-js-package contracts", () => {
 
   it("fails when package.json is missing a string version", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-invalid-"));
+
     try {
       writeFileSync(join(root, "package.json"), '{"name":"@scope/pkg"}\n');
+
       const { recorded, exit } = runRecorded({
         contract: "npm",
         packagePath: root,
@@ -339,6 +364,7 @@ describe("validate-js-package contracts", () => {
         buildCommand: "true",
         releaseTag: "1.0.0",
       });
+
       const result = await exit;
       expect(failureMessage(result)).toContain("Invalid package.json");
       expect(recorded).toEqual([]);
@@ -351,15 +377,18 @@ describe("validate-js-package contracts", () => {
 describe("validate-js-package trusted Bash", () => {
   it("fails a pipeline when pipefail is required", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-pipefail-"));
+
     try {
       writeManifest(root, "package.json", "1.0.0");
       writeManifest(root, "jsr.json", "1.0.0");
+
       const exit = await runReal({
         contract: "jsr",
         packagePath: root,
         checkCommand: "false | true",
         releaseTag: "1.0.0",
       });
+
       expect(exit._tag).toBe("Failure");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -368,17 +397,20 @@ describe("validate-js-package trusted Bash", () => {
 
   it("runs the check command in the package path", async () => {
     const root = mkdtempSync(join(tmpdir(), "js-package-cwd-"));
+
     try {
       const nested = join(root, "pkg");
       mkdirSync(nested);
       writeManifest(nested, "package.json", "1.0.0");
       writeManifest(nested, "jsr.json", "1.0.0");
+
       const exit = await runReal({
         contract: "jsr",
         packagePath: nested,
         checkCommand: "printf ok > checked",
         releaseTag: "1.0.0",
       });
+
       expect(exit._tag).toBe("Success");
       expect(existsSync(join(root, "checked"))).toBe(false);
       expect(readFileSync(join(nested, "checked"), "utf8")).toBe("ok");

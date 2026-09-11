@@ -40,13 +40,18 @@ const formatCommand = (
   properties?: AnnotationProperties,
 ) => {
   const parts: string[] = [];
+
   if (properties?.title !== undefined)
     parts.push(`title=${escapeProperty(properties.title)}`);
+
   if (properties?.file !== undefined)
     parts.push(`file=${escapeProperty(properties.file)}`);
+
   if (properties?.line !== undefined) parts.push(`line=${properties.line}`);
+
   if (properties?.column !== undefined) parts.push(`col=${properties.column}`);
   const suffix = parts.length > 0 ? ` ${parts.join(",")}` : "";
+
   return `::${command}${suffix}::${escapeData(message)}`;
 };
 
@@ -55,6 +60,7 @@ export const layer = Layer.sync(Service, () => {
     Effect.sync(() => {
       process.stdout.write(`${line}\n`);
     });
+
   return Service.of({
     error: Effect.fn("Annotations.error")(function* (
       message: string,
@@ -94,8 +100,10 @@ export class TestService extends Context.Service<TestService, TestInterface>()(
 export const testLayer = Layer.effectContext(
   Effect.gen(function* () {
     const recorded = yield* Ref.make<ReadonlyArray<string>>([]);
+
     const write = (line: string) =>
       Ref.update(recorded, (lines) => [...lines, line]);
+
     const service = TestService.of({
       error: Effect.fn("Annotations.Test.error")(function* (
         message: string,
@@ -125,6 +133,7 @@ export const testLayer = Layer.effectContext(
         return yield* Ref.get(recorded);
       }),
     });
+
     return Context.empty().pipe(
       Context.add(Service, service),
       Context.add(TestService, service),

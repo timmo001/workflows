@@ -20,6 +20,7 @@ import {
 const withTempDirectory =
   (test: (root: string) => Promise<void>) => async () => {
     const root = mkdtempSync(join(tmpdir(), "validate-json-"));
+
     try {
       await test(root);
     } finally {
@@ -38,6 +39,7 @@ describe("validate-json parsing", () => {
     ]) {
       expect(validateJsonSource("test.json", source)._tag).toBe("Valid");
     }
+
     for (const source of ["\uFEFF{}", "01", "1.", "NaN", ""]) {
       expect(validateJsonSource("test.json", source)._tag).toBe("Invalid");
     }
@@ -60,6 +62,7 @@ describe("validate-json discovery", () => {
       const files = await Effect.runPromise(
         discoverJsonFiles(root).pipe(Effect.provide(NodeServices.layer)),
       );
+
       expect(files).toEqual([unusual, join(root, "target.json")]);
     }),
   );
@@ -75,6 +78,7 @@ describe("validate-json validation", () => {
           Effect.provide(NodeServices.layer),
         ),
       );
+
       expect(Exit.isSuccess(exit)).toBe(true);
     }),
   );
@@ -91,19 +95,24 @@ describe("validate-json validation", () => {
       const program = Effect.gen(function* () {
         const exit = yield* Effect.exit(run(root));
         const annotations = yield* Annotations.TestService;
+
         return { exit, lines: yield* annotations.lines() };
       }).pipe(
         Effect.provide(Annotations.testLayer),
         Effect.provide(NodeServices.layer),
       );
+
       const { exit, lines } = await Effect.runPromise(program);
 
       expect(Exit.isFailure(exit)).toBe(true);
+
       if (Exit.isFailure(exit)) {
         const error = Cause.squash(exit.cause);
+
         if (!(error instanceof Annotations.ActionFailure)) throw error;
         expect(error.message).toBe("2 JSON file(s) failed validation.");
       }
+
       expect(lines).toHaveLength(2);
       expect(lines[0]).toContain(
         `::error title=Invalid JSON,file=${join(root, "first invalid.json")}::`,

@@ -1794,6 +1794,7 @@ var normalize = (n) => n > 0 ? Math.floor(n) : 0;
 // node_modules/effect/dist/Result.js
 var succeed2 = succeed;
 var fail2 = fail;
+var isResult2 = isResult;
 var isFailure2 = isFailure;
 var isSuccess2 = isSuccess;
 var match3 = /* @__PURE__ */ dual(2, (self, {
@@ -5857,10 +5858,130 @@ var make12 = (impl) => FileSystem.of({
 var FileTypeId = "~effect/FileSystem/File";
 class WatchBackend extends (/* @__PURE__ */ Service()("effect/FileSystem/WatchBackend")) {
 }
-// node_modules/effect/dist/Ref.js
-var TypeId16 = "~effect/Ref";
-var RefProto = {
+// node_modules/effect/dist/internal/matcher.js
+var TypeId16 = "~effect/Match/Matcher";
+var TypeMatcherProto = {
   [TypeId16]: {
+    _input: identity,
+    _filters: identity,
+    _remaining: identity,
+    _result: identity,
+    _return: identity,
+    _args: identity
+  },
+  _tag: "TypeMatcher",
+  add(_case) {
+    return makeTypeMatcher(this.select, [...this.cases, _case]);
+  },
+  pipe() {
+    return pipeArguments(this, arguments);
+  }
+};
+function makeTypeMatcher(select, cases) {
+  const matcher = Object.create(TypeMatcherProto);
+  matcher.select = select;
+  matcher.cases = cases;
+  return matcher;
+}
+var ValueMatcherProto = {
+  [TypeId16]: {
+    _input: identity,
+    _filters: identity,
+    _result: identity,
+    _return: identity,
+    _flavor: identity
+  },
+  _tag: "ValueMatcher",
+  add(_case) {
+    if (isSuccess2(this.value)) {
+      return this;
+    }
+    if (_case._tag === "When" && _case.guard(this.provided) === true) {
+      return makeValueMatcher(this.provided, succeed2(_case.evaluate(this.provided)));
+    } else if (_case._tag === "Not" && _case.guard(this.provided) === false) {
+      return makeValueMatcher(this.provided, succeed2(_case.evaluate(this.provided)));
+    }
+    return this;
+  },
+  pipe() {
+    return pipeArguments(this, arguments);
+  }
+};
+function makeValueMatcher(provided, value) {
+  const matcher = Object.create(ValueMatcherProto);
+  matcher.provided = provided;
+  matcher.value = value;
+  return matcher;
+}
+var makeWhen = (guard, evaluate) => ({
+  _tag: "When",
+  guard,
+  evaluate
+});
+var value = (i) => makeValueMatcher(i, fail2(i));
+var discriminator = (field) => (...pattern) => {
+  const f = pattern[pattern.length - 1];
+  const values = pattern.slice(0, -1);
+  const pred = values.length === 1 ? (_) => _ != null && _[field] === values[0] : (_) => _ != null && values.includes(_[field]);
+  return (self) => self.add(makeWhen(pred, f));
+};
+var tag = /* @__PURE__ */ discriminator("_tag");
+var result2 = (self) => {
+  if (self._tag === "ValueMatcher") {
+    return self.value;
+  }
+  const len = self.cases.length;
+  if (len === 1) {
+    const _case = self.cases[0];
+    return (...args) => {
+      const input = self.select(...args);
+      if (_case._tag === "When" && _case.guard(input) === true) {
+        return succeed2(_case.evaluate(input, ...args));
+      } else if (_case._tag === "Not" && _case.guard(input) === false) {
+        return succeed2(_case.evaluate(input, ...args));
+      }
+      return fail2(input);
+    };
+  }
+  return (...args) => {
+    const input = self.select(...args);
+    for (let i = 0;i < len; i++) {
+      const _case = self.cases[i];
+      if (_case._tag === "When" && _case.guard(input) === true) {
+        return succeed2(_case.evaluate(input, ...args));
+      } else if (_case._tag === "Not" && _case.guard(input) === false) {
+        return succeed2(_case.evaluate(input, ...args));
+      }
+    }
+    return fail2(input);
+  };
+};
+var getExhaustiveAbsurdErrorMessage = "effect/match/Match/exhaustive: absurd";
+var exhaustive = (self) => {
+  const toResult = result2(self);
+  if (isResult2(toResult)) {
+    if (isSuccess2(toResult)) {
+      return toResult.success;
+    }
+    throw new Error(getExhaustiveAbsurdErrorMessage);
+  }
+  return (...args) => {
+    const result = toResult(...args);
+    if (isSuccess2(result)) {
+      return result.success;
+    }
+    throw new Error(getExhaustiveAbsurdErrorMessage);
+  };
+};
+
+// node_modules/effect/dist/Match.js
+var value2 = value;
+var tag2 = tag;
+var exhaustive2 = exhaustive;
+// node_modules/effect/dist/Ref.js
+var TypeId17 = "~effect/Ref";
+var RefProto = {
+  [TypeId17]: {
     _A: identity
   },
   ...PipeInspectableProto,
@@ -5904,16 +6025,16 @@ var toOption = (value) => value === missing ? none2() : some2(value);
 var fromOptionExit = (option) => option._tag === "None" ? missingExit : succeed9(option.value);
 
 // node_modules/effect/dist/SchemaIssue.js
-var TypeId17 = "~effect/SchemaIssue/Issue";
+var TypeId18 = "~effect/SchemaIssue/Issue";
 function isIssue(u) {
-  return hasProperty(u, TypeId17) && u[TypeId17] === TypeId17;
+  return hasProperty(u, TypeId18) && u[TypeId18] === TypeId18;
 }
 function hasInput(issue) {
   return Object.hasOwn(issue, "input");
 }
 
 class IssueNodeImpl {
-  [TypeId17] = TypeId17;
+  [TypeId18] = TypeId18;
   constructor(input, options) {
     if (options?.reportInput === true && input !== missing) {
       this.input = input;
@@ -6250,9 +6371,9 @@ function decodeBase642() {
 }
 
 // node_modules/effect/dist/SchemaTransformation.js
-var TypeId18 = "~effect/SchemaTransformation/Transformation";
+var TypeId19 = "~effect/SchemaTransformation/Transformation";
 var Transformation = class {
-  [TypeId18] = TypeId18;
+  [TypeId19] = TypeId19;
   _tag = "Transformation";
   decode;
   encode;
@@ -6268,7 +6389,7 @@ var Transformation = class {
   }
 };
 function isTransformation(u) {
-  return hasProperty(u, TypeId18) && u[TypeId18] === TypeId18;
+  return hasProperty(u, TypeId19) && u[TypeId19] === TypeId19;
 }
 var make14 = (options) => {
   if (isTransformation(options)) {
@@ -6385,10 +6506,10 @@ var Context = class {
     this.annotations = annotations;
   }
 };
-var TypeId19 = "~effect/Schema";
+var TypeId20 = "~effect/Schema";
 
 class ASTNodeImpl {
-  [TypeId19] = TypeId19;
+  [TypeId20] = TypeId20;
   annotations;
   checks;
   encoding;
@@ -7940,7 +8061,7 @@ function make15(schema) {
     });
   };
 }
-function is(schema) {
+function is2(schema) {
   return _is(schema.ast);
 }
 function _is(ast) {
@@ -8112,9 +8233,9 @@ function makeParser(ast, compile, compileConstructorDefault, constructorDefault)
 }
 
 // node_modules/effect/dist/internal/schema/make.js
-var TypeId20 = "~effect/Schema/Schema";
+var TypeId21 = "~effect/Schema/Schema";
 var SchemaProto = {
-  [TypeId20]: TypeId20,
+  [TypeId21]: TypeId21,
   pipe() {
     return pipeArguments(this, arguments);
   },
@@ -8151,7 +8272,7 @@ function isSchemaError(u) {
 }
 
 // node_modules/effect/dist/Schema.js
-var TypeId21 = TypeId20;
+var TypeId22 = TypeId21;
 function declareConstructor() {
   return (typeParameters, run, annotations) => {
     return make17(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make17(ast))), annotations));
@@ -8201,7 +8322,7 @@ function decodeUnknownEffect2(schema, options) {
 var decodeEffect2 = decodeUnknownEffect2;
 var make17 = make16;
 function isSchema(u) {
-  return hasProperty(u, TypeId21) && u[TypeId21] === TypeId21;
+  return hasProperty(u, TypeId22) && u[TypeId22] === TypeId22;
 }
 var optionalKey2 = /* @__PURE__ */ lambda((schema) => make17(optionalKey(schema.ast), {
   schema
@@ -8293,12 +8414,12 @@ function withConstructorDefault2(defaultValue) {
     schema
   });
 }
-function tag(literal) {
+function tag3(literal) {
   return Literal2(literal).pipe(withConstructorDefault2(succeed6(literal)));
 }
 function TaggedStruct(value, fields) {
   return Struct({
-    _tag: tag(value),
+    _tag: tag3(value),
     ...fields
   });
 }
@@ -8334,7 +8455,7 @@ function toTaggedUnion(tag) {
           discriminantKeys.add(key);
           discriminants.push(literal);
           assignProperty(cases, literal, schema);
-          assignProperty(guards, literal, is(toType2(schema)));
+          assignProperty(guards, literal, is2(toType2(schema)));
           return;
         }
       }
@@ -8397,7 +8518,7 @@ function TaggedUnion(casesByTag) {
     matchOrElse
   });
 }
-function instanceOf(constructor, annotations) {
+function instanceOf2(constructor, annotations) {
   return declare((u) => u instanceof constructor, annotations);
 }
 function link() {
@@ -8486,7 +8607,7 @@ function Defect(options) {
   defectSchemaCache[key] = schema;
   return schema;
 }
-var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
+var RegExp2 = /* @__PURE__ */ instanceOf2(globalThis.RegExp, {
   representation: {
     id: "effect/schema/RegExp",
     payload: null
@@ -8515,7 +8636,7 @@ var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
 var URLString = /* @__PURE__ */ String4.annotate({
   expected: "a string that will be decoded as a URL"
 });
-var URL2 = /* @__PURE__ */ instanceOf(globalThis.URL, {
+var URL2 = /* @__PURE__ */ instanceOf2(globalThis.URL, {
   representation: {
     id: "effect/schema/URL",
     payload: null
@@ -8534,7 +8655,7 @@ var JsonString = /* @__PURE__ */ String4.annotate({
 function fromJsonString2(schema, options) {
   return JsonString.pipe(decodeTo2(schema, fromJsonString(options)));
 }
-var File = /* @__PURE__ */ instanceOf(globalThis.File, {
+var File = /* @__PURE__ */ instanceOf2(globalThis.File, {
   representation: {
     id: "effect/schema/File",
     payload: null
@@ -8578,7 +8699,7 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
     })
   }))
 });
-var FormData2 = /* @__PURE__ */ instanceOf(globalThis.FormData, {
+var FormData2 = /* @__PURE__ */ instanceOf2(globalThis.FormData, {
   representation: {
     id: "effect/schema/FormData",
     payload: null
@@ -8589,10 +8710,10 @@ var FormData2 = /* @__PURE__ */ instanceOf(globalThis.FormData, {
   }),
   expected: "FormData",
   toCodecJson: () => link()(ArraySchema(Tuple([String4, Union2([Struct({
-    _tag: tag("String"),
+    _tag: tag3("String"),
     value: String4
   }), Struct({
-    _tag: tag("File"),
+    _tag: tag3("File"),
     value: File
   })])])), transformEffect2({
     decode: (e) => {
@@ -8619,7 +8740,7 @@ var FormData2 = /* @__PURE__ */ instanceOf(globalThis.FormData, {
     }
   }))
 });
-var URLSearchParams2 = /* @__PURE__ */ instanceOf(globalThis.URLSearchParams, {
+var URLSearchParams2 = /* @__PURE__ */ instanceOf2(globalThis.URLSearchParams, {
   representation: {
     id: "effect/schema/URLSearchParams",
     payload: null
@@ -8641,7 +8762,7 @@ var Base64String = /* @__PURE__ */ String4.annotate({
   format: "byte",
   contentEncoding: "base64"
 });
-var Uint8Array2 = /* @__PURE__ */ instanceOf(globalThis.Uint8Array, {
+var Uint8Array2 = /* @__PURE__ */ instanceOf2(globalThis.Uint8Array, {
   representation: {
     id: "effect/schema/Uint8Array",
     payload: null
@@ -8678,7 +8799,7 @@ function makeClass(Inherited, identifier, struct2, annotations, proto) {
         }
       });
     }
-    static [TypeId21] = TypeId21;
+    static [TypeId22] = TypeId22;
     get [ClassTypeId]() {
       return ClassTypeId;
     }
@@ -8784,7 +8905,7 @@ var Error4 = (identifier) => (schema, annotations) => {
 var TaggedError3 = (identifier) => {
   return (tagValue, schema, annotations) => {
     const struct = isStruct(schema) ? schema.mapFields((fields) => ({
-      _tag: tag(tagValue),
+      _tag: tag3(tagValue),
       ...fields
     }), {
       unsafePreserveChecks: true
@@ -8841,7 +8962,7 @@ class ChildProcessSpawner extends (/* @__PURE__ */ Service()("effect/process/Chi
 }
 
 // node_modules/effect/dist/unstable/process/ChildProcess.js
-var TypeId22 = "~effect/process/ChildProcess";
+var TypeId23 = "~effect/process/ChildProcess";
 var Proto2 = {
   .../* @__PURE__ */ Prototype2({
     label: "Command",
@@ -8849,7 +8970,7 @@ var Proto2 = {
       return getUnsafe(fiber.context, ChildProcessSpawner).spawn(this);
     }
   }),
-  [TypeId22]: TypeId22
+  [TypeId23]: TypeId23
 };
 var makeStandardCommand = (command, args, options) => Object.assign(Object.create(Proto2), {
   _tag: "StandardCommand",
@@ -9163,7 +9284,7 @@ var runMain = /* @__PURE__ */ makeRunMain(({
 // node_modules/@effect/platform-node/dist/NodeRuntime.js
 var runMain2 = runMain;
 // node_modules/effect/dist/Path.js
-var TypeId23 = "~effect/Path";
+var TypeId24 = "~effect/Path";
 var Path2 = /* @__PURE__ */ Service("effect/Path");
 function normalizeStringPosix(path, allowAboveRoot) {
   let res = "";
@@ -9340,7 +9461,7 @@ function encodePathChars(filepath) {
   return filepath;
 }
 var posixImpl = /* @__PURE__ */ Path2.of({
-  [TypeId23]: TypeId23,
+  [TypeId24]: TypeId24,
   resolve: resolve2,
   normalize(path) {
     if (path.length === 0)
@@ -10368,7 +10489,7 @@ function v7Bytes(timestampMillis, bytes = randomBytes()) {
 var v7String = (timestampMillis, bytes) => stringify(bytes === undefined ? v7Bytes(timestampMillis) : v7Bytes(timestampMillis, bytes));
 
 // node_modules/effect/dist/Crypto.js
-var TypeId24 = "~effect/Crypto";
+var TypeId25 = "~effect/Crypto";
 var Crypto2 = /* @__PURE__ */ Service("effect/Crypto");
 var make21 = (impl) => {
   const randomBytesUnsafe = impl.randomBytes;
@@ -10388,7 +10509,7 @@ var make21 = (impl) => {
     }
   };
   return Crypto2.of({
-    [TypeId24]: TypeId24,
+    [TypeId25]: TypeId25,
     randomBytes,
     nextDoubleUnsafe,
     nextIntUnsafe,
@@ -10899,17 +11020,17 @@ var fileUrlOps = (windows) => ({
   })
 });
 var layerPosix = /* @__PURE__ */ succeed5(Path2)({
-  [TypeId23]: TypeId23,
+  [TypeId24]: TypeId24,
   ...NodePath.posix,
   .../* @__PURE__ */ fileUrlOps(false)
 });
 var layerWin32 = /* @__PURE__ */ succeed5(Path2)({
-  [TypeId23]: TypeId23,
+  [TypeId24]: TypeId24,
   ...NodePath.win32,
   .../* @__PURE__ */ fileUrlOps(true)
 });
 var layer7 = /* @__PURE__ */ succeed5(Path2)({
-  [TypeId23]: TypeId23,
+  [TypeId24]: TypeId24,
   ...NodePath,
   .../* @__PURE__ */ fileUrlOps(undefined)
 });
@@ -10918,10 +11039,10 @@ var layer7 = /* @__PURE__ */ succeed5(Path2)({
 var layer8 = layer7;
 
 // node_modules/effect/dist/Stdio.js
-var TypeId25 = "~effect/Stdio";
-var Stdio2 = /* @__PURE__ */ Service(TypeId25);
+var TypeId26 = "~effect/Stdio";
+var Stdio2 = /* @__PURE__ */ Service(TypeId26);
 var make23 = (options) => ({
-  [TypeId25]: TypeId25,
+  [TypeId26]: TypeId26,
   stdinIsTerminal: succeed6(false),
   stdoutIsTerminal: succeed6(false),
   ...options
@@ -10968,18 +11089,18 @@ var layer9 = /* @__PURE__ */ succeed5(Stdio2, /* @__PURE__ */ make23({
 var layer10 = layer9;
 
 // node_modules/effect/dist/Terminal.js
-var TypeId26 = "~effect/Terminal";
+var TypeId27 = "~effect/Terminal";
 var QuitErrorTypeId = "~effect/Terminal/QuitError";
 
 class QuitError extends (/* @__PURE__ */ Error4("QuitError")({
-  _tag: /* @__PURE__ */ tag("QuitError")
+  _tag: /* @__PURE__ */ tag3("QuitError")
 })) {
   [QuitErrorTypeId] = QuitErrorTypeId;
 }
 var Terminal2 = /* @__PURE__ */ Service("effect/Terminal");
 var make24 = (impl) => Terminal2.of({
   ...impl,
-  [TypeId26]: TypeId26
+  [TypeId27]: TypeId27
 });
 
 // node_modules/@effect/platform-node-shared/dist/NodeTerminal.js
@@ -11322,10 +11443,10 @@ var make26 = fn2("GitHubCommand.make")(function* (label) {
   });
   const mapError = mapError2((error) => new ActionFailure({
     title: "Command failed",
-    message: error._tag === "GhCommandError" ? stderrTail.trim() || `Command failed with exit code ${error.exitCode}: ${label}` : error._tag === "GhTimeoutError" ? `Command timed out after ${error.timeoutMs}ms: ${label}` : String(error.cause)
+    message: value2(error).pipe(tag2("GhCommandError", (error) => stderrTail.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag2("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag2("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
   }));
   const stream = fn2("GitHubCommand.stream")(function* (args, options = {}) {
-    yield* gh.stream(args, options).pipe(runForEach2((chunk) => chunk._tag === "Stderr" ? writeStderr(chunk.text) : sync3(() => {
+    yield* gh.stream(args, options).pipe(runForEach2((chunk) => isTagged(chunk, "Stderr") ? writeStderr(chunk.text) : sync3(() => {
       if (!options.suppressStdout)
         process.stdout.write(chunk.text);
     })), mapError);

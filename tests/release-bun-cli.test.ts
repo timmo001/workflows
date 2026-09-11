@@ -66,6 +66,7 @@ const initRepo = (root: string) => {
   git(["config", "user.email", "test@example.com"], root);
   git(["config", "user.name", "test"], root);
   git(["commit", "--allow-empty", "-m", "init"], root);
+
   return git(["rev-parse", "HEAD"], root);
 };
 
@@ -91,10 +92,12 @@ describe("release-bun-cli architecture and assets", () => {
 
   it("names the six Float App assets", () => {
     const version = "20260101.0";
+
     const assets = [
       ...linuxAssetNames("float-app", version, "x86_64"),
       ...linuxAssetNames("float-app", version, "aarch64"),
     ];
+
     expect(assets).toEqual([
       "float-app-20260101.0-linux-x86_64.tar.gz",
       "float-app_20260101.0_amd64.deb",
@@ -234,6 +237,7 @@ describe("release-bun-cli smoke tests and prepare", () => {
   it("preserves line and argument splitting for Context-style smoke tests", async () => {
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-smoke-"));
     const previous = process.cwd();
+
     try {
       mkdirSync(join(root, "dist/release/root"), { recursive: true });
       writeFileSync(
@@ -246,11 +250,13 @@ printf '%s\\n' "$#" "$@" >> "$TRACE"
       const trace = join(root, "trace");
       process.chdir(root);
       process.env.TRACE = trace;
+
       const exit = await runStage({
         stage: "smoke-test",
         binaryName: "context",
         smokeTestArguments: "help\nstack --json\n",
       });
+
       expect(exit._tag).toBe("Success");
       expect(readFileSync(trace, "utf8")).toBe("1\nhelp\n2\nstack\n--json\n");
     } finally {
@@ -263,13 +269,16 @@ printf '%s\\n' "$#" "$@" >> "$TRACE"
   it("runs package-prepare-command with trusted Bash semantics", async () => {
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-prepare-"));
     const previous = process.cwd();
+
     try {
       process.chdir(root);
+
       const exit = await runStage({
         stage: "prepare-package",
         packagePrepareCommand:
           "mkdir -p out && printf '%s' \"$HOME\" > out/home",
       });
+
       expect(exit._tag).toBe("Success");
       expect(readFileSync(join(root, "out/home"), "utf8")).toBe(
         process.env.HOME ?? "",
@@ -284,10 +293,12 @@ printf '%s\\n' "$#" "$@" >> "$TRACE"
 describe("release-bun-cli archives and checksums", () => {
   it("writes deterministic archive metadata", () => {
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-archive-"));
+
     try {
       mkdirSync(join(root, "dist/release/root"), { recursive: true });
       writeFileSync(join(root, "dist/release/root/float-app"), "binary\n");
       writeFileSync(join(root, "dist/release/root/sendspin-rs-cli"), "extra\n");
+
       const env = {
         ...process.env,
         ARCHIVE_PATHS: "float-app\nsendspin-rs-cli",
@@ -295,21 +306,26 @@ describe("release-bun-cli archives and checksums", () => {
         VERSION: "20260101.0",
         RELEASE_ARCHITECTURE: "x86_64",
       };
+
       execFileSync("bash", ["-c", writeArchiveScript], { cwd: root, env });
       execFileSync("bash", ["-c", writeArchiveScript], { cwd: root, env });
+
       const first = readFileSync(
         join(
           root,
           "dist/release/assets/float-app-20260101.0-linux-x86_64.tar.gz",
         ),
       );
+
       execFileSync("bash", ["-c", writeArchiveScript], { cwd: root, env });
+
       const second = readFileSync(
         join(
           root,
           "dist/release/assets/float-app-20260101.0-linux-x86_64.tar.gz",
         ),
       );
+
       expect(first.equals(second)).toBe(true);
       expect([first[0], first[1]]).toEqual([0x1f, 0x8b]);
     } finally {
@@ -319,22 +335,28 @@ describe("release-bun-cli archives and checksums", () => {
 
   it("creates SHA256SUMS after verifying six assets", async () => {
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-verify-"));
+
     try {
       const assets = [
         ...linuxAssetNames("float-app", "20260101.0", "x86_64"),
         ...linuxAssetNames("float-app", "20260101.0", "aarch64"),
       ];
+
       for (const asset of assets) {
         writeFileSync(join(root, asset), `${asset}\n`);
       }
+
       const exit = await runStage({
         stage: "verify-assets",
         assetRoot: root,
       });
+
       expect(exit._tag).toBe("Success");
+
       const sums = readFileSync(join(root, "SHA256SUMS"), "utf8")
         .trim()
         .split("\n");
+
       expect(sums).toHaveLength(expectedReleaseAssetCount);
       expect(sums.map((line) => line.split("  ")[1]).sort()).toEqual(
         [...assets].sort(),
@@ -346,12 +368,15 @@ describe("release-bun-cli archives and checksums", () => {
 
   it("rejects the wrong number of release assets", async () => {
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-verify-"));
+
     try {
       writeFileSync(join(root, "only-one"), "nope\n");
+
       const exit = await runStage({
         stage: "verify-assets",
         assetRoot: root,
       });
+
       expect(exit._tag).toBe("Failure");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -364,6 +389,7 @@ describe("release-bun-cli GitHub reconciliation", () => {
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-publish-"));
     const previous = process.cwd();
     const previousPath = process.env.PATH;
+
     try {
       const sha = initRepo(root);
       const bin = join(root, "bin");
@@ -385,6 +411,7 @@ fi
       process.chdir(root);
       process.env.PATH = `${bin}:${previousPath}`;
       process.env.GH_LOG = log;
+
       const exit = await runStage({
         stage: "publish-release",
         assetRoot: assets,
@@ -393,6 +420,7 @@ fi
         existingRelease: "true",
         prerelease: "false",
       });
+
       expect(exit._tag).toBe("Success");
       expect(readFileSync(log, "utf8")).toBe(
         `release view 20260101.0\nrelease upload 20260101.0 ${assets}/asset.tar.gz --clobber\n`,
@@ -409,6 +437,7 @@ fi
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-publish-"));
     const previous = process.cwd();
     const previousPath = process.env.PATH;
+
     try {
       const sha = initRepo(root);
       const bin = join(root, "bin");
@@ -427,6 +456,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
       process.chdir(root);
       process.env.PATH = `${bin}:${previousPath}`;
       process.env.GH_LOG = log;
+
       const exit = await runStage({
         stage: "publish-release",
         assetRoot: assets,
@@ -435,6 +465,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
         existingRelease: "false",
         prerelease: "true",
       });
+
       expect(exit._tag).toBe("Success");
       expect(readFileSync(log, "utf8")).toContain(
         `release create 20260101.0 ${assets}/asset.tar.gz --target ${sha} --title 20260101.0 --notes Rolling release 20260101.0 from commit ${sha}. --prerelease`,
@@ -451,6 +482,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-publish-"));
     const previous = process.cwd();
     const previousPath = process.env.PATH;
+
     try {
       const sha = initRepo(root);
       git(["tag", "20260101.0"], root);
@@ -470,6 +502,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
       process.chdir(root);
       process.env.PATH = `${bin}:${previousPath}`;
       process.env.GH_LOG = log;
+
       const exit = await runStage({
         stage: "publish-release",
         assetRoot: assets,
@@ -478,6 +511,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
         existingRelease: "false",
         prerelease: "false",
       });
+
       expect(exit._tag).toBe("Success");
       const logged = readFileSync(log, "utf8");
       expect(logged).toContain("release view 20260101.0");
@@ -495,6 +529,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
   it("fails when an existing tag points at another commit", async () => {
     const root = mkdtempSync(join(tmpdir(), "release-bun-cli-publish-"));
     const previous = process.cwd();
+
     try {
       initRepo(root);
       git(["tag", "20260101.0"], root);
@@ -504,6 +539,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
       mkdirSync(assets);
       writeFileSync(join(assets, "asset.tar.gz"), "asset\n");
       process.chdir(root);
+
       const exit = await runStage({
         stage: "publish-release",
         assetRoot: assets,
@@ -512,6 +548,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
         existingRelease: "false",
         prerelease: "true",
       });
+
       expect(exit._tag).toBe("Failure");
     } finally {
       process.chdir(previous);
@@ -526,14 +563,17 @@ describe("release-bun-cli version job", () => {
     const previous = process.cwd();
     const output = join(root, "github-output");
     writeFileSync(output, "");
+
     try {
       const sha = initRepo(root);
       process.chdir(root);
       process.env.GITHUB_OUTPUT = output;
+
       const exit = await runStage({
         stage: "allocate-version",
         releaseVersion: "20260101.7",
       });
+
       expect(exit._tag).toBe("Success");
       const written = readFileSync(output, "utf8");
       expect(written).toContain("release-version");

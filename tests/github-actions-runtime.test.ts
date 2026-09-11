@@ -13,10 +13,13 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const releaseBundle = resolve(".github/actions/release-bun-cli/dist/index.js");
+
 const dispatchBundle = resolve(
   ".github/actions/build-arch-package/dist/index.js",
 );
+
 const version = "20260101.0";
+
 const sha = "0123456789abcdef0123456789abcdef01234567";
 
 const fixture = () => {
@@ -43,6 +46,7 @@ if [[ "$2" == edit && -n "$GH_ADD_ASSET" ]]; then touch "$GH_ADD_ASSET"; fi
 `,
   );
   chmodSync(join(bin, "gh"), 0o755);
+
   const env = {
     ...process.env,
     LC_ALL: "C",
@@ -63,6 +67,7 @@ if [[ "$2" == edit && -n "$GH_ADD_ASSET" ]]; then touch "$GH_ADD_ASSET"; fi
     INPUT_EXISTINGRELEASE: "false",
     INPUT_PRERELEASE: "true",
   };
+
   return {
     root,
     env,
@@ -106,6 +111,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
     "creates a release with prerelease=%s and literal asset arguments",
     (prerelease) => {
       const test = fixture();
+
       try {
         initRepo(test);
         test.env.INPUT_PRERELEASE = prerelease;
@@ -143,6 +149,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
 
   it("uploads to an explicitly existing release without a local tag or edit", () => {
     const test = fixture();
+
     try {
       test.env.INPUT_EXISTINGRELEASE = "true";
       const result = test.run(runtime, releaseBundle);
@@ -167,6 +174,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
 
   it("checks the tag before probing, then edits before enumerating upload assets", () => {
     const test = fixture();
+
     try {
       initRepo(test);
       test.git(["tag", version]);
@@ -207,6 +215,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
 
   it("creates after a same-commit release probe exits nonzero", () => {
     const test = fixture();
+
     try {
       initRepo(test);
       test.git(["tag", version]);
@@ -225,9 +234,12 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
     "stops on %s failure without retrying a mutation",
     (command) => {
       const test = fixture();
+
       try {
         initRepo(test);
+
         if (command === "edit") test.git(["tag", version]);
+
         if (command === "view" || command === "upload")
           test.env.INPUT_EXISTINGRELEASE = "true";
         test.env.GH_FAIL = command;
@@ -249,6 +261,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
 
   it("rejects a mismatched tag before invoking gh", () => {
     const test = fixture();
+
     try {
       initRepo(test);
       test.git(["tag", version]);
@@ -269,6 +282,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
 
   it("retains Bash's unmatched asset glob", () => {
     const test = fixture();
+
     try {
       test.env.INPUT_EXISTINGRELEASE = "true";
       test.env.INPUT_ASSETROOT = "missing assets";
@@ -290,6 +304,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
     "sends a single dispatch POST with JSON on stdin (failure=%s)",
     (fail) => {
       const test = fixture();
+
       try {
         const env = Object.assign(test.env, {
           INPUT_STAGE: "dispatch",
@@ -299,6 +314,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
           INPUT_ARTIFACTNAME: 'candidate "quote"\n$(touch should-not-exist)',
           GH_FAIL: fail ? "api" : "",
         });
+
         const result = test.run(runtime, dispatchBundle);
         expect(result.error).toBeUndefined();
         expect(result.status).toBe(fail ? 1 : 0);
@@ -325,6 +341,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
         );
         expect(existsSync(join(test.root, "should-not-exist"))).toBe(false);
         expect(result.stderr).toBe(fail ? "--method stderr\n" : "");
+
         if (fail) {
           expect(result.stdout).toContain("--method stdout\n");
           expect(result.stdout).toContain(

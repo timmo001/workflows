@@ -11,6 +11,7 @@ const program = Effect.gen(function* () {
     "auxiliaryFilePaths",
     "aurSshPrivateKey",
   ]).pipe(Effect.mapError(ActionRuntime.toActionFailure));
+
   yield* run(inputs);
 });
 

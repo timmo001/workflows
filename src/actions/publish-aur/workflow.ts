@@ -15,10 +15,12 @@ export const Inputs = Schema.Struct({
   aurCloneUrl: Schema.optionalKey(Schema.String),
   actionPath: Schema.optionalKey(Schema.String),
 });
+
 export interface Inputs extends Schema.Schema.Type<typeof Inputs> {}
 
 const failure = (message: string, title?: string) => {
   if (title === undefined) return new Annotations.ActionFailure({ message });
+
   return new Annotations.ActionFailure({ message, title });
 };
 
@@ -74,6 +76,7 @@ const validate = Effect.fn("PublishAur.validate")(function* (inputs: Inputs) {
     inputs.pkgbuildPath,
     "pkgbuild-path",
   );
+
   yield* runScript(inputs, "validate", {
     ARTIFACT_ROOT: `${process.env.RUNNER_TEMP}/aur-input`,
     AUXILIARY_FILE_PATHS: inputs.auxiliaryFilePaths ?? "",
@@ -106,6 +109,7 @@ const push = Effect.fn("PublishAur.push")(function* (inputs: Inputs) {
     inputs.aurSshPrivateKey,
     "aur-ssh-private-key",
   );
+
   yield* runScript(inputs, "push", {
     AUR_ROOT: `${process.env.RUNNER_TEMP}/aur-repository`,
     AUR_SSH_PRIVATE_KEY: privateKey,
@@ -115,7 +119,9 @@ const push = Effect.fn("PublishAur.push")(function* (inputs: Inputs) {
 
 export const run = Effect.fn("PublishAur.run")(function* (inputs: Inputs) {
   const invalid = validateIdentity(inputs);
+
   if (invalid !== undefined) return yield* invalid;
+
   switch (inputs.stage) {
     case "validate":
       return yield* validate(inputs);

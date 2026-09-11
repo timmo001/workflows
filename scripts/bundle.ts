@@ -59,14 +59,18 @@ for (const action of actions) {
   // The Git-pinned SDK exposes TypeScript through its bun export; output stays Node ESM.
   await $`bun build ${action.entry} --target=node --conditions=bun --format=esm --outfile=${temporary}`;
   const next = await readFile(temporary);
+
   if (check) {
     let current: Uint8Array | undefined;
+
     try {
       current = await readFile(absoluteOut);
     } catch {
       current = undefined;
     }
+
     await $`rm -f ${temporary}`;
+
     if (current === undefined || digest(current) !== digest(next)) {
       console.error(
         `Bundled action is out of date: ${action.outfile}\nRun: bun run bundle`,
@@ -74,9 +78,11 @@ for (const action of actions) {
       process.exitCode = 1;
       continue;
     }
+
     console.log(`Bundle up to date: ${action.outfile}`);
     continue;
   }
+
   await writeFile(absoluteOut, next);
   await $`rm -f ${temporary}`;
   console.log(`Wrote ${action.outfile}`);

@@ -12,6 +12,7 @@ const program = Effect.gen(function* () {
     "jsrCliVersion",
     "releaseTag",
   ]).pipe(Effect.mapError(ActionRuntime.toActionFailure));
+
   yield* run(inputs);
 });
 

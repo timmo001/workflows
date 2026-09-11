@@ -5,15 +5,19 @@ const inputEnvName = (name: string) =>
 
 export const readRawInput = (name: string): string | undefined => {
   const value = process.env[inputEnvName(name)];
+
   return value === undefined || value === "" ? undefined : value;
 };
 
 export const readInputs = (names: readonly string[]) => {
   const inputs: Record<string, string> = {};
+
   for (const name of names) {
     const value = readRawInput(name);
+
     if (value !== undefined) inputs[name] = value;
   }
+
   return inputs;
 };
 

@@ -14,6 +14,7 @@ const program = Effect.gen(function* () {
     "packageName",
     "distDir",
   ]).pipe(Effect.mapError(ActionRuntime.toActionFailure));
+
   yield* run(inputs);
 });
 

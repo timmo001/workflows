@@ -19,6 +19,7 @@ export const Inputs = Schema.Struct({
   packageName: Schema.optionalKey(Schema.String),
   distDir: Schema.optionalKey(Schema.String),
 });
+
 export interface Inputs extends Schema.Schema.Type<typeof Inputs> {}
 
 export const ARTIFACT_NAME_PREFIX = "python-package-distributions";
@@ -28,6 +29,7 @@ export const artifactName = (runId: string, runAttempt: string) =>
 
 const failure = (message: string, title?: string) => {
   if (title === undefined) return new Annotations.ActionFailure({ message });
+
   return new Annotations.ActionFailure({ message, title });
 };
 
@@ -49,17 +51,21 @@ export const validateEvent = (inputs: Inputs) => {
   if (inputs.eventName !== "release") {
     return failure("PyPI publication requires a release event.");
   }
+
   if (inputs.eventAction !== "published") {
     return failure("PyPI publication requires a published release.");
   }
+
   if (inputs.releaseDraft !== "false") {
     return failure("Draft releases cannot be published to PyPI.");
   }
+
   if (inputs.releasePrerelease !== "false") {
     return failure(
       "Prereleases cannot be published through the stable PyPI workflow.",
     );
   }
+
   if (inputs.releaseTag === undefined || inputs.releaseTag === "") {
     return failure("The release has no tag.");
   }
@@ -177,12 +183,15 @@ const validateSource = Effect.fn("BuildPythonPypiRelease.validateSource")(
   function* (inputs: Inputs) {
     const commands = yield* CommandExecutor.Service;
     const tag = yield* requireInput(inputs.releaseTag, "release-tag");
+
     const sourceSha = (yield* commands
       .run("git", ["rev-parse", "HEAD"])
       .pipe(mapCommand)).trim();
+
     const tagSha = (yield* commands
       .run("git", ["rev-parse", "--verify", `refs/tags/${tag}^{commit}`])
       .pipe(mapCommand)).trim();
+
     if (tagSha !== sourceSha) {
       return yield* failure(
         `Release tag ${tag} resolves to ${tagSha}, not event source ${sourceSha}.`,
@@ -226,9 +235,12 @@ export const run = Effect.fn("BuildPythonPypiRelease.run")(function* (
   switch (inputs.stage) {
     case "validate-event": {
       const invalid = validateEvent(inputs);
+
       if (invalid !== undefined) return yield* invalid;
+
       return;
     }
+
     case "validate-source":
       return yield* validateSource(inputs);
     case "validate-tag":

@@ -18,6 +18,7 @@ export const Stage = Schema.Literals([
 ]);
 
 export const Architecture = Schema.Literals(["x86_64", "aarch64"]);
+
 export type Architecture = typeof Architecture.Type;
 
 const GitHubBoolean = Schema.Literals(["true", "false"]);
@@ -39,6 +40,7 @@ export const Inputs = Schema.Struct({
   assetRoot: Schema.optionalKey(Schema.String),
   nfpmVersion: Schema.optionalKey(Schema.String),
 });
+
 export interface Inputs extends Schema.Schema.Type<typeof Inputs> {}
 
 export const architectureProfiles = {
@@ -61,6 +63,7 @@ export const architectureProfiles = {
 export const expectedReleaseAssetCount = 6;
 
 export const VERSION_PATTERN = /^[0-9]{8}\.[0-9]+$/;
+
 export const IDENTITY_PATTERN = /^[a-z0-9][a-z0-9._+-]*$/;
 
 export const linuxAssetNames = (
@@ -69,6 +72,7 @@ export const linuxAssetNames = (
   architecture: Architecture,
 ) => {
   const profile = architectureProfiles[architecture];
+
   return [
     `${packageName}-${version}-linux-${architecture}.tar.gz`,
     `${packageName}_${version}_${profile.debArchitecture}.deb`,
@@ -81,6 +85,7 @@ export const isSafeRelativePath = (path: string) =>
 
 export const newlineValues = (value: string | undefined) => {
   if (value === undefined || value === "") return [];
+
   return value.split("\n").filter((line) => line.length > 0);
 };
 
@@ -91,6 +96,7 @@ export const archiveMemberPaths = (
 
 const failure = (message: string, title?: string) => {
   if (title === undefined) return new Annotations.ActionFailure({ message });
+
   return new Annotations.ActionFailure({ message, title });
 };
 
@@ -110,6 +116,7 @@ const mapCommand = Effect.mapError((error: CommandExecutor.CommandError) =>
 
 const commandLines = (stdout: string) => {
   const trimmed = stdout.trim();
+
   return trimmed === "" ? [] : trimmed.split("\n");
 };
 
@@ -123,21 +130,27 @@ export const resolveReleaseVersion = (input: {
     if (!VERSION_PATTERN.test(input.requestedVersion)) {
       return failure(`Invalid release version: ${input.requestedVersion}`);
     }
+
     return input.requestedVersion;
   }
+
   const existing = input.tagsPointingAtSource.find((tag) =>
     VERSION_PATTERN.test(tag),
   );
+
   if (existing !== undefined) return existing;
   const latest = input.tagsForReleaseDate[0];
+
   if (latest === undefined) return `${input.releaseDate}.0`;
   const prefix = `${input.releaseDate}.`;
   const sequence = latest.startsWith(prefix) ? latest.slice(prefix.length) : "";
+
   if (!/^[0-9]+$/.test(sequence)) {
     return failure(
       `Invalid release tag in the ${input.releaseDate} series: ${latest}`,
     );
   }
+
   return `${input.releaseDate}.${Number.parseInt(sequence, 10) + 1}`;
 };
 
@@ -150,9 +163,11 @@ export const validateIdentity = (input: {
   if (!IDENTITY_PATTERN.test(input.binaryName)) {
     return failure(`Invalid binary name: ${input.binaryName}`);
   }
+
   if (!IDENTITY_PATTERN.test(input.packageName)) {
     return failure(`Invalid package name: ${input.packageName}`);
   }
+
   for (const path of [input.entrypoint, input.packageConfig]) {
     if (!isSafeRelativePath(path)) {
       return failure(
@@ -228,18 +243,23 @@ const requireIdentity = (inputs: Inputs) =>
   Effect.gen(function* () {
     const binaryName = yield* requireInput(inputs.binaryName, "binary-name");
     const entrypoint = yield* requireInput(inputs.entrypoint, "entrypoint");
+
     const packageConfig = yield* requireInput(
       inputs.packageConfig,
       "package-config",
     );
+
     const packageName = resolvedPackageName(inputs, binaryName);
+
     const invalid = validateIdentity({
       binaryName,
       packageName,
       entrypoint,
       packageConfig,
     });
+
     if (invalid !== undefined) return yield* invalid;
+
     return { binaryName, packageName, entrypoint, packageConfig };
   });
 
@@ -247,12 +267,15 @@ const allocateVersion = Effect.fn("ReleaseBunCli.allocateVersion")(function* (
   inputs: Inputs,
 ) {
   const commands = yield* CommandExecutor.Service;
+
   const sourceSha = (yield* commands
     .run("git", ["rev-parse", "HEAD"])
     .pipe(mapCommand)).trim();
+
   const releaseDate = (yield* commands
     .run("date", ["--utc", "+%Y%m%d"])
     .pipe(mapCommand)).trim();
+
   const tagsPointingAtSource = commandLines(
     yield* commands
       .run("git", [
@@ -264,6 +287,7 @@ const allocateVersion = Effect.fn("ReleaseBunCli.allocateVersion")(function* (
       ])
       .pipe(mapCommand),
   );
+
   const tagsForReleaseDate = commandLines(
     yield* commands
       .run("git", [
@@ -274,12 +298,14 @@ const allocateVersion = Effect.fn("ReleaseBunCli.allocateVersion")(function* (
       ])
       .pipe(mapCommand),
   );
+
   const version = resolveReleaseVersion({
     requestedVersion: inputs.releaseVersion,
     releaseDate,
     tagsPointingAtSource,
     tagsForReleaseDate,
   });
+
   if (version instanceof Annotations.ActionFailure) return yield* version;
   yield* ActionOutputs.setOutput("release-version", version);
   yield* ActionOutputs.setOutput("source-sha", sourceSha);
@@ -335,10 +361,12 @@ const preparePackage = Effect.fn("ReleaseBunCli.preparePackage")(function* (
   inputs: Inputs,
 ) {
   const commands = yield* CommandExecutor.Service;
+
   const command = yield* requireInput(
     inputs.packagePrepareCommand,
     "package-prepare-command",
   );
+
   yield* commands
     .stream("bash", ["-euo", "pipefail", "-c", command], {
       label: "prepare package files",
@@ -373,10 +401,12 @@ const buildAssets = Effect.fn("ReleaseBunCli.buildAssets")(function* (
   const architecture = yield* requireInput(inputs.architecture, "architecture");
   const version = yield* requireInput(inputs.releaseVersion, "release-version");
   const extraPaths = newlineValues(inputs.archiveExtraPaths);
+
   for (const path of extraPaths) {
     if (!isSafeRelativePath(path)) {
       return yield* failure(`Invalid archive path: ${path}`);
     }
+
     const exists = yield* fs
       .exists(`dist/release/root/${path}`)
       .pipe(
@@ -384,9 +414,12 @@ const buildAssets = Effect.fn("ReleaseBunCli.buildAssets")(function* (
           failure(String(error), "File operation failed"),
         ),
       );
+
     if (!exists) return yield* failure(`Archive path not found: ${path}`);
   }
+
   const profile = architectureProfiles[architecture];
+
   const archiveEnv = {
     ARCHIVE_PATHS: archiveMemberPaths(
       identity.binaryName,
@@ -400,6 +433,7 @@ const buildAssets = Effect.fn("ReleaseBunCli.buildAssets")(function* (
     RPM_ARCHITECTURE: profile.rpmArchitecture,
     ARCH: profile.nfpmArchitecture,
   };
+
   yield* commands
     .stream("bash", ["-c", writeArchiveScript], {
       label: "create release archive",
@@ -432,14 +466,17 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
 ) {
   const commands = yield* CommandExecutor.Service;
   const assetRoot = yield* requireInput(inputs.assetRoot, "asset-root");
+
   const releaseVersion = yield* requireInput(
     inputs.releaseVersion,
     "release-version",
   );
+
   const sourceSha = yield* requireInput(inputs.sourceSha, "source-sha");
   const gh = yield* Gh;
   const label = "publish GitHub release";
   const github = yield* GitHubCommand.make(label);
+
   const env = {
     ASSET_ROOT: assetRoot,
     EXISTING_RELEASE: inputs.existingRelease ?? "false",
@@ -447,6 +484,7 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
     RELEASE_VERSION: releaseVersion,
     SOURCE_SHA: sourceSha,
   };
+
   const assets = commands
     .run("bash", ["-c", 'set -euo pipefail\nprintf "%s\\0" "$ASSET_ROOT"/*'], {
       env,
@@ -455,6 +493,7 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
       mapCommand,
       Effect.map((stdout) => stdout.split("\0").slice(0, -1)),
     );
+
   if (env.EXISTING_RELEASE === "true") {
     yield* github.stream(["release", "view", releaseVersion], {
       env,
@@ -464,12 +503,16 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
       ["release", "upload", releaseVersion, ...(yield* assets), "--clobber"],
       { env },
     );
+
     return;
   }
+
   const tag = yield* commands
     .capture("bash", ["-c", releaseTagScript], { env })
     .pipe(mapCommand);
+
   if (tag.stderr !== "") yield* github.writeStderr(`${tag.stderr}\n`);
+
   if (tag.exitCode !== 0) {
     return yield* failure(
       tag.stderr.slice(-16 * 1024).trim() ||
@@ -477,6 +520,7 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
       "Command failed",
     );
   }
+
   const releaseExists =
     tag.stdout === "true" &&
     (yield* gh.stream(["release", "view", releaseVersion], { env }).pipe(
@@ -485,6 +529,7 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
       Effect.catchTag("GhCommandError", () => Effect.succeed(false)),
       github.mapError,
     ));
+
   const flags = [
     "--target",
     sourceSha,
@@ -493,6 +538,7 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
     "--notes",
     `Rolling release ${releaseVersion} from commit ${sourceSha}.`,
   ];
+
   if (releaseExists) {
     yield* github.stream(
       [

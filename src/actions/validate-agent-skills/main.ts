@@ -7,6 +7,7 @@ const program = Effect.gen(function* () {
   const inputs = yield* ActionInputs.decodeInputs(Inputs, ["skillRoots"]).pipe(
     Effect.mapError(ActionRuntime.toActionFailure),
   );
+
   yield* run(inputs);
 });
 

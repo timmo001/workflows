@@ -175,6 +175,9 @@ var isTagged = /* @__PURE__ */ dual(2, (self, tag) => hasProperty(self, "_tag") 
 function isIterable(input) {
   return hasProperty(input, Symbol.iterator) || isString(input);
 }
+function not(self) {
+  return (a) => !self(a);
+}
 
 // node_modules/effect/dist/Hash.js
 var symbol = "~effect/Hash";
@@ -1502,6 +1505,33 @@ var mergeAll = (...ctxs) => {
   return makeUnsafe(map);
 };
 var Reference = Service;
+// node_modules/effect/dist/Data.js
+var taggedEnum = () => new Proxy({}, {
+  get(_target, tag, _receiver) {
+    if (tag === "$is") {
+      return isTagged;
+    } else if (tag === "$match") {
+      return taggedMatch;
+    }
+    return (props) => ({
+      ...props,
+      _tag: tag
+    });
+  }
+});
+function taggedMatch() {
+  if (arguments.length === 1) {
+    const cases = arguments[0];
+    return function(value) {
+      return cases[value._tag](value);
+    };
+  }
+  const value = arguments[0];
+  const cases = arguments[1];
+  return cases[value._tag](value);
+}
+var Error3 = Error2;
+var TaggedError2 = TaggedError;
 // node_modules/effect/dist/Duration.js
 var TypeId4 = "~effect/Duration";
 var bigint0 = /* @__PURE__ */ BigInt(0);
@@ -1913,10 +1943,6 @@ var PreventSchedulerYield = /* @__PURE__ */ Reference("effect/Scheduler/PreventS
   fiberCached: true,
   defaultValue: () => false
 });
-
-// node_modules/effect/dist/Data.js
-var Error3 = Error2;
-var TaggedError2 = TaggedError;
 
 // node_modules/effect/dist/Encoding.js
 var EncodingErrorTypeId = "~effect/Encoding/EncodingError";
@@ -10609,6 +10635,7 @@ import { join as join2 } from "node:path";
 var Inputs = Struct({
   skillRoots: String4
 });
+var ValidationResult = taggedEnum();
 var parseSkillRoots = (value) => value.trim() === "" ? [] : value.trim().split(/\s+/);
 var isDirectory = fn2("ValidateAgentSkills.isDirectory")(function* (path) {
   const fs = yield* FileSystem;
@@ -10649,10 +10676,7 @@ var validateSkill = fn2("ValidateAgentSkills.validateSkill")(function* (skillDir
       title: "Missing Agent Skill definition",
       file: skillFile
     });
-    return {
-      _tag: "MissingSkillFile",
-      skillDirectory
-    };
+    return ValidationResult.MissingSkillFile({ skillDirectory });
   }
   const commands = yield* Service3;
   const valid = yield* commands.stream("python", ["-m", "skills_ref.cli", "validate", skillDirectory], {
@@ -10665,12 +10689,9 @@ var validateSkill = fn2("ValidateAgentSkills.validateSkill")(function* (skillDir
       title: "Invalid Agent Skill",
       file: skillFile
     });
-    return {
-      _tag: "SkillsRefFailure",
-      skillDirectory
-    };
+    return ValidationResult.SkillsRefFailure({ skillDirectory });
   }
-  return { _tag: "Valid", skillDirectory };
+  return ValidationResult.Valid({ skillDirectory });
 });
 var run3 = fn2("ValidateAgentSkills.run")(function* (inputs) {
   const skillDirectories = yield* discoverSkillDirectories(parseSkillRoots(inputs.skillRoots));
@@ -10681,8 +10702,8 @@ var run3 = fn2("ValidateAgentSkills.run")(function* (inputs) {
   const results = yield* forEach2(skillDirectories, validateSkill, {
     concurrency: 1
   });
-  const checked = results.filter((result) => result._tag !== "MissingSkillFile").length;
-  const failures = results.filter((result) => result._tag !== "Valid").length;
+  const checked = results.filter(not(isTagged("MissingSkillFile"))).length;
+  const failures = results.filter(not(isTagged("Valid"))).length;
   if (failures > 0) {
     const message = `${failures} skill(s) failed validation.`;
     yield* writeStderr(message);
