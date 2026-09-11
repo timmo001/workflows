@@ -9186,7 +9186,13 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
     }))))));
   });
   const execute = fn2("Gh.execute")(function* (args, options) {
-    return yield* stream(args, options).pipe(runFold2(() => ({ stdout: "", stderr: "", exitCode: 0 }), (output, chunk) => chunk._tag === "Stdout" ? { ...output, stdout: output.stdout + chunk.text } : { ...output, stderr: output.stderr + chunk.text }));
+    return yield* stream(args, options).pipe(runFold2(() => ({ stdout: "", stderr: "", exitCode: 0 }), (output, chunk) => value2(chunk).pipe(tag2("Stdout", ({ text }) => ({
+      ...output,
+      stdout: output.stdout + text
+    })), tag2("Stderr", ({ text }) => ({
+      ...output,
+      stderr: output.stderr + text
+    })), exhaustive2)));
   });
   const json = fn2("Gh.json")(function* (args, schema, options) {
     const output = yield* execute(args, options);
