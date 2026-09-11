@@ -4565,6 +4565,15 @@ var runMain = /* @__PURE__ */ makeRunMain(({
 
 // node_modules/@effect/platform-node/dist/NodeRuntime.js
 var runMain2 = runMain;
+// node_modules/effect/dist/BigInt.js
+var BigInt2 = globalThis.BigInt;
+var toNumber = (b) => {
+  if (b > BigInt2(Number.MAX_SAFE_INTEGER) || b < BigInt2(Number.MIN_SAFE_INTEGER)) {
+    return none2();
+  }
+  return some2(Number(b));
+};
+
 // node_modules/effect/dist/ByteSize.js
 var bigint03 = /* @__PURE__ */ BigInt(0);
 var bigint12 = /* @__PURE__ */ BigInt(1);
@@ -9054,7 +9063,7 @@ var bigintToNumber = (value, field) => {
   }
   return number;
 };
-var bigintToNumberOption = (value, field) => map(fromNullishOr(value), (value) => bigintToNumber(value, field));
+var bigintToNumberOption = (value) => flatMap(fromNullishOr(value), toNumber);
 var positionToNumber = (position, method) => try_2({
   try: () => bigintToNumber(position, "position"),
   catch: handleBadArgument(method)
@@ -9326,15 +9335,15 @@ var makeFileInfo = (stat) => try_2({
     atime: fromNullishOr(stat.atime),
     birthtime: fromNullishOr(stat.birthtime),
     dev: bigintToNumber(stat.dev, "dev"),
-    rdev: bigintToNumberOption(stat.rdev, "rdev"),
-    ino: bigintToNumberOption(stat.ino, "ino"),
+    rdev: bigintToNumberOption(stat.rdev),
+    ino: bigintToNumberOption(stat.ino),
     mode: bigintToNumber(stat.mode, "mode"),
-    nlink: bigintToNumberOption(stat.nlink, "nlink"),
-    uid: bigintToNumberOption(stat.uid, "uid"),
-    gid: bigintToNumberOption(stat.gid, "gid"),
+    nlink: bigintToNumberOption(stat.nlink),
+    uid: bigintToNumberOption(stat.uid),
+    gid: bigintToNumberOption(stat.gid),
     size: bytes(stat.size),
     blksize: stat.blksize !== undefined ? some2(bytes(stat.blksize)) : none2(),
-    blocks: bigintToNumberOption(stat.blocks, "blocks")
+    blocks: bigintToNumberOption(stat.blocks)
   }),
   catch: handleBadArgument("stat")
 });
