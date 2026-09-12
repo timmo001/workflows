@@ -5443,8 +5443,22 @@ function isIndexSignatureParameterSide(ast) {
       return false;
   }
 }
+function isIndexSignatureParameterEncodedSide(ast) {
+  const encoded = getLastEncoding(ast);
+  switch (encoded._tag) {
+    case "String":
+    case "Number":
+    case "Symbol":
+    case "TemplateLiteral":
+      return true;
+    case "Union":
+      return encoded.types.every(isIndexSignatureParameterEncodedSide);
+    default:
+      return false;
+  }
+}
 function isIndexSignatureParameter(ast) {
-  return isIndexSignatureParameterSide(ast) && isIndexSignatureParameterSide(toEncoded(ast));
+  return isIndexSignatureParameterSide(ast) && isIndexSignatureParameterEncodedSide(ast);
 }
 var IndexSignature = class {
   parameter;
@@ -5470,7 +5484,16 @@ var Objects = class extends ASTNodeImpl {
     this.propertySignatures = propertySignatures;
     this.indexSignatures = indexSignatures;
     this.encodingChecks = encodingChecks;
-    const duplicates = propertySignatures.map((ps) => ps.name).filter((name, i, arr) => arr.indexOf(name) !== i);
+    const seen = new Set;
+    const duplicates = [];
+    for (const propertySignature of propertySignatures) {
+      const name = propertySignature.name;
+      if (seen.has(name)) {
+        duplicates.push(name);
+      } else {
+        seen.add(name);
+      }
+    }
     if (duplicates.length > 0) {
       throw new Error(`Duplicate identifiers: ${JSON.stringify(duplicates)}. ts(2300)`);
     }
@@ -6285,6 +6308,9 @@ function replaceContext(ast, context) {
   contextOwners.set(out, owner);
   return out;
 }
+function getLastEncoding(ast) {
+  return ast.encoding ? getLastEncoding(ast.encoding[ast.encoding.length - 1].to) : ast;
+}
 function annotate(ast, annotations) {
   if (ast.checks) {
     const last = ast.checks[ast.checks.length - 1];
@@ -6522,9 +6548,10 @@ function getConstructorDescriptor(ast) {
 
 // node_modules/effect/dist/SchemaParser.js
 function makeEffect(schema) {
-  const parser = runWithCompiler(constructorCompiler, toType(schema.ast));
+  const ast = schema.ast;
+  let parser;
   return (input, options) => {
-    return parser(input, options?.disableChecks ? options?.parseOptions ? {
+    return (parser ??= runWithCompiler(constructorCompiler, toType(ast)))(input, options?.disableChecks ? options?.parseOptions ? {
       ...options.parseOptions,
       disableChecks: true
     } : {
@@ -6729,9 +6756,14 @@ var SchemaProto = {
 };
 function make10(ast, options) {
   function Schema() {}
-  const self = Object.defineProperties(Object.setPrototypeOf(Schema, SchemaProto), Object.getOwnPropertyDescriptors({
-    ...options
-  }));
+  const self = Object.setPrototypeOf(Schema, SchemaProto);
+  if (options && (Object.hasOwn(options, "name") || Object.hasOwn(options, "length") || Object.hasOwn(options, "__proto__"))) {
+    Object.defineProperties(self, Object.getOwnPropertyDescriptors({
+      ...options
+    }));
+  } else {
+    Object.assign(self, options);
+  }
   self.ast = ast;
   self.rebuild = (ast) => make10(ast, options);
   self.makeEffect = makeEffect(self);
