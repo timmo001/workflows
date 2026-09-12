@@ -6,7 +6,7 @@
       "name": "@timmo001/workflows-actions",
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.115",
-        "@timmo001/effect-gh": "github:timmo001/effect-gh#be13641400ae77be078663d543e436d434a9e39a",
+        "@timmo001/effect-gh": "github:timmo001/effect-gh#ccb2bfd1ec84e6b4e087d3ff1233d291da7a9597",
         "effect": "4.0.0-rc.113",
       },
       "devDependencies": {
@@ -135,7 +135,7 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@timmo001/effect-gh": ["@timmo001/effect-gh@github:timmo001/effect-gh#be13641", { "peerDependencies": { "effect": "4.0.0-rc.115" } }, "timmo001-effect-gh-be13641", "sha512-a/v59hbfqvR4t24nX6zzBQ8JyXdFQMKB8khqExO60kRMyyFCFPsMfyQfFFWgukcSkydBs9aj0FUnbkROii/5Lw=="],
+    "@timmo001/effect-gh": ["@timmo001/effect-gh@github:timmo001/effect-gh#ccb2bfd", { "peerDependencies": { "effect": "4.0.0-rc.115" } }, "timmo001-effect-gh-ccb2bfd", "sha512-aZy461eaLEayUv0WYe275nQp650tk5gcMSu13prrCw5ty43FVeXC1MOVGq5T03AGIYoSItjtFx6iwzlIZoS+4A=="],
 
     "@timmo001/oxlint-rules": ["@timmo001/oxlint-rules@0.3.3", "", { "peerDependencies": { "@oxlint/plugins": "1.82.0", "oxlint": "1.82.0" }, "bin": { "oxlint-rules": "dist/cli.js" } }, "sha512-Hshoa5LI9HV1VJRUOz7iAhdz1l12ygXB1bfp2bhYkaA1O3zvzUqAIDZa4GGuhbA9z8j3vDG1tzmxbgA7H+/cDQ=="],
 
