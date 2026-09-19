@@ -9540,6 +9540,8 @@ var make19 = /* @__PURE__ */ gen2(function* () {
             const [code] = yield* _await(exitSignal);
             if (code !== 0 && isNotNull(code)) {
               yield* ignore2(killProcessGroup(cmd, childProcess, cmd.options.killSignal ?? "SIGTERM"));
+            } else if (isReferenced && process.platform !== "win32" && cmd.options.detached !== false) {
+              yield* ignore2(terminateProcessGroup(cmd, childProcess, exitSignal, cmd.options));
             }
             return;
           }
