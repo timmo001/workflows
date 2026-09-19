@@ -1285,9 +1285,7 @@ var getOrElse = /* @__PURE__ */ dual(2, (self, onNone) => isNone2(self) ? onNone
 var fromNullishOr = (a) => a == null ? none2() : some2(a);
 var fromUndefinedOr = (a) => a === undefined ? none2() : some2(a);
 var getOrUndefined = /* @__PURE__ */ getOrElse(constUndefined);
-var map = /* @__PURE__ */ dual(2, (self, f) => isNone2(self) ? none2() : some2(f(self.value)));
 var flatMap = /* @__PURE__ */ dual(2, (self, f) => isNone2(self) ? none2() : f(self.value));
-var filter = /* @__PURE__ */ dual(2, (self, predicate) => isNone2(self) ? none2() : predicate(self.value) ? some2(self.value) : none2());
 
 // node_modules/effect/dist/Context.js
 var ServiceTypeId = "~effect/Context/Service";
@@ -1527,7 +1525,7 @@ var isArrayNonEmpty2 = isArrayNonEmpty;
 var isReadonlyArrayNonEmpty = isArrayNonEmpty;
 var empty2 = () => [];
 var of = (a) => [a];
-var map2 = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
+var map = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
 
 // node_modules/effect/dist/Duration.js
 var TypeId4 = "~effect/Duration";
@@ -3057,7 +3055,7 @@ var tapCont = function(value) {
 var tapEffectCont = function(value) {
   return new ContImpl(this.payload, returnPayload, exitSucceed(value));
 };
-var asSome = (self) => map4(self, some2);
+var asSome = (self) => map3(self, some2);
 var andThen = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? returnPayload : andThenCont, f));
 var tap = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? tapEffectCont : tapCont, f));
 var asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
@@ -3099,8 +3097,8 @@ var flatMapEager = /* @__PURE__ */ dual(2, (self, f) => {
   }
   return flatMap2(self, f);
 });
-var map4 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
-var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map4(self, f));
+var map3 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
+var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map3(self, f));
 var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError(self, f));
 var exitInterrupt = (fiberId) => exitFailCause(causeInterrupt(fiberId));
 var exitIsSuccess = (self) => self._tag === "Success";
@@ -3475,7 +3473,7 @@ var all = (arg, options) => {
   }
   return suspend(() => {
     const out = {};
-    return as(forEach(Object.entries(arg), ([key, effect]) => map4(options?.mode === "result" ? result(effect) : effect, (value) => {
+    return as(forEach(Object.entries(arg), ([key, effect]) => map3(options?.mode === "result" ? result(effect) : effect, (value) => {
       assignProperty(out, key, value);
     }), {
       discard: true,
@@ -4189,8 +4187,9 @@ var tracerLogger = /* @__PURE__ */ loggerMake(({
 var isFailReason2 = isFailReason;
 var fromReasons = causeFromReasons;
 var fail4 = causeFail;
+var die2 = causeDie;
 var hasInterruptsOnly2 = hasInterruptsOnly;
-var map5 = causeMap;
+var map4 = causeMap;
 var squash = causeSquash;
 var isDone2 = isDone;
 var Done2 = Done;
@@ -4349,7 +4348,7 @@ class CurrentMemoMap extends (/* @__PURE__ */ Service()("effect/Layer/CurrentMem
     return current ? forkMemoMapUnsafe(current) : makeMemoMapUnsafe();
   }
 }
-var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope) => provideService(map4(self.build(memoMap, scope), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
+var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope) => provideService(map3(self.build(memoMap, scope), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
 var buildWithScope = /* @__PURE__ */ dual(2, (self, scope) => withFiber((fiber) => buildWithMemoMap(self, CurrentMemoMap.forkOrCreate(fiber.context), scope)));
 var succeed5 = function() {
   if (arguments.length === 1) {
@@ -4371,16 +4370,16 @@ var effect = function() {
   }
   return effectImpl(arguments[0], arguments[1]);
 };
-var effectImpl = (service, effect) => effectContext(map4(effect, (value) => make2(service, value)));
+var effectImpl = (service, effect) => effectContext(map3(effect, (value) => make2(service, value)));
 var effectContext = (effect) => fromBuildMemo((_, scope) => provide(effect, scope));
 var mergeAllEffect = (layers, memoMap, scope) => {
   const parentScope = forkUnsafe2(scope, "parallel");
   return forEach(layers, (layer) => layer.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
     concurrency: layers.length
-  }).pipe(map4((context) => mergeAll(...context)));
+  }).pipe(map3((context) => mergeAll(...context)));
 };
 var mergeAll2 = (...layers) => fromBuild((memoMap, scope) => mergeAllEffect(layers, memoMap, scope));
-var provideWith = (self, that, f) => fromBuild((memoMap, scope) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope) : that.build(memoMap, scope), (context) => self.build(memoMap, scope).pipe(provideContext(context), map4((merged) => f(merged, context)))));
+var provideWith = (self, that, f) => fromBuild((memoMap, scope) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope) : that.build(memoMap, scope), (context) => self.build(memoMap, scope).pipe(provideContext(context), map3((merged) => f(merged, context)))));
 var provide2 = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, identity));
 var provideMerge = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, (self, that) => merge(that, self)));
 
@@ -4445,7 +4444,6 @@ var forEach2 = forEach;
 var whileLoop2 = whileLoop;
 var tryPromise2 = tryPromise;
 var succeed6 = succeed3;
-var succeedNone2 = succeedNone;
 var suspend2 = suspend;
 var sync3 = sync;
 var void_3 = void_;
@@ -4454,7 +4452,7 @@ var gen2 = gen;
 var fail6 = fail3;
 var failCause3 = failCause;
 var failCauseSync2 = failCauseSync;
-var die2 = die;
+var die3 = die;
 var try_2 = try_;
 var withFiber2 = withFiber;
 var fromResult2 = fromResult;
@@ -4462,7 +4460,7 @@ var flatMap3 = flatMap2;
 var andThen2 = andThen;
 var tap2 = tap;
 var exit2 = exit;
-var map6 = map4;
+var map5 = map3;
 var as2 = as;
 var catch_2 = catch_;
 var catchTag2 = catchTag;
@@ -4508,7 +4506,7 @@ var effectify = (fn, onError, onSyncError) => (...args) => callback2((resume) =>
       }
     });
   } catch (err) {
-    resume(onSyncError ? fail6(onSyncError(err, args)) : die2(err));
+    resume(onSyncError ? fail6(onSyncError(err, args)) : die3(err));
   }
 });
 var mapEager2 = mapEager;
@@ -4693,7 +4691,7 @@ var fromNumber = (input) => {
   }
   return make5(BigInt(input));
 };
-var parse = (input) => {
+var fromStringUnsafe = (input) => {
   const match = /^\s*(\d+)(?:\.(\d+))?\s*([A-Za-z]+)\s*$/.exec(input);
   if (match === null)
     return invalid2(`unsupported syntax ${JSON.stringify(input)}`);
@@ -4717,7 +4715,7 @@ var fromInputUnsafe2 = (input) => {
     case "number":
       return fromNumber(input);
     case "string":
-      return parse(input);
+      return fromStringUnsafe(input);
   }
   return invalid2(`unsupported input ${input}`);
 };
@@ -5286,12 +5284,12 @@ var asyncQueue = (scope, f, options) => make8({
   capacity: options?.bufferSize,
   strategy: options?.strategy
 }).pipe(tap2((queue) => addFinalizer2(scope, shutdown(queue))), tap2((queue) => forkIn2(provide(f(queue), scope), scope)));
-var callbackArray = (f, options) => fromTransform((_, scope) => map6(asyncQueue(scope, f, options), takeAll2));
+var callbackArray = (f, options) => fromTransform((_, scope) => map5(asyncQueue(scope, f, options), takeAll2));
 var suspend3 = (evaluate) => fromTransform((upstream, scope) => suspend2(() => toTransform(evaluate())(upstream, scope)));
 var empty3 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done2()));
-var map7 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => sync3(() => {
+var map6 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => sync3(() => {
   let i = 0;
-  return map6(pull, (o) => f(o, i++));
+  return map5(pull, (o) => f(o, i++));
 })));
 var mapDone = /* @__PURE__ */ dual(2, (self, f) => mapDoneEffect(self, (o) => succeed6(f(o))));
 var mapDoneEffect = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => succeed6(catchDone(pull, (done) => flatMap3(f(done), done2)))));
@@ -5484,7 +5482,7 @@ var forEach3 = (f) => forEachArray(forEach2((_) => f(_), {
 var forEachArray = (f) => fromTransform2((upstream) => upstream.pipe(flatMap3(f), forever2({
   disableYield: true
 }), catchDone(() => endVoid)));
-var unwrap2 = (effect) => fromChannel2(unwrap(map6(effect, toChannel)));
+var unwrap2 = (effect) => fromChannel2(unwrap(map5(effect, toChannel)));
 
 // node_modules/effect/dist/internal/rcRef.js
 var TypeId13 = "~effect/RcRef";
@@ -5520,7 +5518,7 @@ class RcRefImpl {
 var make9 = (options) => withFiber2((fiber) => {
   const context = fiber.context;
   const scope = get(context, Scope);
-  const ref = new RcRefImpl(options.acquire, context, scope, options.idleTimeToLive ? fromInputUnsafe(options.idleTimeToLive) : undefined);
+  const ref = new RcRefImpl(options.acquire, context, scope, options.idleTimeToLive !== undefined ? fromInputUnsafe(options.idleTimeToLive) : undefined);
   return as2(addFinalizerExit(scope, () => {
     const close2 = ref.state._tag === "Acquired" ? close(ref.state.scope, void_2) : void_3;
     ref.state = stateClosed;
@@ -5607,10 +5605,10 @@ var toChannel2 = (stream) => stream.channel;
 var callback3 = (f, options) => fromChannel3(callbackArray(f, options));
 var empty4 = /* @__PURE__ */ fromChannel3(empty3);
 var suspend4 = (stream) => fromChannel3(suspend3(() => stream().channel));
-var unwrap3 = (effect) => fromChannel3(unwrap(map6(effect, toChannel2)));
-var map8 = /* @__PURE__ */ dual(2, (self, f) => suspend4(() => {
+var unwrap3 = (effect) => fromChannel3(unwrap(map5(effect, toChannel2)));
+var map7 = /* @__PURE__ */ dual(2, (self, f) => suspend4(() => {
   let i = 0;
-  return fromChannel3(map7(self.channel, map2((o) => f(o, i++))));
+  return fromChannel3(map6(self.channel, map((o) => f(o, i++))));
 }));
 var merge3 = /* @__PURE__ */ dual((args) => isStream(args[0]) && isStream(args[1]), (self, that, options) => fromChannel3(merge2(toChannel2(self), toChannel2(that), options)));
 var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (upstream, scope) => sync3(() => {
@@ -5627,7 +5625,7 @@ var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (up
     done = fail5(error);
     return done2();
   }));
-  const pull = map6(suspend2(() => sink.transform(upstreamWithLeftover, scope)), ([value, leftover_]) => {
+  const pull = map5(suspend2(() => sink.transform(upstreamWithLeftover, scope)), ([value, leftover_]) => {
     leftover = leftover_;
     return of(value);
   });
@@ -5635,12 +5633,12 @@ var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (up
 })));
 var decodeText = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, options) => suspend4(() => {
   const decoder = new TextDecoder(options?.encoding);
-  return map8(self, (chunk) => decoder.decode(chunk, {
+  return map7(self, (chunk) => decoder.decode(chunk, {
     stream: true
   }));
 }));
 var splitLines2 = (self) => self.channel.pipe(pipeTo(splitLines()), fromChannel3);
-var run = /* @__PURE__ */ dual(2, (self, sink) => scopedWith2((scope) => toPullScoped(self.channel, scope).pipe(flatMap3((upstream) => sink.transform(upstream, scope)), map6(([a]) => a))));
+var run = /* @__PURE__ */ dual(2, (self, sink) => scopedWith2((scope) => toPullScoped(self.channel, scope).pipe(flatMap3((upstream) => sink.transform(upstream, scope)), map5(([a]) => a))));
 var runCollect = (self) => runFold(self.channel, () => [], (acc, chunk) => {
   for (let i = 0;i < chunk.length; i++) {
     acc.push(chunk[i]);
@@ -5707,7 +5705,7 @@ var make11 = (impl) => FileSystem.of({
   sink: (path, options) => pipe(impl.open(path, {
     ...options,
     flag: options?.flag ?? "w"
-  }), map6((file) => forEach3((_) => file.writeAll(_))), unwrap2),
+  }), map5((file) => forEach3((_) => file.writeAll(_))), unwrap2),
   writeFileString: (path, data, options) => flatMap3(try_2({
     try: () => new TextEncoder().encode(data),
     catch: (cause) => badArgument({
@@ -6365,7 +6363,7 @@ function normalizeFilterOutput(ast, out, input, options) {
     if (!isReadonlyArrayNonEmpty(out)) {
       return;
     }
-    return out.length === 1 ? makeFilterIssue(out[0], input, options) : new Composite(ast, map2(out, (entry) => makeFilterIssue(entry, input, options)), input, options);
+    return out.length === 1 ? makeFilterIssue(out[0], input, options) : new Composite(ast, map(out, (entry) => makeFilterIssue(entry, input, options)), input, options);
   }
   return makeSingle(out, input, options);
 }
@@ -6493,48 +6491,23 @@ function getSchemaIssueOrThrow(cause, message) {
 }
 
 // node_modules/effect/dist/SchemaGetter.js
-var Getter = class extends Class {
-  run;
-  constructor(run) {
-    super();
-    this.run = run;
-  }
-  map(f) {
-    return new Getter((oe, options) => this.run(oe, options).pipe(mapEager2(map(f))));
-  }
-  compose(other) {
-    if (isPassthrough(this)) {
-      return other;
-    }
-    if (isPassthrough(other)) {
-      return this;
-    }
-    return new Getter((oe, options) => this.run(oe, options).pipe(flatMapEager2((ot) => other.run(ot, options))));
-  }
-};
-var passthrough_ = /* @__PURE__ */ new Getter(succeed6);
-function isPassthrough(getter) {
-  return getter.run === passthrough_.run;
-}
+var makeGetter = (fields) => Object.assign(Object.create(Prototype), fields);
+var passthrough_ = /* @__PURE__ */ makeGetter({
+  _tag: "Passthrough"
+});
 function passthrough() {
   return passthrough_;
 }
-function onSome(f) {
-  return new Getter((oe, options) => isNone2(oe) ? succeedNone2 : f(oe.value, options));
-}
 function transform(f) {
-  return transformOptional(map(f));
+  return makeGetter({
+    _tag: "Transform",
+    transform: f
+  });
 }
 function transformEffect(f) {
-  return onSome((e, options) => f(e, options).pipe(mapEager2(some2)));
-}
-function transformOptional(f) {
-  return new Getter((oe) => succeed6(f(oe)));
-}
-function withDefault(defaultValue) {
-  return new Getter((o) => {
-    const filtered = filter(o, isNotUndefined);
-    return isSome2(filtered) ? succeed6(filtered) : mapEager2(defaultValue, some2);
+  return makeGetter({
+    _tag: "TransformEffect",
+    transform: f
   });
 }
 function String2() {
@@ -6544,21 +6517,21 @@ function Number3() {
   return transform(globalThis.Number);
 }
 function parseJson(options) {
-  return onSome((input, parseOptions) => try_2({
-    try: () => some2(JSON.parse(input, options?.reviver)),
+  return transformEffect((input, parseOptions) => try_2({
+    try: () => JSON.parse(input, options?.reviver),
     catch: () => new InvalidValue({
       expected: "a valid JSON string"
     }, input, parseOptions)
   }));
 }
 function stringifyJson(options) {
-  return onSome((input, parseOptions) => try_2({
+  return transformEffect((input, parseOptions) => try_2({
     try: () => {
       const output = JSON.stringify(input, options?.replacer, options?.space);
       if (output === undefined) {
         throw new TypeError("Value cannot be represented as JSON");
       }
-      return some2(output);
+      return output;
     },
     catch: () => new InvalidValue({
       expected: "a JSON-serializable value"
@@ -6576,26 +6549,24 @@ function decodeBase642() {
 
 // node_modules/effect/dist/SchemaTransformation.js
 var TypeId18 = "~effect/SchemaTransformation/Transformation";
-var Transformation = class {
+var Transformation = class extends Class {
   [TypeId18] = TypeId18;
   _tag = "Transformation";
   decode;
   encode;
   constructor(decode, encode) {
+    super();
     this.decode = decode;
     this.encode = encode;
   }
   flip() {
     return new Transformation(this.encode, this.decode);
   }
-  compose(other) {
-    return new Transformation(this.decode.compose(other.decode), other.encode.compose(this.encode));
-  }
 };
 function isTransformation(u) {
   return hasProperty(u, TypeId18) && u[TypeId18] === TypeId18;
 }
-var make12 = (options) => {
+var makeTransformation = (options) => {
   if (isTransformation(options)) {
     return options;
   }
@@ -6833,7 +6804,7 @@ var Arrays = class extends ASTNodeImpl {
       }
     }
   }
-  getParser(compile, compileConstructorDefault = compile) {
+  getParser(compile, compileField = compile) {
     const ast = this;
     let elements;
     let rest;
@@ -6857,11 +6828,11 @@ var Arrays = class extends ASTNodeImpl {
       if (!elements) {
         elements = ast.elements.map((ast) => ({
           ast,
-          parser: compileConstructorDefault(ast)
+          parser: compileField(ast)
         }));
         rest = ast.rest.map((ast) => ({
           ast,
-          parser: compileConstructorDefault(ast)
+          parser: compileField(ast)
         }));
       }
       const len = input.length;
@@ -6918,33 +6889,34 @@ var Arrays = class extends ASTNodeImpl {
     return "array";
   }
 };
+function stepArray(s, item, exit, i) {
+  if (exit._tag === "Failure") {
+    return wrapPropertyKeyIssue(s, s.ast, i, exit);
+  }
+  const value = exit === sameExit ? item : exit[args];
+  if (value !== missing) {
+    s.output[i] = value;
+  } else {
+    const p = s.getParser(s.tailThreshold, i);
+    if (isOptional(p.ast))
+      return;
+    const issue = new Pointer([i], new MissingKey(p.ast.context?.annotations));
+    if (s.options.errors === "all") {
+      if (s.issues)
+        s.issues.push(issue);
+      else
+        s.issues = [issue];
+    } else {
+      return fail5(new Composite(s.ast, [issue], s.input, s.options));
+    }
+  }
+}
 var parseArrayOptions = {
   onItem(s, item, i) {
     const value = i < s.len ? item : missing;
     return s.getParser(s.tailThreshold, i).parser(value, s.options);
   },
-  step(s, item, exit, i) {
-    if (exit._tag === "Failure") {
-      return wrapPropertyKeyIssue(s, s.ast, i, exit);
-    }
-    const value = exit === sameExit ? item : exit[args];
-    if (value !== missing) {
-      s.output[i] = value;
-    } else {
-      const p = s.getParser(s.tailThreshold, i);
-      if (isOptional(p.ast))
-        return;
-      const issue = new Pointer([i], new MissingKey(p.ast.context?.annotations));
-      if (s.options.errors === "all") {
-        if (s.issues)
-          s.issues.push(issue);
-        else
-          s.issues = [issue];
-      } else {
-        return fail5(new Composite(s.ast, [issue], s.input, s.options));
-      }
-    }
-  }
+  step: stepArray
 };
 var parseArray = /* @__PURE__ */ iterateEager()(parseArrayOptions);
 var parseArrayConcurrent = /* @__PURE__ */ iterateConcurrent()(parseArrayOptions);
@@ -6954,7 +6926,7 @@ var wrapPropertyKeyIssue = (s, ast, key, exit) => {
   }
   const issue = getSchemaIssue(exit.cause);
   if (issue === undefined) {
-    return failCause2(map5(exit.cause, (issue) => new Composite(ast, [new Pointer([key], issue)], s.input, s.options)));
+    return failCause2(map4(exit.cause, (issue) => new Composite(ast, [new Pointer([key], issue)], s.input, s.options)));
   }
   const pointer = new Pointer([key], issue);
   if (s.options.errors === "all") {
@@ -7063,7 +7035,7 @@ var Objects = class extends ASTNodeImpl {
       throw new Error(`Duplicate identifiers: ${JSON.stringify(duplicates)}. ts(2300)`);
     }
   }
-  getParser(compile, compileConstructorDefault = compile) {
+  getParser(compile, compileField = compile) {
     const ast = this;
     const expectedKeys = [];
     for (const ps of ast.propertySignatures) {
@@ -7117,14 +7089,14 @@ var Objects = class extends ASTNodeImpl {
     const compileMembers = () => {
       if (!properties) {
         properties = ast.propertySignatures.map((ps) => ({
-          parser: compileConstructorDefault(ps.type),
+          parser: compileField(ps.type),
           name: ps.name,
           type: ps.type
         }));
         indexes = indexCount ? ast.indexSignatures.map((is) => ({
           is,
           parserKey: compile(parameterFromPropertyKey(is.parameter)),
-          parserValue: compileConstructorDefault(is.type)
+          parserValue: compileField(is.type)
         })) : undefined;
       }
       return properties;
@@ -7270,7 +7242,7 @@ var Objects = class extends ASTNodeImpl {
             return terminal;
         }
       } catch (error) {
-        return die2(error);
+        return die3(error);
       }
       return succeed8(out);
     };
@@ -7619,13 +7591,13 @@ var Union = class extends ASTNodeImpl {
     this.options = options;
     this.encodingChecks = encodingChecks;
   }
-  getParser(compile, compileConstructorDefault) {
+  getParser(compile, compileField) {
     const ast = this;
     return (input, options) => {
       if (input === missing) {
         return missingExit;
       }
-      const candidates = getCandidates(input, ast.types, compileConstructorDefault !== undefined);
+      const candidates = getCandidates(input, ast.types, compileField !== undefined);
       if (candidates.length === 0) {
         return fail6(new AnyOf(ast, [], input, options));
       }
@@ -7955,9 +7927,7 @@ var optionalKey = /* @__PURE__ */ memoizeIdempotent((ast) => {
 });
 var optionalKeyLastLink = /* @__PURE__ */ applyToLastLink(optionalKey);
 function withConstructorDefault(ast, defaultValue) {
-  const transformation = new Transformation(withDefault(defaultValue), passthrough());
-  const constructorDefault = new Link(unknown, transformation);
-  const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, constructorDefault, ast.context.annotations) : new Context(false, false, constructorDefault);
+  const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, defaultValue, ast.context.annotations) : new Context(false, false, defaultValue);
   return replaceContext(ast, context);
 }
 function decodeTo(from, to, transformation) {
@@ -8137,8 +8107,8 @@ var HandleProto = {
 var makeHandle = (params) => Object.setPrototypeOf({
   ...params
 }, HandleProto);
-var make13 = (spawn) => {
-  const streamString = (command, options) => spawn(command).pipe(map6((handle) => decodeText(options?.includeStderr === true ? handle.all : handle.stdout)), unwrap3);
+var make12 = (spawn) => {
+  const streamString = (command, options) => spawn(command).pipe(map5((handle) => decodeText(options?.includeStderr === true ? handle.all : handle.stdout)), unwrap3);
   const streamLines = (command, options) => splitLines2(streamString(command, options));
   return ChildProcessSpawner.of({
     spawn,
@@ -8170,7 +8140,7 @@ var makeStandardCommand = (command, args, options) => Object.assign(Object.creat
   args,
   options
 });
-var make14 = function make(...args) {
+var make13 = function make(...args) {
   if (isTemplateString(args[0])) {
     const [templates, ...expressions] = args;
     const tokens = parseTemplates(templates, expressions);
@@ -8485,7 +8455,7 @@ var isProcessAlive = (childProcess, exitSignal) => {
 var taskkill = (childProcess, onExit = () => {}) => NodeChildProcess.execFile("taskkill", ["/pid", String(childProcess.pid), "/T", "/F"], {
   windowsHide: true
 }, onExit);
-var make15 = /* @__PURE__ */ gen2(function* () {
+var make14 = /* @__PURE__ */ gen2(function* () {
   const fs = yield* FileSystem;
   const path = yield* Path;
   const resolveWorkingDirectory = fnUntraced2(function* (options) {
@@ -8846,7 +8816,7 @@ var make15 = /* @__PURE__ */ gen2(function* () {
           getInputFd,
           getOutputFd
         } = yield* setupAdditionalFds(cmd, childProcess, resolvedAdditionalFds);
-        const isRunning = map6(isDone3(exitSignal), (done) => !done);
+        const isRunning = map5(isDone3(exitSignal), (done) => !done);
         const exitCode = flatMap3(_await(exitSignal), ([code, signal]) => {
           if (isNotNull(code)) {
             return succeed6(ExitCode(code));
@@ -8883,7 +8853,7 @@ var make15 = /* @__PURE__ */ gen2(function* () {
           const sourceStream = unwrap3(succeed6(getSourceStream(handles[handles.length - 1], options.from)));
           const toOption = options.to ?? "stdin";
           if (toOption === "stdin") {
-            handles.push(yield* spawnCommand(make14(command.command, command.args, {
+            handles.push(yield* spawnCommand(make13(command.command, command.args, {
               ...command.options,
               stdin: {
                 ...stdinConfig,
@@ -8895,7 +8865,7 @@ var make15 = /* @__PURE__ */ gen2(function* () {
             if (isNotUndefined(fd)) {
               const fdName2 = fdName(fd);
               const existingFds = command.options.additionalFds ?? {};
-              handles.push(yield* spawnCommand(make14(command.command, command.args, {
+              handles.push(yield* spawnCommand(make13(command.command, command.args, {
                 ...command.options,
                 additionalFds: {
                   ...existingFds,
@@ -8906,7 +8876,7 @@ var make15 = /* @__PURE__ */ gen2(function* () {
                 }
               })));
             } else {
-              handles.push(yield* spawnCommand(make14(command.command, command.args, {
+              handles.push(yield* spawnCommand(make13(command.command, command.args, {
                 ...command.options,
                 stdin: {
                   ...stdinConfig,
@@ -8945,9 +8915,9 @@ var make15 = /* @__PURE__ */ gen2(function* () {
       }
     }
   });
-  return make13(spawnCommand);
+  return make12(spawnCommand);
 });
-var layer = /* @__PURE__ */ effect(ChildProcessSpawner, make15);
+var layer = /* @__PURE__ */ effect(ChildProcessSpawner, make14);
 var flattenCommand = (command) => {
   const commands = [];
   const pipeOptions = [];
@@ -8975,6 +8945,32 @@ var flattenCommand = (command) => {
     commands: nonEmptyCommands,
     pipeOptions
   };
+};
+
+// node_modules/effect/dist/internal/ulid.js
+var maxTimestamp = 2 ** 48 - 1;
+var base32Chars = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+var ulidString = (timestampMillis, bytes) => {
+  if (bytes.length !== 10) {
+    throw new Error(`ULID randomness must be exactly 10 bytes, received ${bytes.length}`);
+  }
+  const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxTimestamp);
+  let out = "";
+  for (let shift = 45;shift >= 0; shift -= 5) {
+    out += base32Chars[Math.floor(timestamp / 2 ** shift) & 31];
+  }
+  let accumulator = 0;
+  let bits = 0;
+  for (const byte of bytes) {
+    accumulator = accumulator << 8 | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      out += base32Chars[accumulator >>> bits & 31];
+    }
+    accumulator &= (1 << bits) - 1;
+  }
+  return out;
 };
 
 // node_modules/effect/dist/internal/uuid.js
@@ -9008,9 +9004,9 @@ var v7String = (timestampMillis, bytes) => stringify(bytes === undefined ? v7Byt
 // node_modules/effect/dist/Crypto.js
 var TypeId21 = "~effect/Crypto";
 var Crypto = /* @__PURE__ */ Service("effect/Crypto");
-var make16 = (impl) => {
+var make15 = (impl) => {
   const randomBytesUnsafe = impl.randomBytes;
-  const randomBytes = (size) => map6(validateSize("randomBytes", size), randomBytesUnsafe);
+  const randomBytes = (size) => map5(validateSize("randomBytes", size), randomBytesUnsafe);
   const readUint53 = (bytes) => (bytes[0] & 31) * 2 ** 48 + bytes[1] * 2 ** 40 + bytes[2] * 2 ** 32 + bytes[3] * 2 ** 24 + bytes[4] * 2 ** 16 + bytes[5] * 2 ** 8 + bytes[6];
   const nextDoubleUnsafe = () => readUint53(randomBytesUnsafe(7)) / 2 ** 53;
   const nextIntUnsafe = () => {
@@ -9054,7 +9050,8 @@ var make16 = (impl) => {
       return buffer;
     }),
     randomUUIDv4: sync3(() => v4String(randomBytesUnsafe(16))),
-    randomUUIDv7: clockWith2((clock) => succeed6(v7String(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16))))
+    randomUUIDv7: clockWith2((clock) => succeed6(v7String(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16)))),
+    randomULID: clockWith2((clock) => succeed6(ulidString(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(10))))
   });
 };
 var validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ? succeed6(size) : fail6(badArgument({
@@ -9087,11 +9084,11 @@ var digest = (algorithm, data) => try_2({
     cause
   })
 });
-var make17 = /* @__PURE__ */ make16({
+var make16 = /* @__PURE__ */ make15({
   randomBytes: NodeCrypto.randomBytes,
   digest
 });
-var layer2 = /* @__PURE__ */ succeed5(Crypto, make17);
+var layer2 = /* @__PURE__ */ succeed5(Crypto, make16);
 
 // node_modules/@effect/platform-node/dist/NodeCrypto.js
 var layer3 = layer2;
@@ -9196,7 +9193,7 @@ var makeTempDirectoryScoped = /* @__PURE__ */ (() => {
 var openFactory = (method) => {
   const nodeOpen = effectify(NFS.open, handleErrnoException("FileSystem", method), handleBadArgument(method));
   const nodeClose = effectify(NFS.close, handleErrnoException("FileSystem", method), handleBadArgument(method));
-  return (path, options) => pipe(acquireRelease2(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map6((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
+  return (path, options) => pipe(acquireRelease2(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map5((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
 };
 var open2 = /* @__PURE__ */ openFactory("open");
 var makeFile = /* @__PURE__ */ (() => {
@@ -9245,7 +9242,7 @@ var makeFile = /* @__PURE__ */ (() => {
     read(buffer) {
       return suspend2(() => {
         const position = this.position;
-        return map6(nodeRead(this.fd, {
+        return map5(nodeRead(this.fd, {
           buffer,
           position
         }), (bytesRead) => {
@@ -9262,7 +9259,7 @@ var makeFile = /* @__PURE__ */ (() => {
           }
           const buffer = Buffer.allocUnsafeSlow(size);
           const position = this.position;
-          return map6(nodeReadAlloc(this.fd, {
+          return map5(nodeReadAlloc(this.fd, {
             buffer,
             position
           }), (bytesRead) => {
@@ -9283,7 +9280,7 @@ var makeFile = /* @__PURE__ */ (() => {
       });
     }
     truncate(length) {
-      return map6(nodeTruncate(this.fd, length || undefined), () => {
+      return map5(nodeTruncate(this.fd, length || undefined), () => {
         if (!this.append) {
           const len = BigInt(length ?? 0);
           if (this.position > len) {
@@ -9295,7 +9292,7 @@ var makeFile = /* @__PURE__ */ (() => {
     write(buffer) {
       return suspend2(() => {
         const position = this.position;
-        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "write"), (nodePosition) => map6(nodeWrite(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
+        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "write"), (nodePosition) => map5(nodeWrite(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
           if (!this.append) {
             this.position = position + BigInt(bytesWritten);
           }
@@ -9459,7 +9456,7 @@ var watchNode = (path, info, options) => callback3((queue) => acquireRelease2(sy
   });
   return watcher;
 }), (watcher) => sync3(() => watcher.close())));
-var watch2 = (backend, path, options) => stat2(path).pipe(map6((stat) => backend.pipe(flatMap((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap3);
+var watch2 = (backend, path, options) => stat2(path).pipe(map5((stat) => backend.pipe(flatMap((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap3);
 var writeFile2 = (path, data, options) => callback2((resume, signal) => {
   try {
     NFS.writeFile(path, data, {
@@ -9477,7 +9474,7 @@ var writeFile2 = (path, data, options) => callback2((resume, signal) => {
     resume(fail6(handleBadArgument("writeFile")(err)));
   }
 });
-var makeFileSystem = /* @__PURE__ */ map6(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make11({
+var makeFileSystem = /* @__PURE__ */ map5(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make11({
   access: access2,
   chmod: chmod2,
   chown: chown2,
@@ -9558,7 +9555,7 @@ var layer7 = layer6;
 // node_modules/effect/dist/Stdio.js
 var TypeId22 = "~effect/Stdio";
 var Stdio = /* @__PURE__ */ Service(TypeId22);
-var make18 = (options) => ({
+var make17 = (options) => ({
   [TypeId22]: TypeId22,
   stdinIsTerminal: succeed6(false),
   stdoutIsTerminal: succeed6(false),
@@ -9566,7 +9563,7 @@ var make18 = (options) => ({
 });
 
 // node_modules/@effect/platform-node-shared/dist/NodeStdio.js
-var layer8 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make18({
+var layer8 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make17({
   args: /* @__PURE__ */ sync3(() => process.argv.slice(2)),
   stdinIsTerminal: /* @__PURE__ */ sync3(() => process.stdin.isTTY === true),
   stdoutIsTerminal: /* @__PURE__ */ sync3(() => process.stdout.isTTY === true),
@@ -9605,98 +9602,37 @@ var layer8 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make18({
 // node_modules/@effect/platform-node/dist/NodeStdio.js
 var layer9 = layer8;
 
-// node_modules/effect/dist/SchemaParser.js
-function makeEffect(schema) {
-  const ast = schema.ast;
-  let parser;
-  return (input, options) => {
-    return (parser ??= runWithCompiler(constructorCompiler, toType(ast)))(input, options?.disableChecks ? options?.parseOptions ? {
-      ...options.parseOptions,
-      disableChecks: true
-    } : {
-      disableChecks: true
-    } : options?.parseOptions);
-  };
-}
-function makeOption(schema) {
-  const parser = makeEffect(schema);
-  return (input, options) => {
-    const exit = runSyncExit2(parser(input, options));
-    if (isSuccess3(exit)) {
-      return some2(exit.value);
-    }
-    getSchemaIssueOrThrow(exit.cause, "Option adapter can only return none for schema issues");
-    return none2();
-  };
-}
-function make19(schema) {
-  const parser = makeEffect(schema);
-  return (input, options) => {
-    const exit = runSyncExit2(parser(input, options));
-    if (isSuccess3(exit)) {
-      return exit.value;
-    }
-    const issue = getSchemaIssueOrThrow(exit.cause, "Constructor adapter can only throw schema issues");
-    throw new Error("Schema validation failed", {
-      cause: issue
-    });
-  };
-}
-function decodeUnknownEffect(schema, options) {
-  const parser = run2(schema.ast);
-  return options === undefined ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
-}
-function decodeUnknownExit(schema, options) {
-  return asExit(decodeUnknownEffect(schema, options));
-}
-var mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
-  ...options,
-  ...overrideOptions
-} : options;
-var getValue = (value) => {
-  if (value === missing) {
-    return fail6(new InvalidValue);
+// node_modules/effect/dist/internal/schema/interpreter.js
+var flatMapTransformation = (result, current, f) => result === sameExit ? f(current) : flatMapEager2(result, f);
+function compileTransformation(transformation) {
+  if (transformation._tag === "Middleware") {
+    return (result, current, options) => {
+      const transformed = result === sameExit ? transformation.decode(succeed8(toOption(current)), options) : transformation.decode(mapEager2(result, toOption), options);
+      return fromOptionalEffect(transformed);
+    };
   }
-  return succeed6(value);
-};
-function run2(ast) {
-  return runWithCompiler(normalCompiler, ast);
-}
-function runWithCompiler(compiler, ast) {
-  let parser;
-  return (input, options) => {
-    const result = (parser ??= compiler(ast))(input, options ?? defaultParseOptions);
-    if (result === sameExit) {
-      return succeed6(input);
+  const getter = transformation.decode;
+  switch (getter._tag) {
+    case "Passthrough":
+      return (result, current) => result === sameExit ? succeed8(current) : result;
+    case "Transform": {
+      const transform = (value) => value === missing ? missingExit : succeed8(getter.transform(value));
+      return (result, current) => flatMapTransformation(result, current, transform);
     }
-    if (!effectIsExit(result)) {
-      return flatMapEager2(result, getValue);
+    case "TransformOptional": {
+      const transform = (value) => fromOptionExit(getter.transform(toOption(value)));
+      return (result, current) => flatMapTransformation(result, current, transform);
     }
-    return result[args] === missing ? getValue(missing) : result;
-  };
-}
-function asExit(parser) {
-  return (input, options) => runSyncExit2(parser(input, options));
-}
-var normalCompiler = /* @__PURE__ */ memoize((ast) => makeParser(ast, normalCompiler));
-var constructorCompiler = /* @__PURE__ */ memoize((ast) => makeParser(ast, constructorCompiler, compileConstructorDefault));
-var compileDefaulted = /* @__PURE__ */ memoize((ast) => makeParser(ast, constructorCompiler, compileConstructorDefault, ast.context?.constructorDefault));
-function compileConstructorDefault(ast) {
-  return ast.context?.constructorDefault ? compileDefaulted(ast) : constructorCompiler(ast);
-}
-function applyTransformation(result, current, transformation, options) {
-  let transformed;
-  if (effectIsExit(result) && result._tag === "Success") {
-    const optional = toOption(result === sameExit ? current : result[args]);
-    transformed = transformation._tag === "Transformation" ? transformation.decode.run(optional, options) : transformation.decode(succeed8(optional), options);
-  } else if (transformation._tag === "Transformation") {
-    transformed = flatMapEager2(result, (value) => transformation.decode.run(toOption(value), options));
-  } else {
-    transformed = transformation.decode(mapEager2(result, toOption), options);
+    case "TransformEffect":
+      return (result, current, options) => flatMapTransformation(result, current, (value) => value === missing ? missingExit : getter.transform(value, options));
+    case "TransformOptionalEffect":
+      return (result, current, options) => flatMapTransformation(result, current, (value) => fromOptionalEffect(getter.transform(toOption(value), options)));
   }
-  return effectIsExit(transformed) && transformed._tag === "Success" ? fromOptionExit(transformed[args]) : flatMapEager2(transformed, fromOptionExit);
 }
+var fromOptionalEffect = (effect) => flatMapEager2(effect, fromOptionExit);
+var wrapEncoding = (ast, input, options, effect) => catchCause2(effect, (cause) => failCauseSync2(() => map4(cause, (issue) => new Encoding(ast, issue, input, options))));
 function makeConstructorParser(descriptor, compile) {
+  const transform = compileTransformation(descriptor.link.transformation);
   let sourceParser;
   return (input, options) => {
     if (input === missing)
@@ -9704,20 +9640,45 @@ function makeConstructorParser(descriptor, compile) {
     if (descriptor.isConstructed(input))
       return sameExit;
     const result = (sourceParser ??= compile(descriptor.link.to))(input, options);
-    return applyTransformation(result, input, descriptor.link.transformation, options);
+    return transform(result, input, options);
   };
 }
-function makeParser(ast, compile, compileConstructorDefault, constructorDefault) {
-  const descriptor = compileConstructorDefault ? getConstructorDescriptor(ast) : undefined;
-  const parser = descriptor ? makeConstructorParser(descriptor, compile) : ast.getParser(compile, compileConstructorDefault);
+function withDefault(ast, parser) {
+  const defaultValue = ast.context.constructorDefault;
+  return (input, options) => {
+    if (input !== missing && input !== undefined)
+      return parser(input, options);
+    const result = defaultValue;
+    if (effectIsExit(result) && result._tag === "Success") {
+      const local = parser(result[args], options);
+      return local === sameExit ? result : local;
+    }
+    return flatMapEager2(wrapEncoding(ast, input, options, result), (value) => {
+      const local = parser(value, options);
+      return local === sameExit ? succeed8(value) : local;
+    });
+  };
+}
+function compileField(ast, compile) {
+  const parser = compile(ast);
+  return ast.context?.constructorDefault === undefined ? parser : withDefault(ast, parser);
+}
+function compile(ast, compile, compileField, base, specialize) {
+  if (ast._tag === "Declaration") {
+    for (const parameter of ast.typeParameters)
+      compile(parameter);
+  }
+  const descriptor = compileField ? getConstructorDescriptor(ast) : undefined;
+  const parser = descriptor ? makeConstructorParser(descriptor, compile) : base ?? ast.getParser(compile, compileField);
   const checks = ast.checks;
-  const links = constructorDefault ? ast.encoding ? [...ast.encoding, constructorDefault] : [constructorDefault] : ast.encoding;
+  const links = ast.encoding;
+  const transformations = links?.map((link) => compileTransformation(link.transformation));
   const encodingChecks = ast.encodingChecks;
   if (!links && !checks && !encodingChecks) {
     return parser;
   }
   let encodingParsers;
-  const parseLocal = (input, options) => {
+  const parseChecks = (input, options) => {
     let result = parser(input, options);
     if (encodingChecks && !options.disableChecks) {
       if (effectIsExit(result)) {
@@ -9767,6 +9728,7 @@ function makeParser(ast, compile, compileConstructorDefault, constructorDefault)
     }
     return result;
   };
+  const parseLocal = specialize === undefined ? parseChecks : specialize(parseChecks);
   if (!links) {
     return parseLocal;
   }
@@ -9775,7 +9737,7 @@ function makeParser(ast, compile, compileConstructorDefault, constructorDefault)
     let current = input;
     let result = parsers[parsers.length - 1](input, options);
     for (let i = links.length - 1;i >= 0; i--) {
-      result = applyTransformation(result, current, links[i].transformation, options);
+      result = transformations[i](result, current, options);
       if (i !== 0) {
         const next = parsers[i - 1];
         if (result._tag === "Success") {
@@ -9794,13 +9756,224 @@ function makeParser(ast, compile, compileConstructorDefault, constructorDefault)
       const local = parseLocal(value, options);
       return local === sameExit ? result : local;
     }
-    result = catchCause2(result, (cause) => failCauseSync2(() => map5(cause, (issue) => new Encoding(ast, issue, input, options))));
+    result = wrapEncoding(ast, input, options, result);
     return flatMapEager2(result, (value) => {
       const local = parseLocal(value, options);
       return local === sameExit ? succeed8(value) : local;
     });
   };
 }
+
+// node_modules/effect/dist/internal/schema/compilerRegistry.js
+var invalid3 = /* @__PURE__ */ Symbol();
+var cache = /* @__PURE__ */ new WeakMap;
+var compiler;
+var compilerAdaptersEnabled = false;
+var decodeChild = (ast) => compilerAdaptersEnabled ? lazyParser(resolve4, ast, "parser") : resolve4(ast).parser;
+var makeChild = (ast) => compilerAdaptersEnabled ? lazyParser(resolve4, ast, "makeEffect") : resolve4(ast).makeEffect;
+var makeField = (ast) => compileField(ast, makeChild);
+
+class InterpretedEntry {
+  ast;
+  constructor(ast) {
+    this.ast = ast;
+  }
+  get decodeEffect() {
+    return this.cachedDecodeEffect ??= compile(this.ast, decodeChild);
+  }
+  get parser() {
+    return this.decodeEffect;
+  }
+  get makeEffect() {
+    return this.cachedMakeEffect ??= compile(this.ast, makeChild, makeField);
+  }
+}
+
+class CompilerEntry extends InterpretedEntry {
+  compiled;
+  resolve;
+  constructor(ast, compiled, resolve) {
+    super(ast);
+    this.compiled = compiled;
+    this.resolve = resolve;
+  }
+  save(key, value) {
+    Object.defineProperty(this, key, {
+      value
+    });
+    return value;
+  }
+  operation(key) {
+    const compiled = this.compiled;
+    return typeof compiled === "function" ? compiled(this.ast, this.resolve, key) : compiled?.[key];
+  }
+  get is() {
+    return this.save("is", this.operation("is"));
+  }
+  get decode() {
+    return this.save("decode", this.operation("decode"));
+  }
+  get make() {
+    return this.save("make", this.operation("make"));
+  }
+  get decodeEffect() {
+    return this.save("decodeEffect", this.operation("decodeEffect") ?? compile(this.ast, (ast) => lazyParser(this.resolve, ast, "parser")));
+  }
+  get parser() {
+    const decode = this.decode;
+    return decode === undefined ? this.decodeEffect : this.save("parser", withDecode(decode, () => this.decodeEffect));
+  }
+  get makeEffect() {
+    const makeEffect = this.operation("makeEffect");
+    if (makeEffect !== undefined)
+      return this.save("makeEffect", makeEffect);
+    const child = (ast) => lazyParser(this.resolve, ast, "makeEffect");
+    return this.save("makeEffect", compile(this.ast, child, (ast) => compileField(ast, child)));
+  }
+}
+function withDecode(fastDecode, decodeEffect) {
+  let detailed;
+  return (input, options) => {
+    if (input !== missing) {
+      try {
+        const value = fastDecode(input, options);
+        if (value !== invalid3)
+          return value === input ? sameExit : succeed8(value);
+      } catch (error) {
+        return die3(error);
+      }
+    }
+    return (detailed ??= decodeEffect())(input, options);
+  };
+}
+function lazyParser(resolve, ast, operation) {
+  const entry = resolve(ast);
+  if (entry.compiled === undefined || Object.hasOwn(entry, operation)) {
+    return entry[operation];
+  }
+  let parser;
+  return (input, options) => (parser ??= entry[operation])(input, options);
+}
+function resolve4(ast) {
+  const cached = cache.get(ast);
+  if (cached !== undefined)
+    return cached;
+  const entry = compiler === undefined ? new InterpretedEntry(ast) : new CompilerEntry(ast, compiler(ast, resolve4), resolve4);
+  cache.set(ast, entry);
+  return entry;
+}
+
+// node_modules/effect/dist/SchemaParser.js
+function makeEffect(schema) {
+  const ast = schema.ast;
+  let parser;
+  return (input, options) => {
+    return (parser ??= runWithCompiler(constructorCompiler, toType(ast)))(input, options?.disableChecks ? options?.parseOptions ? {
+      ...options.parseOptions,
+      disableChecks: true
+    } : {
+      disableChecks: true
+    } : options?.parseOptions);
+  };
+}
+function makeOption(schema) {
+  const parser = makeEffect(schema);
+  return (input, options) => {
+    const exit = runSyncExit2(parser(input, options));
+    if (isSuccess3(exit)) {
+      return some2(exit.value);
+    }
+    getSchemaIssueOrThrow(exit.cause, "Option adapter can only return none for schema issues");
+    return none2();
+  };
+}
+function make18(schema) {
+  return makeConstructorSync(toType(schema.ast));
+}
+function decodeUnknownEffect(schema, options) {
+  const parser = run2(schema.ast);
+  return options === undefined ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
+}
+function decodeUnknownExit(schema, options) {
+  return asExit(decodeUnknownEffect(schema, options));
+}
+var mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
+  ...options,
+  ...overrideOptions
+} : options;
+var getValue = (value) => {
+  if (value === missing) {
+    return fail6(new InvalidValue);
+  }
+  return succeed6(value);
+};
+function run2(ast) {
+  return runWithCompiler(normalCompiler, ast);
+}
+function parserResult(result, input) {
+  if (result === sameExit) {
+    return succeed6(input);
+  }
+  if (!effectIsExit(result)) {
+    return flatMapEager2(result, getValue);
+  }
+  return result[args] === missing ? getValue(missing) : result;
+}
+function runWithCompiler(compiler, ast) {
+  let parser;
+  return (input, options) => {
+    const result = (parser ??= compiler(ast))(input, options ?? defaultParseOptions);
+    if (result === sameExit) {
+      return succeed6(input);
+    }
+    if (!effectIsExit(result)) {
+      return flatMapEager2(result, getValue);
+    }
+    return result[args] === missing ? getValue(missing) : result;
+  };
+}
+function asExit(parser) {
+  return (input, options) => runSyncExit2(parser(input, options));
+}
+function runSync2(effect, message) {
+  const exit = runSyncExit2(effect);
+  if (isSuccess3(exit)) {
+    return exit.value;
+  }
+  const issue = getSchemaIssueOrThrow(exit.cause, message);
+  throw new Error("Schema validation failed", {
+    cause: issue
+  });
+}
+function makeConstructorSync(ast) {
+  let entry;
+  let parser;
+  return (input, options) => {
+    entry ??= resolve4(ast);
+    const parseOptions = options?.disableChecks ? options.parseOptions ? {
+      ...options.parseOptions,
+      disableChecks: true
+    } : {
+      disableChecks: true
+    } : options?.parseOptions ?? defaultParseOptions;
+    const make = entry.make;
+    if (make !== undefined && input !== missing) {
+      let output;
+      try {
+        output = make(input, parseOptions);
+      } catch (error) {
+        getSchemaIssueOrThrow(die2(error), "Constructor adapter can only throw schema issues");
+        throw error;
+      }
+      if (output !== invalid3 && output !== missing)
+        return output;
+    }
+    const result = (parser ??= entry.makeEffect)(input, parseOptions);
+    return runSync2(parserResult(result, input), "Constructor adapter can only throw schema issues");
+  };
+}
+var normalCompiler = (ast) => resolve4(ast).parser;
+var constructorCompiler = (ast) => resolve4(ast).makeEffect;
 
 // node_modules/effect/dist/internal/schema/make.js
 var TypeId23 = "~effect/Schema/Schema";
@@ -9819,7 +9992,7 @@ var SchemaProto = {
     return this.rebuild(appendChecks(this.ast, checks));
   }
 };
-function make20(ast, options) {
+function make19(ast, options) {
   function Schema() {}
   const self = Object.setPrototypeOf(Schema, SchemaProto);
   if (options && (Object.hasOwn(options, "name") || Object.hasOwn(options, "length") || Object.hasOwn(options, "__proto__"))) {
@@ -9830,9 +10003,9 @@ function make20(ast, options) {
     Object.assign(self, options);
   }
   self.ast = ast;
-  self.rebuild = (ast) => make20(ast, options);
+  self.rebuild = (ast) => make19(ast, options);
   self.makeEffect = makeEffect(self);
-  self.make = make19(self);
+  self.make = make18(self);
   self.makeOption = makeOption(self);
   return self;
 }
@@ -9847,7 +10020,7 @@ var SchemaErrorTypeId = "~effect/Schema/SchemaError";
 var TypeId24 = TypeId23;
 function declareConstructor() {
   return (typeParameters, run, annotations) => {
-    return make21(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make21(ast))), annotations));
+    return make20(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make20(ast))), annotations));
   };
 }
 function declare(is, annotations) {
@@ -9874,7 +10047,7 @@ class SchemaError extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
   }
 }
 function fromIssueExit(exit) {
-  return isSuccess3(exit) ? exit : failCause2(map5(exit.cause, (issue) => new SchemaError(issue)));
+  return isSuccess3(exit) ? exit : failCause2(map4(exit.cause, (issue) => new SchemaError(issue)));
 }
 function decodeUnknownExit2(schema, options) {
   const parser = decodeUnknownExit(schema, options);
@@ -9882,15 +10055,15 @@ function decodeUnknownExit2(schema, options) {
     return fromIssueExit(parser(input, options));
   };
 }
-var make21 = make20;
+var make20 = make19;
 function isSchema(u) {
   return hasProperty(u, TypeId24) && u[TypeId24] === TypeId24;
 }
-var optionalKey2 = /* @__PURE__ */ lambda((schema) => make21(optionalKey(schema.ast), {
+var optionalKey2 = /* @__PURE__ */ lambda((schema) => make20(optionalKey(schema.ast), {
   schema
 }));
 function Literal2(literal) {
-  const out = make21(new Literal(literal), {
+  const out = make20(new Literal(literal), {
     literal,
     transform(to) {
       return out.pipe(decodeTo2(Literal2(to), {
@@ -9901,11 +10074,11 @@ function Literal2(literal) {
   });
   return out;
 }
-var Unknown2 = /* @__PURE__ */ make21(unknown);
-var String4 = /* @__PURE__ */ make21(string2);
-var Number5 = /* @__PURE__ */ make21(number2);
+var Unknown2 = /* @__PURE__ */ make20(unknown);
+var String4 = /* @__PURE__ */ make20(string2);
+var Number5 = /* @__PURE__ */ make20(number2);
 function makeStruct(ast, fields) {
-  return make21(ast, {
+  return make20(ast, {
     fields,
     mapFields(f, options) {
       const fields = f(this.fields);
@@ -9917,7 +10090,7 @@ function Struct(fields) {
   return makeStruct(struct(fields, undefined), fields);
 }
 function makeTuple(ast, elements) {
-  return make21(ast, {
+  return make20(ast, {
     elements,
     mapElements(f, options) {
       const elements = f(this.elements);
@@ -9928,11 +10101,11 @@ function makeTuple(ast, elements) {
 function Tuple(elements) {
   return makeTuple(tuple(elements), elements);
 }
-var ArraySchema = /* @__PURE__ */ lambda((schema) => make21(new Arrays(false, [], [schema.ast]), {
+var ArraySchema = /* @__PURE__ */ lambda((schema) => make20(new Arrays(false, [], [schema.ast]), {
   value: schema
 }));
 function makeUnion(ast, members) {
-  return make21(ast, {
+  return make20(ast, {
     members,
     mapMembers(f, options) {
       const members = f(this.members);
@@ -9945,14 +10118,14 @@ function Union2(members, options) {
 }
 function decodeTo2(to, transformation) {
   return (from) => {
-    return make21(decodeTo(from.ast, to.ast, transformation ? make12(transformation) : passthrough2()), {
+    return make20(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough2()), {
       from,
       to
     });
   };
 }
 function withConstructorDefault2(defaultValue) {
-  return (schema) => make21(withConstructorDefault(schema.ast, defaultValue), {
+  return (schema) => make20(withConstructorDefault(schema.ast, defaultValue), {
     schema
   });
 }
@@ -9970,7 +10143,7 @@ function instanceOf(constructor, annotations) {
 }
 function link3() {
   return (encodeTo, transformation) => {
-    return new Link(encodeTo.ast, make12(transformation));
+    return new Link(encodeTo.ast, makeTransformation(transformation));
   };
 }
 var makeFilter2 = makeFilter;
@@ -10224,7 +10397,7 @@ function makeClass(Inherited, identifier, struct2, annotations, proto) {
       return getClassSchema(this).rebuild(ast);
     }
     static make(input, options) {
-      return make19(getClassSchema(this))(input ?? {}, options);
+      return make18(getClassSchema(this))(input ?? {}, options);
     }
     static makeOption(input, options) {
       return makeOption(getClassSchema(this))(input ?? {}, options);
@@ -10283,7 +10456,7 @@ function getClassSchemaFactory(from, identifier, annotations) {
     const ClassTypeId = getClassTypeId(identifier);
     const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
     const transformation = getClassTransformation(self);
-    const to = make21(new Declaration([from.ast], () => (input, ast, options) => {
+    const to = make20(new Declaration([from.ast], () => (input, ast, options) => {
       return isClassValue(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options));
     }, {
       identifier,
@@ -10332,14 +10505,14 @@ class QuitError extends (/* @__PURE__ */ Error4("QuitError")({
   [QuitErrorTypeId] = QuitErrorTypeId;
 }
 var Terminal = /* @__PURE__ */ Service("effect/Terminal");
-var make22 = (impl) => Terminal.of({
+var make21 = (impl) => Terminal.of({
   ...impl,
   [TypeId25]: TypeId25
 });
 
 // node_modules/@effect/platform-node-shared/dist/NodeTerminal.js
 import * as readline from "node:readline";
-var make23 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
+var make22 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
   const stdin = process.stdin;
   const stdout = process.stdout;
   const lines = yield* make8();
@@ -10444,7 +10617,7 @@ var make23 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
       cause: err
     }))));
   }));
-  return make22({
+  return make21({
     columns,
     rows,
     readInput,
@@ -10452,7 +10625,7 @@ var make23 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
     display
   });
 });
-var layer10 = /* @__PURE__ */ effect(Terminal, /* @__PURE__ */ make23(defaultShouldQuit));
+var layer10 = /* @__PURE__ */ effect(Terminal, /* @__PURE__ */ make22(defaultShouldQuit));
 function defaultShouldQuit(input) {
   return input.key.ctrl && (input.key.name === "c" || input.key.name === "d");
 }
@@ -10481,7 +10654,7 @@ var makeUnsafe6 = (value) => {
   self.ref = make6(value);
   return self;
 };
-var make24 = (value) => sync3(() => makeUnsafe6(value));
+var make23 = (value) => sync3(() => makeUnsafe6(value));
 var get4 = (self) => sync3(() => self.ref.current);
 var update = /* @__PURE__ */ dual(2, (self, f) => sync3(() => {
   self.ref.current = f(self.ref.current);
@@ -10531,7 +10704,7 @@ var layer13 = sync2(Service2, () => {
 class TestService extends Service()("@timmo001/workflows/Annotations/Test") {
 }
 var testLayer = effectContext(gen2(function* () {
-  const recorded = yield* make24([]);
+  const recorded = yield* make23([]);
   const write = (line) => update(recorded, (lines) => [...lines, line]);
   const service = TestService.of({
     error: fn2("Annotations.Test.error")(function* (message, properties) {
@@ -10576,7 +10749,7 @@ class Service3 extends Service()("@timmo001/workflows/CommandExecutor") {
 }
 var layer14 = effect(Service3, gen2(function* () {
   const spawner = yield* ChildProcessSpawner;
-  const make = (command, args, options) => make14(command, args, {
+  const make = (command, args, options) => make13(command, args, {
     cwd: options?.cwd,
     env: options?.env,
     extendEnv: true
@@ -10615,7 +10788,7 @@ var layer14 = effect(Service3, gen2(function* () {
   const stream = fn2("CommandExecutor.stream")(function* (command, args, options) {
     const label = options?.label ?? `${command} ${args.join(" ")}`.trim();
     return yield* scoped2(gen2(function* () {
-      const handle = yield* spawner.spawn(make14(command, args, {
+      const handle = yield* spawner.spawn(make13(command, args, {
         cwd: options?.cwd,
         env: options?.env,
         extendEnv: true,
@@ -10710,7 +10883,7 @@ var discoverJsonFiles = fn2("ValidateJson.discoverJsonFiles")(function* (root) {
 });
 var validateFile = fn2("ValidateJson.validateFile")(function* (file) {
   const fs = yield* FileSystem;
-  return yield* fs.readFileString(file).pipe(map6((source) => validateJsonSource(file, source)), catch_2((error) => succeed6(ValidationResult.Invalid({
+  return yield* fs.readFileString(file).pipe(map5((source) => validateJsonSource(file, source)), catch_2((error) => succeed6(ValidationResult.Invalid({
     file,
     message: `Unable to read JSON file: ${error}`
   }))));

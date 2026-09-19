@@ -502,6 +502,33 @@ function makeCompareSet(equivalence) {
 var compareSets = /* @__PURE__ */ makeCompareSet(compareBoth);
 var isEqual = (u) => hasProperty(u, symbol2);
 
+// node_modules/effect/dist/internal/array.js
+var isArrayNonEmpty = (self) => self.length > 0;
+
+// node_modules/effect/dist/internal/count.js
+var normalize = (n) => n > 0 ? Math.floor(n) : 0;
+
+// node_modules/effect/dist/internal/record.js
+function assignProperty(self, key, value) {
+  if (key === "__proto__") {
+    Object.defineProperty(self, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  } else {
+    self[key] = value;
+  }
+}
+function assignProperties(self, source) {
+  for (const key of Reflect.ownKeys(source)) {
+    if (Object.prototype.propertyIsEnumerable.call(source, key)) {
+      assignProperty(self, key, source[key]);
+    }
+  }
+}
+
 // node_modules/effect/dist/Redactable.js
 var symbolRedactable = /* @__PURE__ */ Symbol.for("~effect/Redactable");
 var isRedactable = (u) => hasProperty(u, symbolRedactable);
@@ -743,27 +770,6 @@ var pickInternalCall = () => {
   return isNotOptimizedAway ? standard[InternalTypeId] : forced[InternalTypeId];
 };
 var internalCall = /* @__PURE__ */ pickInternalCall();
-
-// node_modules/effect/dist/internal/record.js
-function assignProperty(self, key, value) {
-  if (key === "__proto__") {
-    Object.defineProperty(self, key, {
-      value,
-      writable: true,
-      enumerable: true,
-      configurable: true
-    });
-  } else {
-    self[key] = value;
-  }
-}
-function assignProperties(self, source) {
-  for (const key of Reflect.ownKeys(source)) {
-    if (Object.prototype.propertyIsEnumerable.call(source, key)) {
-      assignProperty(self, key, source[key]);
-    }
-  }
-}
 
 // node_modules/effect/dist/internal/core.js
 var EffectTypeId = `~effect/Effect`;
@@ -1133,12 +1139,6 @@ var done = (value) => {
   return exitFail(Done(value));
 };
 
-// node_modules/effect/dist/Effectable.js
-var Prototype2 = (options) => makePrimitiveProto({
-  op: options.label,
-  [evaluate]: options.evaluate
-});
-
 // node_modules/effect/dist/internal/option.js
 var TypeId = "~effect/Option";
 var CommonProto = {
@@ -1300,9 +1300,64 @@ var getOrElse = /* @__PURE__ */ dual(2, (self, onNone) => isNone2(self) ? onNone
 var fromNullishOr = (a) => a == null ? none2() : some2(a);
 var fromUndefinedOr = (a) => a === undefined ? none2() : some2(a);
 var getOrUndefined = /* @__PURE__ */ getOrElse(constUndefined);
-var map = /* @__PURE__ */ dual(2, (self, f) => isNone2(self) ? none2() : some2(f(self.value)));
 var flatMap = /* @__PURE__ */ dual(2, (self, f) => isNone2(self) ? none2() : f(self.value));
-var filter = /* @__PURE__ */ dual(2, (self, predicate) => isNone2(self) ? none2() : predicate(self.value) ? some2(self.value) : none2());
+
+// node_modules/effect/dist/Result.js
+var succeed2 = succeed;
+var fail2 = fail;
+var isResult2 = isResult;
+var isFailure2 = isFailure;
+var isSuccess2 = isSuccess;
+var match2 = /* @__PURE__ */ dual(2, (self, {
+  onFailure,
+  onSuccess
+}) => isFailure2(self) ? onFailure(self.failure) : onSuccess(self.success));
+
+// node_modules/effect/dist/Iterable.js
+var headUnsafe = (self) => {
+  const iterator = self[Symbol.iterator]();
+  const result = iterator.next();
+  if (result.done)
+    throw new Error("headUnsafe: empty iterable");
+  return result.value;
+};
+var constEmpty = {
+  [Symbol.iterator]() {
+    return constEmptyIterator;
+  }
+};
+var constEmptyIterator = {
+  next() {
+    return {
+      done: true,
+      value: undefined
+    };
+  }
+};
+
+// node_modules/effect/dist/Array.js
+var Array2 = globalThis.Array;
+var fromIterable = (collection) => Array2.isArray(collection) ? collection : Array2.from(collection);
+var append = /* @__PURE__ */ dual(2, (self, last) => [...self, last]);
+var isArray = Array2.isArray;
+var isArrayNonEmpty2 = isArrayNonEmpty;
+var isReadonlyArrayNonEmpty = isArrayNonEmpty;
+var empty = () => [];
+var of = (a) => [a];
+var map = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
+// node_modules/effect/dist/BigInt.js
+var BigInt2 = globalThis.BigInt;
+var toNumber = (b) => {
+  if (b > BigInt2(Number.MAX_SAFE_INTEGER) || b < BigInt2(Number.MIN_SAFE_INTEGER)) {
+    return none2();
+  }
+  return some2(Number(b));
+};
+// node_modules/effect/dist/Effectable.js
+var Prototype2 = (options) => makePrimitiveProto({
+  op: options.label,
+  [evaluate]: options.evaluate
+});
 
 // node_modules/effect/dist/Context.js
 var ServiceTypeId = "~effect/Context/Service";
@@ -1443,7 +1498,7 @@ var Proto = {
 var hasSameCache = (self, that) => self.cacheRoot === that.cacheRoot;
 var isContext = (u) => hasProperty(u, TypeId3);
 var isReference = (u) => !!u[ReferenceTypeId];
-var empty = () => emptyContext2;
+var empty2 = () => emptyContext2;
 var emptyContext2 = /* @__PURE__ */ makeUnsafe(/* @__PURE__ */ new Map);
 var make2 = (key, service) => makeUnsafe(new Map([[key.key, service]]));
 var add = /* @__PURE__ */ dual(3, (self, key, service) => addUnsafe(self, key.key, service));
@@ -1517,6 +1572,7 @@ var mergeAll = (...ctxs) => {
   return makeUnsafe(map);
 };
 var Reference = Service;
+
 // node_modules/effect/dist/Duration.js
 var TypeId4 = "~effect/Duration";
 var bigint0 = /* @__PURE__ */ BigInt(0);
@@ -1740,7 +1796,7 @@ var minutes = (minutes) => make3(minutes * 60000);
 var hours = (hours) => make3(hours * 3600000);
 var days = (days) => make3(days * 86400000);
 var weeks = (weeks) => make3(weeks * 604800000);
-var toMillis = (self) => match2(fromInputUnsafe(self), {
+var toMillis = (self) => match3(fromInputUnsafe(self), {
   onMillis: identity,
   onNanos: (nanos) => Number(nanos) / 1e6,
   onInfinity: () => Infinity,
@@ -1758,7 +1814,7 @@ var toNanosUnsafe = (input) => {
       return roundMillisToNanos(self.value.millis);
   }
 };
-var match2 = /* @__PURE__ */ dual(2, (self, options) => {
+var match3 = /* @__PURE__ */ dual(2, (self, options) => {
   switch (self.value._tag) {
     case "Millis":
       return options.onMillis(self.value.millis);
@@ -1785,55 +1841,6 @@ var Equivalence = (self, that) => matchPair(self, that, {
   onInfinity: (self, that) => self.value._tag === that.value._tag
 });
 var equals2 = /* @__PURE__ */ dual(2, (self, that) => Equivalence(self, that));
-// node_modules/effect/dist/internal/array.js
-var isArrayNonEmpty = (self) => self.length > 0;
-
-// node_modules/effect/dist/internal/count.js
-var normalize = (n) => n > 0 ? Math.floor(n) : 0;
-
-// node_modules/effect/dist/Result.js
-var succeed2 = succeed;
-var fail2 = fail;
-var isResult2 = isResult;
-var isFailure2 = isFailure;
-var isSuccess2 = isSuccess;
-var match3 = /* @__PURE__ */ dual(2, (self, {
-  onFailure,
-  onSuccess
-}) => isFailure2(self) ? onFailure(self.failure) : onSuccess(self.success));
-
-// node_modules/effect/dist/Iterable.js
-var headUnsafe = (self) => {
-  const iterator = self[Symbol.iterator]();
-  const result = iterator.next();
-  if (result.done)
-    throw new Error("headUnsafe: empty iterable");
-  return result.value;
-};
-var constEmpty = {
-  [Symbol.iterator]() {
-    return constEmptyIterator;
-  }
-};
-var constEmptyIterator = {
-  next() {
-    return {
-      done: true,
-      value: undefined
-    };
-  }
-};
-
-// node_modules/effect/dist/Array.js
-var Array2 = globalThis.Array;
-var fromIterable = (collection) => Array2.isArray(collection) ? collection : Array2.from(collection);
-var append = /* @__PURE__ */ dual(2, (self, last) => [...self, last]);
-var isArray = Array2.isArray;
-var isArrayNonEmpty2 = isArrayNonEmpty;
-var isReadonlyArrayNonEmpty = isArrayNonEmpty;
-var empty2 = () => [];
-var of = (a) => [a];
-var map2 = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
 
 // node_modules/effect/dist/Scheduler.js
 var Scheduler = /* @__PURE__ */ Reference("effect/Scheduler", {
@@ -2581,7 +2588,7 @@ class FiberImpl {
     }
     this._stack.length = 0;
     this._children = undefined;
-    this.context = empty();
+    this.context = empty2();
   }
   runLoop(effect) {
     const prevFiber = globalThis[currentFiberTypeId];
@@ -2769,7 +2776,7 @@ var fiberInterruptAs = /* @__PURE__ */ dual((args) => hasProperty(args[0], Fiber
 }));
 var fiberInterruptAll = (fibers) => withFiber((parent) => {
   const annotations = fiberStackAnnotations(parent);
-  let fiberArr = empty2();
+  let fiberArr = empty();
   for (const fiber of fibers) {
     fiber.interruptUnsafe(parent.id, annotations);
     fiberArr.push(fiber);
@@ -2793,7 +2800,7 @@ var suspend = /* @__PURE__ */ makePrimitive({
     return this[args]();
   }
 });
-var fromResult = /* @__PURE__ */ match3({
+var fromResult = /* @__PURE__ */ match2({
   onFailure: fail3,
   onSuccess: succeed3
 });
@@ -3086,7 +3093,7 @@ var tapCont = function(value) {
 var tapEffectCont = function(value) {
   return new ContImpl(this.payload, returnPayload, exitSucceed(value));
 };
-var asSome = (self) => map4(self, some2);
+var asSome = (self) => map3(self, some2);
 var andThen = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? returnPayload : andThenCont, f));
 var tap = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? tapEffectCont : tapCont, f));
 var asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
@@ -3128,8 +3135,8 @@ var flatMapEager = /* @__PURE__ */ dual(2, (self, f) => {
   }
   return flatMap2(self, f);
 });
-var map4 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
-var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map4(self, f));
+var map3 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
+var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map3(self, f));
 var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError(self, f));
 var exitInterrupt = (fiberId) => exitFailCause(causeInterrupt(fiberId));
 var exitIsSuccess = (self) => self._tag === "Success";
@@ -3505,7 +3512,7 @@ var all = (arg, options) => {
   }
   return suspend(() => {
     const out = {};
-    return as(forEach(Object.entries(arg), ([key, effect]) => map4(options?.mode === "result" ? result(effect) : effect, (value) => {
+    return as(forEach(Object.entries(arg), ([key, effect]) => map3(options?.mode === "result" ? result(effect) : effect, (value) => {
       assignProperty(out, key, value);
     }), {
       discard: true,
@@ -3785,7 +3792,7 @@ var fiberRunIn = /* @__PURE__ */ dual(2, (self, scope) => {
   self.addObserver(() => scopeRemoveFinalizerUnsafe(scope, key));
   return self;
 });
-var runFork = /* @__PURE__ */ runForkWith(/* @__PURE__ */ empty());
+var runFork = /* @__PURE__ */ runForkWith(/* @__PURE__ */ empty2());
 var runSyncExitWith = (context) => {
   const runFork = runForkWith(context);
   return (effect) => {
@@ -3799,7 +3806,7 @@ var runSyncExitWith = (context) => {
     return fiber._exit ?? exitDie(new AsyncFiberError(fiber));
   };
 };
-var runSyncExit = /* @__PURE__ */ runSyncExitWith(/* @__PURE__ */ empty());
+var runSyncExit = /* @__PURE__ */ runSyncExitWith(/* @__PURE__ */ empty2());
 var succeedTrue = /* @__PURE__ */ succeed3(true);
 var succeedFalse = /* @__PURE__ */ succeed3(false);
 
@@ -3921,7 +3928,7 @@ var makeSpanUnsafe = (fiber, name, options) => {
     span = noopSpan({
       name,
       parent,
-      annotations: add(options?.annotations ?? empty(), DisablePropagation, true)
+      annotations: add(options?.annotations ?? empty2(), DisablePropagation, true)
     });
   } else {
     const tracer = fiber.getRef(Tracer);
@@ -3934,7 +3941,7 @@ var makeSpanUnsafe = (fiber, name, options) => {
     span = tracer.span({
       name,
       parent,
-      annotations: options?.annotations ?? empty(),
+      annotations: options?.annotations ?? empty2(),
       links,
       startTime: timingEnabled ? clock.currentTimeNanosUnsafe() : bigint02,
       kind: options?.kind ?? "internal",
@@ -4223,10 +4230,24 @@ function interruptChildrenPatch() {
   fiberMiddleware.interruptChildren ??= fiberInterruptChildren;
 }
 
+// node_modules/effect/dist/Cause.js
+var isFailReason2 = isFailReason;
+var fromReasons = causeFromReasons;
+var fail4 = causeFail;
+var die2 = causeDie;
+var hasInterruptsOnly2 = hasInterruptsOnly;
+var map4 = causeMap;
+var squash = causeSquash;
+var findError2 = findError;
+var isDone2 = isDone;
+var Done2 = Done;
+var done2 = done;
+var UnknownError2 = UnknownError;
+
 // node_modules/effect/dist/Exit.js
 var succeed4 = exitSucceed;
 var failCause2 = exitFailCause;
-var fail4 = exitFail;
+var fail5 = exitFail;
 var void_2 = exitVoid;
 var isSuccess3 = exitIsSuccess;
 var isFailure3 = exitIsFailure;
@@ -4263,8 +4284,8 @@ var _await = (self) => callback((resume) => {
   });
 });
 var completeWith = /* @__PURE__ */ dual(2, (self, effect) => sync(() => doneUnsafe(self, effect)));
-var done2 = completeWith;
-var isDone2 = (self) => sync(() => isDoneUnsafe(self));
+var done3 = completeWith;
+var isDone3 = (self) => sync(() => isDoneUnsafe(self));
 var isDoneUnsafe = (self) => self.effect !== undefined;
 var doneUnsafe = (self, effect) => {
   if (self.effect)
@@ -4337,7 +4358,7 @@ var memoMapBuild = (memoMap, layer, scope, build) => {
   memoMap.map.set(layer, entry);
   return scopeAddFinalizerExit(scope, entry.finalizer).pipe(flatMap2(() => build(memoMap, layerScope)), onExit((exit) => {
     entry.effect = exit;
-    return done2(deferred, exit);
+    return done3(deferred, exit);
   }));
 };
 
@@ -4375,7 +4396,7 @@ class CurrentMemoMap extends (/* @__PURE__ */ Service()("effect/Layer/CurrentMem
     return current ? forkMemoMapUnsafe(current) : makeMemoMapUnsafe();
   }
 }
-var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope) => provideService(map4(self.build(memoMap, scope), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
+var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope) => provideService(map3(self.build(memoMap, scope), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
 var buildWithScope = /* @__PURE__ */ dual(2, (self, scope) => withFiber((fiber) => buildWithMemoMap(self, CurrentMemoMap.forkOrCreate(fiber.context), scope)));
 var succeed5 = function() {
   if (arguments.length === 1) {
@@ -4397,31 +4418,18 @@ var effect = function() {
   }
   return effectImpl(arguments[0], arguments[1]);
 };
-var effectImpl = (service, effect) => effectContext(map4(effect, (value) => make2(service, value)));
+var effectImpl = (service, effect) => effectContext(map3(effect, (value) => make2(service, value)));
 var effectContext = (effect) => fromBuildMemo((_, scope) => provide(effect, scope));
 var mergeAllEffect = (layers, memoMap, scope) => {
   const parentScope = forkUnsafe2(scope, "parallel");
   return forEach(layers, (layer) => layer.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
     concurrency: layers.length
-  }).pipe(map4((context) => mergeAll(...context)));
+  }).pipe(map3((context) => mergeAll(...context)));
 };
 var mergeAll2 = (...layers) => fromBuild((memoMap, scope) => mergeAllEffect(layers, memoMap, scope));
-var provideWith = (self, that, f) => fromBuild((memoMap, scope) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope) : that.build(memoMap, scope), (context) => self.build(memoMap, scope).pipe(provideContext(context), map4((merged) => f(merged, context)))));
+var provideWith = (self, that, f) => fromBuild((memoMap, scope) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope) : that.build(memoMap, scope), (context) => self.build(memoMap, scope).pipe(provideContext(context), map3((merged) => f(merged, context)))));
 var provide2 = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, identity));
 var provideMerge = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, (self, that) => merge(that, self)));
-
-// node_modules/effect/dist/Cause.js
-var isFailReason2 = isFailReason;
-var fromReasons = causeFromReasons;
-var fail5 = causeFail;
-var hasInterruptsOnly2 = hasInterruptsOnly;
-var map5 = causeMap;
-var squash = causeSquash;
-var findError2 = findError;
-var isDone3 = isDone;
-var Done2 = Done;
-var done3 = done;
-var UnknownError2 = UnknownError;
 
 // node_modules/effect/dist/internal/random.js
 var nextBetween = (min, max, draw) => {
@@ -4442,7 +4450,7 @@ var nextBetween = (min, max, draw) => {
 // node_modules/effect/dist/Pull.js
 var catchDone = /* @__PURE__ */ dual(2, (effect, f) => catchCauseFilter(effect, filterDoneLeftover, (l) => f(l)));
 var isDoneCause = (cause) => cause.reasons.some(isDoneFailure);
-var isDoneFailure = (failure) => failure._tag === "Fail" && isDone3(failure.error);
+var isDoneFailure = (failure) => failure._tag === "Fail" && isDone2(failure.error);
 var filterDone = (cause) => {
   let done;
   let hasFailure = false;
@@ -4484,7 +4492,6 @@ var forEach2 = forEach;
 var whileLoop2 = whileLoop;
 var tryPromise2 = tryPromise;
 var succeed6 = succeed3;
-var succeedNone2 = succeedNone;
 var suspend2 = suspend;
 var sync3 = sync;
 var void_3 = void_;
@@ -4494,7 +4501,7 @@ var gen2 = gen;
 var fail6 = fail3;
 var failCause3 = failCause;
 var failCauseSync2 = failCauseSync;
-var die2 = die;
+var die3 = die;
 var try_2 = try_;
 var yieldNow2 = yieldNow;
 var withFiber2 = withFiber;
@@ -4503,7 +4510,7 @@ var flatMap3 = flatMap2;
 var andThen2 = andThen;
 var tap2 = tap;
 var exit2 = exit;
-var map6 = map4;
+var map5 = map3;
 var as2 = as;
 var catch_2 = catch_;
 var catchTag2 = catchTag;
@@ -4550,21 +4557,356 @@ var effectify = (fn, onError, onSyncError) => (...args) => callback2((resume) =>
       }
     });
   } catch (err) {
-    resume(onSyncError ? fail6(onSyncError(err, args)) : die2(err));
+    resume(onSyncError ? fail6(onSyncError(err, args)) : die3(err));
   }
 });
 var mapEager2 = mapEager;
 var mapErrorEager2 = mapErrorEager;
 var flatMapEager2 = flatMapEager;
 var fnUntracedEager2 = fnUntracedEager;
-// node_modules/effect/dist/BigInt.js
-var BigInt2 = globalThis.BigInt;
-var toNumber = (b) => {
-  if (b > BigInt2(Number.MAX_SAFE_INTEGER) || b < BigInt2(Number.MIN_SAFE_INTEGER)) {
-    return none2();
+
+// node_modules/effect/dist/internal/schema/annotations.js
+function resolve(ast) {
+  return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
+}
+var STRUCTURAL_ANNOTATION_KEY = "~structural";
+var SENTINELS_ANNOTATION_KEY = "~sentinels";
+var CONSTRUCTOR_ANNOTATION_KEY = "~constructor";
+var getExpected = /* @__PURE__ */ memoize((ast) => {
+  const identifier = resolve(ast)?.identifier;
+  if (typeof identifier === "string")
+    return identifier;
+  return ast.getExpected(getExpected);
+});
+
+// node_modules/effect/dist/internal/schema/parser.js
+var missing = /* @__PURE__ */ Symbol();
+var succeed7 = succeed4;
+var missingExit = /* @__PURE__ */ succeed7(missing);
+var sameExit = /* @__PURE__ */ succeed7(missing);
+var toOption = (value) => value === missing ? none2() : some2(value);
+var fromOptionExit = (option) => option._tag === "None" ? missingExit : succeed7(option.value);
+
+// node_modules/effect/dist/SchemaIssue.js
+var TypeId7 = "~effect/SchemaIssue/Issue";
+function isIssue(u) {
+  return hasProperty(u, TypeId7) && u[TypeId7] === TypeId7;
+}
+function hasInput(issue) {
+  return Object.hasOwn(issue, "input");
+}
+
+class IssueNodeImpl {
+  [TypeId7] = TypeId7;
+  constructor(input, options) {
+    if (options?.reportInput === true && input !== missing) {
+      this.input = input;
+    }
   }
-  return some2(Number(b));
+}
+var Filter = class extends IssueNodeImpl {
+  _tag = "Filter";
+  filter;
+  issue;
+  constructor(filter, issue, input, options) {
+    super(input, options);
+    this.filter = filter;
+    this.issue = issue;
+  }
 };
+var Encoding = class extends IssueNodeImpl {
+  _tag = "Encoding";
+  ast;
+  issue;
+  constructor(ast, issue, input, options) {
+    super(input, options);
+    this.ast = ast;
+    this.issue = issue;
+  }
+};
+var Pointer = class extends IssueNodeImpl {
+  _tag = "Pointer";
+  path;
+  issue;
+  constructor(path, issue) {
+    super();
+    this.path = path;
+    this.issue = issue;
+  }
+};
+var MissingKey = class extends IssueNodeImpl {
+  _tag = "MissingKey";
+  annotations;
+  constructor(annotations) {
+    super();
+    this.annotations = annotations;
+  }
+};
+var UnexpectedKey = class extends IssueNodeImpl {
+  _tag = "UnexpectedKey";
+  ast;
+  constructor(ast, input, options) {
+    super(input, options);
+    this.ast = ast;
+  }
+};
+var Composite = class extends IssueNodeImpl {
+  _tag = "Composite";
+  ast;
+  issues;
+  constructor(ast, issues, input, options) {
+    super(input, options);
+    this.ast = ast;
+    this.issues = issues;
+  }
+};
+var InvalidType = class extends IssueNodeImpl {
+  _tag = "InvalidType";
+  ast;
+  constructor(ast, input, options) {
+    super(input, options);
+    this.ast = ast;
+  }
+};
+var InvalidValue = class extends IssueNodeImpl {
+  _tag = "InvalidValue";
+  annotations;
+  constructor(annotations, input, options) {
+    super(input, options);
+    this.annotations = annotations;
+  }
+};
+var AnyOf = class extends IssueNodeImpl {
+  _tag = "AnyOf";
+  ast;
+  issues;
+  constructor(ast, issues, input, options) {
+    super(input, options);
+    this.ast = ast;
+    this.issues = issues;
+  }
+};
+var OneOf = class extends IssueNodeImpl {
+  _tag = "OneOf";
+  ast;
+  successes;
+  constructor(ast, successes, input, options) {
+    super(input, options);
+    this.ast = ast;
+    this.successes = successes;
+  }
+};
+function makeFilterIssue(entry, input, options) {
+  if (isIssue(entry)) {
+    return entry;
+  }
+  if (typeof entry === "string") {
+    return new InvalidValue({
+      message: entry
+    }, input, options);
+  }
+  const inner = typeof entry.issue === "string" ? new InvalidValue({
+    message: entry.issue
+  }, input, options) : entry.issue;
+  return new Pointer(entry.path, inner);
+}
+function makeSingle(out, input, options) {
+  if (out === undefined) {
+    return;
+  }
+  if (typeof out === "boolean") {
+    return out ? undefined : new InvalidValue(undefined, input, options);
+  }
+  return makeFilterIssue(out, input, options);
+}
+function normalizeFilterOutput(ast, out, input, options) {
+  if (Array.isArray(out)) {
+    if (!isReadonlyArrayNonEmpty(out)) {
+      return;
+    }
+    return out.length === 1 ? makeFilterIssue(out[0], input, options) : new Composite(ast, map(out, (entry) => makeFilterIssue(entry, input, options)), input, options);
+  }
+  return makeSingle(out, input, options);
+}
+var defaultLeafHook = (issue) => {
+  const message = findMessage(issue);
+  if (message !== undefined)
+    return message;
+  switch (issue._tag) {
+    case "InvalidType":
+      return getExpectedMessage(getExpected(issue.ast), issue);
+    case "InvalidValue": {
+      const expected = findExpected(issue);
+      if (expected !== undefined)
+        return getExpectedMessage(expected, issue);
+      const input = formatInput(issue);
+      return input === undefined ? "Expected a valid value" : `Invalid data ${input}`;
+    }
+    case "MissingKey":
+      return "Missing key";
+    case "UnexpectedKey": {
+      const input = formatInput(issue);
+      return input === undefined ? "Expected no excess property" : `Unexpected key with value ${input}`;
+    }
+    case "Forbidden":
+      return "Forbidden operation";
+    case "OneOf": {
+      const input = formatInput(issue);
+      return input === undefined ? "Expected exactly one member to match" : `Expected exactly one member to match the input ${input}`;
+    }
+  }
+};
+var defaultCheckHook = (issue) => findMessage(issue.issue) ?? findMessage(issue);
+function formatInput(issue) {
+  return hasInput(issue) ? format(issue.input) : undefined;
+}
+function findExpected(issue) {
+  const expected = issue.annotations?.expected;
+  return typeof expected === "string" ? expected : undefined;
+}
+function getExpectedMessage(expected, issue) {
+  const input = formatInput(issue);
+  return input === undefined ? `Expected ${expected}` : `Expected ${expected}, got ${input}`;
+}
+function formatCheck(check) {
+  const expected = check.annotations?.expected;
+  if (typeof expected === "string")
+    return expected;
+  switch (check._tag) {
+    case "Filter":
+      return "<filter>";
+    case "FilterGroup":
+      return check.checks.map((check) => formatCheck(check)).join(" & ");
+  }
+}
+function makeFormatterDefault() {
+  return (issue) => formatIssue(issue, "");
+}
+var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
+function formatIssue(issue, path) {
+  let message;
+  switch (issue._tag) {
+    case "Filter": {
+      const annotated = defaultCheckHook(issue);
+      if (annotated !== undefined) {
+        message = annotated;
+      } else {
+        if (issue.issue._tag !== "InvalidValue") {
+          return formatIssue(issue.issue, path);
+        }
+        const expected = findExpected(issue.issue);
+        message = expected === undefined ? getExpectedMessage(formatCheck(issue.filter), issue) : getExpectedMessage(expected, issue.issue);
+      }
+      break;
+    }
+    case "Encoding":
+      return formatIssue(issue.issue, path);
+    case "Pointer":
+      return formatIssue(issue.issue, path + formatPath(issue.path));
+    case "Composite":
+    case "AnyOf": {
+      if (issue._tag === "Composite" || issue.issues.length > 0) {
+        return issue.issues.map((issue) => formatIssue(issue, path)).join(`
+`);
+      }
+      message = findMessage(issue) ?? getExpectedMessage(getExpected(issue.ast), issue);
+      break;
+    }
+    default:
+      message = defaultLeafHook(issue);
+      break;
+  }
+  return path ? `${message}
+  at ${path}` : message;
+}
+function findMessage(issue) {
+  if (issue._tag === "Pointer")
+    return;
+  if (issue._tag === "Encoding")
+    return findMessage(issue.issue);
+  const annotations = issue._tag === "Filter" ? issue.filter.annotations : ("annotations" in issue) ? issue.annotations : issue.ast.annotations;
+  const message = annotations?.[issue._tag === "MissingKey" ? "messageMissingKey" : issue._tag === "UnexpectedKey" ? "messageUnexpectedKey" : "message"];
+  if (typeof message === "string")
+    return message;
+}
+
+// node_modules/effect/dist/internal/schema/cause.js
+function getSchemaIssue(cause) {
+  let issue;
+  for (const reason of cause.reasons) {
+    if (!isFailReason2(reason) || !isIssue(reason.error)) {
+      return;
+    }
+    issue ??= reason.error;
+  }
+  return issue;
+}
+function getSchemaIssueOrThrow(cause, message) {
+  const issue = getSchemaIssue(cause);
+  if (issue === undefined) {
+    throw new Error(message, {
+      cause
+    });
+  }
+  return issue;
+}
+
+// node_modules/effect/dist/SchemaGetter.js
+var makeGetter = (fields) => Object.assign(Object.create(Prototype), fields);
+var passthrough_ = /* @__PURE__ */ makeGetter({
+  _tag: "Passthrough"
+});
+function passthrough() {
+  return passthrough_;
+}
+function transform(f) {
+  return makeGetter({
+    _tag: "Transform",
+    transform: f
+  });
+}
+function transformEffect(f) {
+  return makeGetter({
+    _tag: "TransformEffect",
+    transform: f
+  });
+}
+function String2() {
+  return transform(globalThis.String);
+}
+function Number3() {
+  return transform(globalThis.Number);
+}
+function parseJson(options) {
+  return transformEffect((input, parseOptions) => try_2({
+    try: () => JSON.parse(input, options?.reviver),
+    catch: () => new InvalidValue({
+      expected: "a valid JSON string"
+    }, input, parseOptions)
+  }));
+}
+function stringifyJson(options) {
+  return transformEffect((input, parseOptions) => try_2({
+    try: () => {
+      const output = JSON.stringify(input, options?.replacer, options?.space);
+      if (output === undefined) {
+        throw new TypeError("Value cannot be represented as JSON");
+      }
+      return output;
+    },
+    catch: () => new InvalidValue({
+      expected: "a JSON-serializable value"
+    }, input, parseOptions)
+  }));
+}
+function encodeBase642() {
+  return transform(encodeBase64);
+}
+function decodeBase642() {
+  return transformEffect((input, options) => mapErrorEager2(fromResult2(decodeBase64(input)), () => new InvalidValue({
+    expected: "a valid Base64 string"
+  }, input, options)));
+}
 
 // node_modules/effect/dist/ByteSize.js
 var bigint03 = /* @__PURE__ */ BigInt(0);
@@ -4661,7 +5003,7 @@ var fromNumber = (input) => {
   }
   return make5(BigInt(input));
 };
-var parse = (input) => {
+var fromStringUnsafe = (input) => {
   const match = /^\s*(\d+)(?:\.(\d+))?\s*([A-Za-z]+)\s*$/.exec(input);
   if (match === null)
     return invalid2(`unsupported syntax ${JSON.stringify(input)}`);
@@ -4685,48 +5027,1698 @@ var fromInputUnsafe2 = (input) => {
     case "number":
       return fromNumber(input);
     case "string":
-      return parse(input);
+      return fromStringUnsafe(input);
   }
   return invalid2(`unsupported input ${input}`);
 };
 var bytes = (value) => typeof value === "bigint" ? fromInputUnsafe2(value) : fromNumber(value);
 
-// node_modules/effect/dist/PlatformError.js
-var TypeId7 = "~effect/PlatformError";
-
-class BadArgument extends (/* @__PURE__ */ TaggedError2("BadArgument")) {
-  get message() {
-    return `${this.module}.${this.method}${this.description ? `: ${this.description}` : ""}`;
+// node_modules/effect/dist/SchemaTransformation.js
+var TypeId8 = "~effect/SchemaTransformation/Transformation";
+var Transformation = class extends Class {
+  [TypeId8] = TypeId8;
+  _tag = "Transformation";
+  decode;
+  encode;
+  constructor(decode, encode) {
+    super();
+    this.decode = decode;
+    this.encode = encode;
   }
+  flip() {
+    return new Transformation(this.encode, this.decode);
+  }
+};
+function isTransformation(u) {
+  return hasProperty(u, TypeId8) && u[TypeId8] === TypeId8;
+}
+var makeTransformation = (options) => {
+  if (isTransformation(options)) {
+    return options;
+  }
+  return new Transformation(options.decode, options.encode);
+};
+function transformEffect2(options) {
+  return new Transformation(transformEffect(options.decode), transformEffect(options.encode));
+}
+function transform2(options) {
+  return new Transformation(transform(options.decode), transform(options.encode));
+}
+var passthrough_2 = /* @__PURE__ */ new Transformation(/* @__PURE__ */ passthrough(), /* @__PURE__ */ passthrough());
+function passthrough2() {
+  return passthrough_2;
+}
+var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ String2());
+var isJsonError = (input) => isObject(input) && typeof input["message"] === "string";
+var decodeJsonError = (input) => {
+  const hasCause = Object.hasOwn(input, "cause");
+  const err = hasCause ? new Error(input.message, {
+    cause: decodeDefect(input.cause)
+  }) : new Error(input.message);
+  if (typeof input.name === "string" && input.name !== "Error")
+    err.name = input.name;
+  if (typeof input.stack === "string")
+    err.stack = input.stack;
+  return err;
+};
+var encodeUnknownAsJson = (input) => {
+  try {
+    const json = formatJson(input);
+    return json === undefined ? format(input) : JSON.parse(json);
+  } catch {
+    return format(input);
+  }
+};
+var encodeJsonError = (input, options, encodeDefect) => {
+  const encoded = {
+    name: input.name,
+    message: typeof input.message === "string" ? input.message : ""
+  };
+  if (options?.includeStack && typeof input.stack === "string") {
+    encoded.stack = input.stack;
+  }
+  if (!options?.excludeCause && input.cause !== undefined) {
+    encoded.cause = encodeDefect(input.cause);
+  }
+  return encoded;
+};
+var makeEncodeDefect = (options) => {
+  const seen = new WeakSet;
+  const encode = (input) => {
+    if (isError(input)) {
+      if (seen.has(input)) {
+        return "[Circular]";
+      }
+      seen.add(input);
+      const encoded = encodeJsonError(input, options, encode);
+      seen.delete(input);
+      return encoded;
+    }
+    return encodeUnknownAsJson(input);
+  };
+  return encode;
+};
+var decodeDefect = (input) => isJsonError(input) ? decodeJsonError(input) : input;
+var defectFromJson = (options) => transform2({
+  decode: decodeDefect,
+  encode: makeEncodeDefect(options)
+});
+var urlFromString = /* @__PURE__ */ transformEffect2({
+  decode: (s, options) => URL.canParse(s) ? succeed6(new URL(s)) : fail6(new InvalidValue({
+    expected: "a valid URL string"
+  }, s, options)),
+  encode: (url) => succeed6(url.href)
+});
+var uint8ArrayFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase642(), /* @__PURE__ */ encodeBase642());
+function fromJsonString(options) {
+  return new Transformation(parseJson(options ?? {}), stringifyJson(options));
 }
 
-class SystemError extends Error3 {
-  get message() {
-    return `${this._tag}: ${this.module}.${this.method}${this.pathOrDescriptor !== undefined ? ` (${this.pathOrDescriptor})` : ""}${this.description ? `: ${this.description}` : ""}`;
+// node_modules/effect/dist/SchemaAST.js
+function makeGuard(tag) {
+  return (ast) => ast._tag === tag;
+}
+var isDeclaration = /* @__PURE__ */ makeGuard("Declaration");
+var isNever2 = /* @__PURE__ */ makeGuard("Never");
+var isLiteral = /* @__PURE__ */ makeGuard("Literal");
+var isUniqueSymbol = /* @__PURE__ */ makeGuard("UniqueSymbol");
+var isArrays = /* @__PURE__ */ makeGuard("Arrays");
+var isObjects = /* @__PURE__ */ makeGuard("Objects");
+var isUnion = /* @__PURE__ */ makeGuard("Union");
+var isSuspend = /* @__PURE__ */ makeGuard("Suspend");
+var Link = class {
+  to;
+  transformation;
+  constructor(to, transformation) {
+    this.to = to;
+    this.transformation = transformation;
+  }
+};
+var defaultParseOptions = {};
+var Context = class {
+  isOptional;
+  isMutable;
+  constructorDefault;
+  annotations;
+  constructor(isOptional, isMutable, constructorDefault = undefined, annotations = undefined) {
+    this.isOptional = isOptional;
+    this.isMutable = isMutable;
+    this.constructorDefault = constructorDefault;
+    this.annotations = annotations;
+  }
+};
+var TypeId9 = "~effect/Schema";
+
+class ASTNodeImpl {
+  [TypeId9] = TypeId9;
+  annotations;
+  checks;
+  encoding;
+  context;
+  constructor(annotations = undefined, checks = undefined, encoding = undefined, context = undefined) {
+    this.annotations = annotations;
+    this.checks = checks;
+    this.encoding = encoding;
+    this.context = context;
+  }
+  toString() {
+    return `<${this._tag}>`;
   }
 }
-
-class PlatformError extends (/* @__PURE__ */ TaggedError2("PlatformError")) {
-  constructor(reason) {
-    if ("cause" in reason) {
-      super({
-        reason,
-        cause: reason.cause
-      });
-    } else {
-      super({
-        reason
-      });
+var Declaration = class extends ASTNodeImpl {
+  _tag = "Declaration";
+  typeParameters;
+  run;
+  encodingChecks;
+  encodingRun;
+  constructor(typeParameters, run, annotations, checks, encoding, context, encodingChecks, encodingRun) {
+    super(annotations, checks, encoding, context);
+    this.typeParameters = typeParameters;
+    this.run = run;
+    this.encodingChecks = encodingChecks;
+    this.encodingRun = encodingRun;
+  }
+  getParser() {
+    let run;
+    return (input, options) => {
+      if (input === missing)
+        return missingExit;
+      return (run ??= this.run(this.typeParameters))(input, this, options);
+    };
+  }
+  _rebuild(recur, checks, encodingChecks, run, encodingRun) {
+    const tps = mapOrSame(this.typeParameters, recur);
+    return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run, this.annotations, checks, undefined, this.context, encodingChecks, encodingRun);
+  }
+  recur(recur) {
+    return this._rebuild(recur, this.checks, this.encodingChecks, this.run, this.encodingRun);
+  }
+  flip(recur) {
+    return this._rebuild(recur, this.encodingChecks, this.checks, this.encodingRun ?? this.run, this.run);
+  }
+  getExpected() {
+    const expected = this.annotations?.expected;
+    if (typeof expected === "string")
+      return expected;
+    return "<Declaration>";
+  }
+};
+var Unknown = class extends ASTNodeImpl {
+  _tag = "Unknown";
+  getParser() {
+    return fromRefinement(this, isUnknown);
+  }
+  getExpected() {
+    return "unknown";
+  }
+};
+var unknown = /* @__PURE__ */ new Unknown;
+var Literal = class extends ASTNodeImpl {
+  _tag = "Literal";
+  literal;
+  constructor(literal, annotations, checks, encoding, context) {
+    super(annotations, checks, encoding, context);
+    if (typeof literal === "number" && !globalThis.Number.isFinite(literal)) {
+      throw new Error(`A numeric literal must be finite, got ${format(literal)}`);
+    }
+    this.literal = literal;
+  }
+  getParser() {
+    return fromConst(this, this.literal);
+  }
+  matchPart(s, _options) {
+    return s === globalThis.String(this.literal) ? this.literal : undefined;
+  }
+  toCodecJson() {
+    return typeof this.literal === "bigint" ? literalToString(this) : this;
+  }
+  toCodecStringTree() {
+    return typeof this.literal === "string" ? this : literalToString(this);
+  }
+  getExpected() {
+    return typeof this.literal === "string" ? JSON.stringify(this.literal) : globalThis.String(this.literal);
+  }
+};
+function literalToString(ast) {
+  const literalAsString = globalThis.String(ast.literal);
+  return replaceEncoding(ast, [new Link(new Literal(literalAsString), new Transformation(transform(() => ast.literal), transform(() => literalAsString)))]);
+}
+var String3 = class extends ASTNodeImpl {
+  _tag = "String";
+  getParser() {
+    return fromRefinement(this, isString);
+  }
+  matchPart(s, options) {
+    const checks = this.checks;
+    return checks && !options.disableChecks && collectIssues(checks, s, undefined, this, options) ? undefined : s;
+  }
+  getExpected() {
+    return "string";
+  }
+};
+var string2 = /* @__PURE__ */ new String3;
+var Number4 = class extends ASTNodeImpl {
+  _tag = "Number";
+  getParser() {
+    return fromRefinement(this, isNumber);
+  }
+  matchKey(s, options) {
+    return this._match(isStringNumberRegExp, s, options);
+  }
+  matchPart(s, options) {
+    return this._match(isStringFiniteRegExp, s, options);
+  }
+  _match(regexp, s, options) {
+    if (!regexp.test(s))
+      return;
+    const value = globalThis.Number(s);
+    if (options.disableChecks || !this.checks)
+      return value;
+    return collectIssues(this.checks, value, undefined, this, options) ? undefined : value;
+  }
+  toCodecJson() {
+    if (this.checks && (hasCheck(this.checks, "effect/schema/isFinite") || hasCheck(this.checks, "effect/schema/isInt"))) {
+      return this;
+    }
+    return replaceEncoding(this, [numberToJson]);
+  }
+  toCodecStringTree() {
+    if (this.toCodecJson() === this) {
+      return replaceEncoding(this, [finiteToString]);
+    }
+    return replaceEncoding(this, [numberToString]);
+  }
+  getExpected() {
+    return "number";
+  }
+};
+function hasCheck(checks, id) {
+  return checks.some((check) => check.annotations?.representation?.id === id || check._tag === "FilterGroup" && hasCheck(check.checks, id));
+}
+var number2 = /* @__PURE__ */ new Number4;
+var Boolean = class extends ASTNodeImpl {
+  _tag = "Boolean";
+  getParser() {
+    return fromRefinement(this, isBoolean);
+  }
+  getExpected() {
+    return "boolean";
+  }
+};
+var boolean = /* @__PURE__ */ new Boolean;
+var Arrays = class extends ASTNodeImpl {
+  _tag = "Arrays";
+  isMutable;
+  elements;
+  rest;
+  encodingChecks;
+  constructor(isMutable, elements, rest, annotations, checks, encoding, context, encodingChecks) {
+    super(annotations, checks, encoding, context);
+    this.isMutable = isMutable;
+    this.elements = elements;
+    this.rest = rest;
+    this.encodingChecks = encodingChecks;
+    let hasOptional = false;
+    for (let i = 0;i < elements.length; i++) {
+      if (isOptional(elements[i])) {
+        hasOptional = true;
+      } else if (hasOptional) {
+        throw new Error("A required element cannot follow an optional element. ts(1257)");
+      }
+    }
+    if (hasOptional && rest.length > 1) {
+      throw new Error("A required element cannot follow an optional element. ts(1257)");
+    }
+    for (let i = 1;i < rest.length; i++) {
+      if (isOptional(rest[i])) {
+        throw new Error("An optional element cannot follow a rest element. ts(1266)");
+      }
     }
   }
-  [TypeId7] = TypeId7;
-  get message() {
-    return this.reason.message;
+  getParser(compile, compileField = compile) {
+    const ast = this;
+    let elements;
+    let rest;
+    const elementLen = ast.elements.length;
+    const tailLen = Math.max(0, ast.rest.length - 1);
+    function getParser(tailThreshold, index) {
+      if (index < elementLen) {
+        return elements[index];
+      } else if (index >= tailThreshold) {
+        return rest[index - tailThreshold + 1];
+      }
+      return rest[0];
+    }
+    return fnUntracedEager2(function* (input, options) {
+      if (input === missing) {
+        return missing;
+      }
+      if (!Array.isArray(input)) {
+        return yield* fail6(new InvalidType(ast, input, options));
+      }
+      if (!elements) {
+        elements = ast.elements.map((ast) => ({
+          ast,
+          parser: compileField(ast)
+        }));
+        rest = ast.rest.map((ast) => ({
+          ast,
+          parser: compileField(ast)
+        }));
+      }
+      const len = input.length;
+      const state = {
+        ast,
+        getParser,
+        input,
+        len,
+        tailThreshold: Math.max(elementLen, len - tailLen),
+        output: new globalThis.Array(len),
+        issues: undefined,
+        options
+      };
+      const end = ast.rest.length === 0 ? elementLen : Math.max(len, elementLen + tailLen);
+      const concurrency = options.concurrency === undefined ? 1 : resolveConcurrency(options.concurrency);
+      const eff = concurrency === 1 ? parseArray(state, input, 0, end) : parseArrayConcurrent(state, input, {
+        concurrency,
+        end
+      });
+      if (eff)
+        yield* eff;
+      if (ast.rest.length === 0 && len > elementLen) {
+        for (let i = elementLen;i <= len - 1; i++) {
+          const unexpected = new UnexpectedKey(ast, input[i], options);
+          const issue = new Pointer([i], unexpected);
+          if (options.errors === "all") {
+            if (state.issues)
+              state.issues.push(issue);
+            else
+              state.issues = [issue];
+          } else {
+            return yield* fail6(new Composite(ast, [issue], input, options));
+          }
+        }
+      }
+      if (state.issues) {
+        return yield* fail6(new Composite(ast, state.issues, input, options));
+      }
+      return state.output;
+    });
+  }
+  _rebuild(recur, checks, encodingChecks) {
+    const elements = mapOrSame(this.elements, recur);
+    const rest = mapOrSame(this.rest, recur);
+    return elements === this.elements && rest === this.rest && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Arrays(this.isMutable, elements, rest, this.annotations, checks, undefined, this.context, encodingChecks);
+  }
+  recur(recur) {
+    return this._rebuild(recur, this.checks, this.encodingChecks);
+  }
+  flip(recur) {
+    return this._rebuild(recur, this.encodingChecks, this.checks);
+  }
+  getExpected() {
+    return "array";
+  }
+};
+function stepArray(s, item, exit, i) {
+  if (exit._tag === "Failure") {
+    return wrapPropertyKeyIssue(s, s.ast, i, exit);
+  }
+  const value = exit === sameExit ? item : exit[args];
+  if (value !== missing) {
+    s.output[i] = value;
+  } else {
+    const p = s.getParser(s.tailThreshold, i);
+    if (isOptional(p.ast))
+      return;
+    const issue = new Pointer([i], new MissingKey(p.ast.context?.annotations));
+    if (s.options.errors === "all") {
+      if (s.issues)
+        s.issues.push(issue);
+      else
+        s.issues = [issue];
+    } else {
+      return fail5(new Composite(s.ast, [issue], s.input, s.options));
+    }
   }
 }
-var systemError = (options) => new PlatformError(new SystemError(options));
-var badArgument = (options) => new PlatformError(new BadArgument(options));
+var parseArrayOptions = {
+  onItem(s, item, i) {
+    const value = i < s.len ? item : missing;
+    return s.getParser(s.tailThreshold, i).parser(value, s.options);
+  },
+  step: stepArray
+};
+var parseArray = /* @__PURE__ */ iterateEager()(parseArrayOptions);
+var parseArrayConcurrent = /* @__PURE__ */ iterateConcurrent()(parseArrayOptions);
+var wrapPropertyKeyIssue = (s, ast, key, exit) => {
+  if (exit.cause.reasons.length === 0) {
+    return exit;
+  }
+  const issue = getSchemaIssue(exit.cause);
+  if (issue === undefined) {
+    return failCause2(map4(exit.cause, (issue) => new Composite(ast, [new Pointer([key], issue)], s.input, s.options)));
+  }
+  const pointer = new Pointer([key], issue);
+  if (s.options.errors === "all") {
+    if (s.issues)
+      s.issues.push(pointer);
+    else
+      s.issues = [pointer];
+  } else {
+    return fail5(new Composite(ast, [pointer], s.input, s.options));
+  }
+};
+var FINITE_PATTERN = "[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?";
+function getIndexSignatureKeys(input, parameter, options = defaultParseOptions) {
+  let stringKeys;
+  let symbolKeys;
+  function go(parameter) {
+    switch (parameter._tag) {
+      case "String":
+      case "TemplateLiteral":
+        return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchPart(k, options) !== undefined);
+      case "Number":
+        return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchKey(k, options) !== undefined);
+      case "Symbol":
+        return (symbolKeys ??= Object.getOwnPropertySymbols(input)).filter((k) => parameter.matchKey(k, options) !== undefined);
+      case "Union":
+        return [...new Set(parameter.types.flatMap(go))];
+      default:
+        return [];
+    }
+  }
+  return go(parameterFromPropertyKey(toEncoded(parameter)));
+}
+var PropertySignature = class {
+  name;
+  type;
+  constructor(name, type) {
+    this.name = name;
+    this.type = type;
+  }
+};
+function isIndexSignatureParameterSide(ast) {
+  switch (ast._tag) {
+    case "String":
+    case "Number":
+    case "Symbol":
+    case "TemplateLiteral":
+      return true;
+    case "Union":
+      return ast.types.every(isIndexSignatureParameterSide);
+    default:
+      return false;
+  }
+}
+function isIndexSignatureParameterEncodedSide(ast) {
+  const encoded = getLastEncoding(ast);
+  switch (encoded._tag) {
+    case "String":
+    case "Number":
+    case "Symbol":
+    case "TemplateLiteral":
+      return true;
+    case "Union":
+      return encoded.types.every(isIndexSignatureParameterEncodedSide);
+    default:
+      return false;
+  }
+}
+function isIndexSignatureParameter(ast) {
+  return isIndexSignatureParameterSide(ast) && isIndexSignatureParameterEncodedSide(ast);
+}
+var IndexSignature = class {
+  parameter;
+  type;
+  constructor(parameter, type) {
+    if (!isIndexSignatureParameter(parameter)) {
+      throw new Error(`Invalid index signature parameter ${parameter._tag}`);
+    }
+    this.parameter = parameter;
+    this.type = type;
+    if (isOptional(type) && !containsUndefined(type)) {
+      throw new Error("Cannot use `Schema.optionalKey` with index signatures, use `Schema.optional` instead.");
+    }
+  }
+};
+var Objects = class extends ASTNodeImpl {
+  _tag = "Objects";
+  propertySignatures;
+  indexSignatures;
+  encodingChecks;
+  constructor(propertySignatures, indexSignatures, annotations, checks, encoding, context, encodingChecks) {
+    super(annotations, checks, encoding, context);
+    this.propertySignatures = propertySignatures;
+    this.indexSignatures = indexSignatures;
+    this.encodingChecks = encodingChecks;
+    const seen = new Set;
+    const duplicates = [];
+    for (const propertySignature of propertySignatures) {
+      const name = propertySignature.name;
+      if (seen.has(name)) {
+        duplicates.push(name);
+      } else {
+        seen.add(name);
+      }
+    }
+    if (duplicates.length > 0) {
+      throw new Error(`Duplicate identifiers: ${JSON.stringify(duplicates)}. ts(2300)`);
+    }
+  }
+  getParser(compile, compileField = compile) {
+    const ast = this;
+    const expectedKeys = [];
+    for (const ps of ast.propertySignatures) {
+      expectedKeys.push(typeof ps.name === "number" ? globalThis.String(ps.name) : ps.name);
+    }
+    const hasProperties = expectedKeys.length;
+    const indexCount = ast.indexSignatures.length;
+    let expectedKeysSet = hasProperties && indexCount ? new Set(expectedKeys) : undefined;
+    if (!hasProperties && !indexCount) {
+      return fromRefinement(ast, isNotNullish);
+    }
+    let properties;
+    let indexes;
+    const finishIndex = (s, key, k2, inputValue, exitValue) => {
+      if (exitValue._tag === "Failure") {
+        return wrapPropertyKeyIssue(s, ast, key, exitValue) ?? void_2;
+      }
+      const value = exitValue === sameExit ? inputValue : exitValue[args];
+      if (k2 !== missing && value !== missing) {
+        if (hasProperties && (expectedKeysSet.has(key) || expectedKeysSet.has(typeof k2 === "number" ? globalThis.String(k2) : k2)))
+          return void_2;
+        assignProperty(s.out, k2, value);
+      }
+      return void_2;
+    };
+    const parseIndex = (s, key, index, exitKey) => {
+      if (!exitKey) {
+        const eff = index.parserKey(key, s.options);
+        if (!effectIsExit(eff)) {
+          return flatMap3(exit2(eff), (exit) => parseIndex(s, key, index, exit));
+        }
+        exitKey = eff;
+      }
+      if (exitKey._tag === "Failure") {
+        return wrapPropertyKeyIssue(s, ast, key, exitKey) ?? void_2;
+      }
+      const k2 = exitKey === sameExit ? key : exitKey[args];
+      const inputValue = s.input[key];
+      const result = index.parserValue(inputValue, s.options);
+      return effectIsExit(result) ? finishIndex(s, key, k2, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, k2, inputValue, exit));
+    };
+    const parseStringIndex = (s, key, index) => {
+      const inputValue = s.input[key];
+      const result = index.parserValue(inputValue, s.options);
+      return effectIsExit(result) ? finishIndex(s, key, key, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, key, inputValue, exit));
+    };
+    const parseIndexes = indexCount ? iterateConcurrent()({
+      onItem: (s, [key, index]) => index.is.parameter === string2 ? parseStringIndex(s, key, index) : parseIndex(s, key, index),
+      step: (_s, _item, exit) => exit._tag === "Failure" ? exit : undefined
+    }) : undefined;
+    const compileMembers = () => {
+      if (!properties) {
+        properties = ast.propertySignatures.map((ps) => ({
+          parser: compileField(ps.type),
+          name: ps.name,
+          type: ps.type
+        }));
+        indexes = indexCount ? ast.indexSignatures.map((is) => ({
+          is,
+          parserKey: compile(parameterFromPropertyKey(is.parameter)),
+          parserValue: compileField(is.type)
+        })) : undefined;
+      }
+      return properties;
+    };
+    const fallback = fnUntracedEager2(function* (input, options) {
+      if (input === missing) {
+        return missing;
+      }
+      if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
+        return yield* fail6(new InvalidType(ast, input, options));
+      }
+      compileMembers();
+      const record = input;
+      const out = {};
+      const state = {
+        ast,
+        input: record,
+        out,
+        issues: undefined,
+        options
+      };
+      const errorsAllOption = options.errors === "all";
+      const onExcessPropertyError = options.onExcessProperty === "error";
+      const concurrency = options.concurrency === undefined ? 1 : resolveConcurrency(options.concurrency);
+      const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record, index.parameter, options)) : undefined;
+      if (onExcessPropertyError) {
+        expectedKeysSet ??= new Set(expectedKeys);
+        const coveredKeys = indexKeys ? new Set(expectedKeysSet) : expectedKeysSet;
+        if (indexKeys) {
+          for (const keys of indexKeys) {
+            for (const key of keys)
+              coveredKeys.add(key);
+          }
+        }
+        const inputKeys = Reflect.ownKeys(record);
+        for (let i = 0;i < inputKeys.length; i++) {
+          const key = inputKeys[i];
+          if (!coveredKeys.has(key)) {
+            const unexpected = new UnexpectedKey(ast, record[key], options);
+            const issue = new Pointer([key], unexpected);
+            if (errorsAllOption) {
+              if (state.issues) {
+                state.issues.push(issue);
+              } else {
+                state.issues = [issue];
+              }
+              continue;
+            } else {
+              return yield* fail6(new Composite(ast, [issue], input, options));
+            }
+          }
+        }
+      }
+      if (hasProperties) {
+        const eff = concurrency === 1 ? parseProperties(state, properties) : parsePropertiesConcurrent(state, properties, {
+          concurrency
+        });
+        if (eff)
+          yield* eff;
+      }
+      if (indexCount && concurrency === 1) {
+        for (let i = 0;i < indexCount; i++) {
+          const index = indexes[i];
+          const parse = index.is.parameter === string2 ? parseStringIndex : parseIndex;
+          const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
+          for (let j = 0;j < keys.length; j++) {
+            const eff = parse(state, keys[j], index);
+            if (!effectIsExit(eff))
+              yield* eff;
+            else if (eff._tag === "Failure")
+              return yield* eff;
+          }
+        }
+      } else if (parseIndexes) {
+        const keyPairs = empty();
+        for (let i = 0;i < indexCount; i++) {
+          const index = indexes[i];
+          const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
+          for (let j = 0;j < keys.length; j++) {
+            keyPairs.push([keys[j], index]);
+          }
+        }
+        const eff = parseIndexes(state, keyPairs, {
+          concurrency
+        });
+        if (eff)
+          yield* eff;
+      }
+      if (state.issues) {
+        return yield* fail6(new Composite(ast, state.issues, input, options));
+      }
+      return out;
+    });
+    if (indexCount)
+      return fallback;
+    const resume = (state, index, pending) => {
+      const property = properties[index];
+      return flatMap3(exit2(pending), (exit) => {
+        const terminal = stepProperty(state, property, exit);
+        if (terminal)
+          return terminal;
+        const done = () => succeed7(state.out);
+        const eff = parseProperties(state, properties.slice(index + 1));
+        return eff ? flatMapEager2(eff, done) : done();
+      });
+    };
+    return (input, options) => {
+      if (input === missing)
+        return missingExit;
+      if (options.errors === "all" || options.onExcessProperty !== undefined || options.concurrency !== undefined && resolveConcurrency(options.concurrency) !== 1) {
+        return fallback(input, options);
+      }
+      if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
+        return fail6(new InvalidType(ast, input, options));
+      }
+      const props = compileMembers();
+      const record = input;
+      const out = {};
+      const state = {
+        ast,
+        input: record,
+        out,
+        issues: undefined,
+        options
+      };
+      try {
+        for (let index = 0;index < props.length; index++) {
+          const property = props[index];
+          const name = property.name;
+          const hasKey = hasPropertySignature(record, name);
+          const value = hasKey ? record[name] : missing;
+          const exit = property.parser(value, options);
+          if (!effectIsExit(exit)) {
+            return resume(state, index, exit);
+          }
+          if (exit === sameExit) {
+            if (hasKey)
+              assignProperty(out, name, value);
+            continue;
+          }
+          const terminal = stepProperty(state, property, exit);
+          if (terminal)
+            return terminal;
+        }
+      } catch (error) {
+        return die3(error);
+      }
+      return succeed7(out);
+    };
+  }
+  _rebuild(recur, recurParameter, checks, encodingChecks) {
+    const props = mapOrSame(this.propertySignatures, (ps) => {
+      const t = recur(ps.type);
+      return t === ps.type ? ps : new PropertySignature(ps.name, t);
+    });
+    const indexes = mapOrSame(this.indexSignatures, (is) => {
+      const p = recurParameter(is.parameter);
+      const t = recur(is.type);
+      return p === is.parameter && t === is.type ? is : new IndexSignature(p, t);
+    });
+    return props === this.propertySignatures && indexes === this.indexSignatures && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Objects(props, indexes, this.annotations, checks, undefined, this.context, encodingChecks);
+  }
+  flip(recur) {
+    return this._rebuild(recur, recur, this.encodingChecks, this.checks);
+  }
+  recur(recur, recurParameter = recur) {
+    return this._rebuild(recur, recurParameter, this.checks, this.encodingChecks);
+  }
+  getExpected() {
+    if (this.propertySignatures.length === 0 && this.indexSignatures.length === 0)
+      return "object | array";
+    return "object";
+  }
+};
+function stepProperty(s, p, exit) {
+  if (exit._tag === "Failure") {
+    return wrapPropertyKeyIssue(s, s.ast, p.name, exit);
+  }
+  if (exit === sameExit)
+    return;
+  const value = exit[args];
+  if (value !== missing) {
+    assignProperty(s.out, p.name, value);
+    return;
+  }
+  delete s.out[p.name];
+  if (!isOptional(p.type)) {
+    const issue = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
+    if (s.options.errors === "all") {
+      if (s.issues)
+        s.issues.push(issue);
+      else
+        s.issues = [issue];
+      return;
+    } else {
+      return fail5(new Composite(s.ast, [issue], s.input, s.options));
+    }
+  }
+}
+var parsePropertiesOptions = {
+  onItem(s, p) {
+    if (!hasPropertySignature(s.input, p.name)) {
+      return p.parser(missing, s.options);
+    }
+    const value = s.input[p.name];
+    assignProperty(s.out, p.name, value);
+    return p.parser(value, s.options);
+  },
+  step: stepProperty
+};
+var parseProperties = /* @__PURE__ */ iterateEager()(parsePropertiesOptions);
+var parsePropertiesConcurrent = /* @__PURE__ */ iterateConcurrent()(parsePropertiesOptions);
+function combineChecks(a, b) {
+  if (!a)
+    return b;
+  if (!b)
+    return a;
+  return [...a, ...b];
+}
+function struct(fields, checks, annotations) {
+  return new Objects(Reflect.ownKeys(fields).map((key) => {
+    return new PropertySignature(key, fields[key].ast);
+  }), [], annotations, checks);
+}
+function getAST(self) {
+  return self.ast;
+}
+function tuple(elements, checks = undefined) {
+  return new Arrays(false, elements.map((e) => e.ast), [], undefined, checks);
+}
+function union(members, options, checks) {
+  return new Union(members.map(getAST), options, undefined, checks);
+}
+var toCandidate = /* @__PURE__ */ memoizeIdempotent((ast) => {
+  while (true) {
+    if (isSuspend(ast))
+      return unknown;
+    const encoding = ast.encoding;
+    if (!encoding) {
+      return ast.recur?.(toCandidate, identity) ?? ast;
+    }
+    if (encoding.some((link) => link.transformation._tag === "Middleware" && link.transformation.decode !== identity))
+      return unknown;
+    ast = encoding[encoding.length - 1].to;
+  }
+});
+function getCandidateTypes(ast) {
+  switch (ast._tag) {
+    case "Null":
+      return ["null"];
+    case "Undefined":
+      return ["undefined"];
+    case "String":
+    case "TemplateLiteral":
+      return ["string"];
+    case "Number":
+      return ["number"];
+    case "Boolean":
+      return ["boolean"];
+    case "Symbol":
+    case "UniqueSymbol":
+      return ["symbol"];
+    case "BigInt":
+      return ["bigint"];
+    case "Arrays":
+      return ["array"];
+    case "ObjectKeyword":
+      return ["object", "array", "function"];
+    case "Objects":
+      return ast.propertySignatures.length || ast.indexSignatures.length ? ["object"] : ["string", "number", "boolean", "symbol", "bigint", "object", "array", "function"];
+    case "Enum":
+      return Array.from(new Set(ast.enums.map(([, v]) => typeof v)));
+    case "Literal":
+      return [typeof ast.literal];
+    case "Union":
+      return Array.from(new Set(ast.types.flatMap(getCandidateTypes)));
+    default:
+      return ["null", "undefined", "string", "number", "boolean", "symbol", "bigint", "object", "array", "function"];
+  }
+}
+function collectSentinels(ast) {
+  switch (ast._tag) {
+    default:
+      return [];
+    case "Declaration": {
+      const s = ast.annotations?.[SENTINELS_ANNOTATION_KEY];
+      return Array.isArray(s) ? s : [];
+    }
+    case "Objects":
+      return ast.propertySignatures.flatMap((ps) => {
+        const type = ps.type;
+        if (!isOptional(type)) {
+          if (isLiteral(type)) {
+            return [{
+              key: ps.name,
+              literal: type.literal
+            }];
+          }
+          if (isUniqueSymbol(type)) {
+            return [{
+              key: ps.name,
+              literal: type.symbol
+            }];
+          }
+        }
+        return [];
+      });
+    case "Arrays":
+      return ast.elements.flatMap((e, i) => {
+        if (!isOptional(e)) {
+          if (isLiteral(e)) {
+            return [{
+              key: i,
+              literal: e.literal
+            }];
+          }
+          if (isUniqueSymbol(e)) {
+            return [{
+              key: i,
+              literal: e.symbol
+            }];
+          }
+        }
+        return [];
+      });
+    case "Union": {
+      if (ast.types.length === 0)
+        return [];
+      const members = ast.types.map((type) => collectSentinels(toCandidate(type)));
+      return members[0].filter((s) => members.every((sentinels) => sentinels.some((o) => o.key === s.key && o.literal === s.literal)));
+    }
+    case "Suspend":
+      return collectSentinels(ast.thunk());
+  }
+}
+var candidateIndexCache = /* @__PURE__ */ new WeakMap;
+var emptyCandidates = /* @__PURE__ */ Object.freeze([]);
+var hasPropertySignature = (input, key) => key === "__proto__" ? Object.hasOwn(input, key) : (key in input);
+function getIndex(types) {
+  let index = candidateIndexCache.get(types);
+  if (index)
+    return index;
+  let bySentinel;
+  let sentinelCandidateCount = 0;
+  let otherwise;
+  let literalCandidates;
+  let onlyLiterals = true;
+  for (let i = 0;i < types.length; i++) {
+    const a = types[i];
+    const encoded = toCandidate(a);
+    if (isNever2(encoded))
+      continue;
+    if (onlyLiterals) {
+      if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
+        literalCandidates ??= new Map;
+        const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
+        let arr = literalCandidates.get(literal);
+        if (!arr)
+          literalCandidates.set(literal, arr = []);
+        arr.push(a);
+      } else {
+        onlyLiterals = false;
+      }
+    }
+    const sentinels = collectSentinels(encoded);
+    if (sentinels.length) {
+      bySentinel ??= new Map;
+      sentinelCandidateCount++;
+      for (const {
+        key,
+        literal
+      } of sentinels) {
+        let entry = bySentinel.get(key);
+        if (!entry)
+          bySentinel.set(key, entry = [new Map, new Set]);
+        entry[1].add(i);
+        let indexes = entry[0].get(literal);
+        if (!indexes)
+          entry[0].set(literal, indexes = new Set);
+        indexes.add(i);
+      }
+    } else {
+      otherwise ??= {};
+      const candidateTypes = getCandidateTypes(encoded);
+      for (const t of candidateTypes)
+        (otherwise[t] ??= []).push(i);
+    }
+  }
+  if (onlyLiterals && literalCandidates) {
+    literalCandidates.forEach(Object.freeze);
+    index = (input) => literalCandidates.get(input) ?? emptyCandidates;
+  } else if (bySentinel?.size === 1 && !otherwise) {
+    const [key, [byValue]] = bySentinel.entries().next().value;
+    const candidates = byValue;
+    for (const [literal, indexes] of byValue) {
+      candidates.set(literal, Object.freeze(Array.from(indexes, (index) => types[index])));
+    }
+    index = (input, isConstructor) => {
+      if (isObjectKeyword(input)) {
+        const value = hasPropertySignature(input, key) ? input[key] : undefined;
+        if (value !== undefined)
+          return candidates.get(value) ?? emptyCandidates;
+        if (isConstructor)
+          return types;
+      }
+      return emptyCandidates;
+    };
+  } else if (bySentinel) {
+    let commonSentinel;
+    for (const entry of bySentinel) {
+      if ((!commonSentinel || entry[1][0].size > commonSentinel[1][0].size) && entry[1][1].size === sentinelCandidateCount) {
+        commonSentinel = entry;
+      }
+    }
+    index = (input, isConstructor) => {
+      const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
+      const base = otherwise?.[runtimeType] ?? emptyCandidates;
+      if (!isObjectKeyword(input))
+        return base.map((i) => types[i]);
+      const selected = new Set(base);
+      let directKey;
+      if (commonSentinel) {
+        const [key, [byValue]] = commonSentinel;
+        const hasKey = hasPropertySignature(input, key);
+        const value = hasKey ? input[key] : undefined;
+        if (hasKey && (!isConstructor || value !== undefined)) {
+          const match = byValue.get(value);
+          if (!match)
+            return base.map((i) => types[i]);
+          for (const i of match)
+            selected.add(i);
+          directKey = key;
+        }
+      }
+      if (directKey === undefined) {
+        for (const [key, [byValue, all]] of bySentinel) {
+          const hasKey = hasPropertySignature(input, key);
+          const value = hasKey ? input[key] : undefined;
+          if (hasKey && (!isConstructor || value !== undefined)) {
+            const match = byValue.get(value);
+            if (match) {
+              for (const i of match)
+                selected.add(i);
+            }
+          } else if (isConstructor) {
+            for (const i of all)
+              selected.add(i);
+          }
+        }
+      }
+      for (const [key, [byValue, all]] of bySentinel) {
+        if (key === directKey)
+          continue;
+        const hasKey = hasPropertySignature(input, key);
+        const value = hasKey ? input[key] : undefined;
+        if (hasKey && (!isConstructor || value !== undefined)) {
+          const match = byValue.get(value);
+          for (const i of selected) {
+            if (all.has(i) && !match?.has(i))
+              selected.delete(i);
+          }
+        }
+      }
+      return Array.from(selected).sort((a, b) => a - b).map((i) => types[i]);
+    };
+  } else {
+    index = (input) => {
+      const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
+      return (otherwise?.[runtimeType] ?? emptyCandidates).map((i) => types[i]).filter(filterLiterals(input));
+    };
+  }
+  candidateIndexCache.set(types, index);
+  return index;
+}
+function filterLiterals(input) {
+  return (ast) => {
+    const encoded = toCandidate(ast);
+    return encoded._tag === "Literal" ? encoded.literal === input : encoded._tag === "UniqueSymbol" ? encoded.symbol === input : true;
+  };
+}
+function getCandidates(input, types, isConstructor = false) {
+  return getIndex(types)(input, isConstructor);
+}
+var Union = class extends ASTNodeImpl {
+  _tag = "Union";
+  types;
+  options;
+  encodingChecks;
+  constructor(types, options, annotations, checks, encoding, context, encodingChecks) {
+    super(annotations, checks, encoding, context);
+    this.types = types;
+    this.options = options;
+    this.encodingChecks = encodingChecks;
+  }
+  getParser(compile, compileField) {
+    const ast = this;
+    return (input, options) => {
+      if (input === missing) {
+        return missingExit;
+      }
+      const candidates = getCandidates(input, ast.types, compileField !== undefined);
+      if (candidates.length === 0) {
+        return fail6(new AnyOf(ast, [], input, options));
+      }
+      if (candidates.length === 1) {
+        const result = compile(candidates[0])(input, options);
+        if (result._tag === "Success")
+          return result;
+        return effectIsExit(result) ? failSingleUnionCandidate(ast, result.cause, input, options) : catchCause2(result, (cause) => failSingleUnionCandidate(ast, cause, input, options));
+      }
+      const state = {
+        ast,
+        compile,
+        input,
+        out: undefined,
+        successes: ast.options?.mode === "oneOf" ? [] : undefined,
+        issues: undefined,
+        options
+      };
+      const eff = parseUnion(state, candidates);
+      if (!eff) {
+        if (state.out)
+          return state.out;
+        return fail6(new AnyOf(ast, state.issues ?? [], input, options));
+      }
+      return flatMapEager2(eff, (_) => {
+        if (state.out === sameExit)
+          return succeed6(input);
+        if (state.out)
+          return state.out;
+        return fail6(new AnyOf(ast, state.issues ?? [], input, options));
+      });
+    };
+  }
+  _rebuild(recur, checks, encodingChecks) {
+    const types = mapOrSame(this.types, recur);
+    return types === this.types && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Union(types, this.options, this.annotations, checks, undefined, this.context, encodingChecks);
+  }
+  recur(recur) {
+    return this._rebuild(recur, this.checks, this.encodingChecks);
+  }
+  flip(recur) {
+    return this._rebuild(recur, this.encodingChecks, this.checks);
+  }
+  matchPart(s, options) {
+    for (const type of this.types) {
+      const out = type.matchPart(s, options);
+      if (out !== undefined)
+        return out;
+    }
+    return;
+  }
+  getExpected(getExpected) {
+    const expected = this.annotations?.expected;
+    if (typeof expected === "string")
+      return expected;
+    if (this.types.length === 0)
+      return "never";
+    const types = this.types.map((type) => {
+      const encoded = toEncoded(type);
+      switch (encoded._tag) {
+        case "Arrays": {
+          const literals = encoded.elements.filter(isLiteral);
+          if (literals.length > 0) {
+            return `${formatIsMutable(encoded.isMutable)}[ ${literals.map((e) => getExpected(e) + formatIsOptional(e.context?.isOptional)).join(", ")}, ... ]`;
+          }
+          break;
+        }
+        case "Objects": {
+          const literals = encoded.propertySignatures.filter((ps) => isLiteral(ps.type));
+          if (literals.length > 0) {
+            return `{ ${literals.map((ps) => `${formatIsMutable(ps.type.context?.isMutable)}${formatPropertyKey(ps.name)}${formatIsOptional(ps.type.context?.isOptional)}: ${getExpected(ps.type)}`).join(", ")}, ... }`;
+          }
+          break;
+        }
+      }
+      return getExpected(encoded);
+    });
+    return Array.from(new Set(types)).join(" | ");
+  }
+};
+function failSingleUnionCandidate(ast, cause, input, options) {
+  const issue = getSchemaIssue(cause);
+  if (!issue)
+    return failCause2(cause);
+  return fail5(new AnyOf(ast, [issue], input, options));
+}
+var parseUnion = /* @__PURE__ */ iterateEager()({
+  onItem(s, ast) {
+    const parser = s.compile(ast);
+    return parser(s.input, s.options);
+  },
+  step(s, candidate, exit) {
+    if (exit._tag === "Failure") {
+      const issue = getSchemaIssue(exit.cause);
+      if (issue === undefined) {
+        return exit;
+      }
+      if (s.issues)
+        s.issues.push(issue);
+      else
+        s.issues = [issue];
+    } else {
+      if (s.out && s.successes) {
+        s.successes.push(candidate);
+        return fail5(new OneOf(s.ast, s.successes, s.input, s.options));
+      }
+      s.out = exit;
+      if (s.successes) {
+        s.successes.push(candidate);
+      } else {
+        return void_2;
+      }
+    }
+  }
+});
+var nonFiniteLiterals = /* @__PURE__ */ new Union([/* @__PURE__ */ new Literal("Infinity"), /* @__PURE__ */ new Literal("-Infinity"), /* @__PURE__ */ new Literal("NaN")]);
+function formatIsMutable(isMutable) {
+  return isMutable ? "" : "readonly ";
+}
+function formatIsOptional(isOptional) {
+  return isOptional ? "?" : "";
+}
+var Filter2 = class extends Class {
+  _tag = "Filter";
+  run;
+  annotations;
+  aborted;
+  constructor(run, annotations = undefined, aborted = false) {
+    super();
+    this.run = run;
+    this.annotations = annotations;
+    this.aborted = aborted;
+  }
+  annotate(annotations) {
+    return new Filter2(this.run, {
+      ...this.annotations,
+      ...annotations
+    }, this.aborted);
+  }
+  abort() {
+    return new Filter2(this.run, this.annotations, true);
+  }
+  and(other, annotations) {
+    return new FilterGroup([this, other], annotations);
+  }
+};
+var FilterGroup = class extends Class {
+  _tag = "FilterGroup";
+  checks;
+  annotations;
+  constructor(checks, annotations = undefined) {
+    super();
+    this.checks = checks;
+    this.annotations = annotations;
+  }
+  annotate(annotations) {
+    return new FilterGroup(this.checks, {
+      ...this.annotations,
+      ...annotations
+    });
+  }
+  and(other, annotations) {
+    return new FilterGroup([this, other], annotations);
+  }
+};
+function makeFilter(filter, annotations, aborted = false) {
+  return new Filter2((input, ast, options) => normalizeFilterOutput(ast, filter(input, ast, options), input, options), annotations, aborted);
+}
+function isFinite2(annotations) {
+  return makeFilter((n) => globalThis.Number.isFinite(n), {
+    expected: "a finite number",
+    representation: {
+      id: "effect/schema/isFinite",
+      payload: null
+    },
+    toJsonSchema: () => ({
+      type: "number"
+    }),
+    toCode: () => ({
+      runtime: "Schema.isFinite()"
+    }),
+    arbitraryConstraint: {
+      number: "finite"
+    },
+    ...annotations
+  });
+}
+var finite = /* @__PURE__ */ appendChecks(number2, [/* @__PURE__ */ isFinite2()]);
+var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finite, nonFiniteLiterals]), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
+function isPattern(regExp, annotations) {
+  const source = regExp.source;
+  const pattern = new globalThis.RegExp(source, regExp.flags);
+  return makeFilter((s) => {
+    pattern.lastIndex = 0;
+    return pattern.test(s);
+  }, {
+    expected: `a string matching the RegExp ${source}`,
+    representation: {
+      id: "effect/schema/isPattern",
+      payload: {
+        source,
+        flags: regExp.flags
+      }
+    },
+    toJsonSchema: () => ({
+      pattern: source
+    }),
+    arbitraryConstraint: {
+      patterns: [{
+        source: regExp.source,
+        flags: regExp.flags
+      }]
+    },
+    ...annotations
+  });
+}
+function modifyOwnPropertyDescriptors(ast, f) {
+  const d = Object.getOwnPropertyDescriptors(ast);
+  f(d);
+  return Object.create(Object.getPrototypeOf(ast), d);
+}
+var contextOwners = /* @__PURE__ */ new WeakMap;
+function getContextOwner(ast) {
+  return contextOwners.get(ast) ?? ast;
+}
+function replaceEncoding(ast, encoding) {
+  if (ast.encoding === encoding) {
+    return ast;
+  }
+  return modifyOwnPropertyDescriptors(ast, (d) => {
+    d.encoding.value = encoding;
+  });
+}
+function replaceContext(ast, context) {
+  if (ast.context === context) {
+    return ast;
+  }
+  const owner = getContextOwner(ast);
+  if (owner.context === context) {
+    return owner;
+  }
+  const out = modifyOwnPropertyDescriptors(ast, (d) => {
+    d.context.value = context;
+  });
+  contextOwners.set(out, owner);
+  return out;
+}
+function getLastEncoding(ast) {
+  return ast.encoding ? getLastEncoding(ast.encoding[ast.encoding.length - 1].to) : ast;
+}
+function annotate(ast, annotations) {
+  if (ast.checks) {
+    const last = ast.checks[ast.checks.length - 1];
+    return replaceChecks(ast, append(ast.checks.slice(0, -1), last.annotate(annotations)));
+  }
+  return modifyOwnPropertyDescriptors(ast, (d) => {
+    d.annotations.value = {
+      ...d.annotations.value,
+      ...annotations
+    };
+  });
+}
+function replaceChecks(ast, checks) {
+  if (ast._tag === "Suspend" && checks) {
+    throw new Error("Cannot add checks to Suspend");
+  }
+  if (ast.checks === checks) {
+    return ast;
+  }
+  return modifyOwnPropertyDescriptors(ast, (d) => {
+    d.checks.value = checks;
+  });
+}
+function appendChecks(ast, checks) {
+  return replaceChecks(ast, combineChecks(ast.checks, checks));
+}
+function mapLink(link, f) {
+  const to = f(link.to);
+  return to === link.to ? link : new Link(to, link.transformation);
+}
+function updateLastLink(encoding, f) {
+  const links = encoding;
+  const last = links[links.length - 1];
+  const out = mapLink(last, f);
+  return out === last ? encoding : append(encoding.slice(0, encoding.length - 1), out);
+}
+function applyToLastLink(f) {
+  return (ast) => ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, f)) : ast;
+}
+function applyToSelfOrLastLinkEncodingIdempotent(f, options) {
+  function out(ast) {
+    if (ast.encoding) {
+      const last = ast.encoding[ast.encoding.length - 1];
+      return options?.stopAt?.(last) ? ast : replaceEncoding(ast, updateLastLink(ast.encoding, out));
+    }
+    return f(ast);
+  }
+  return memoizeIdempotent(out);
+}
+function appendTransformation(from, transformation, to) {
+  const link = new Link(from, transformation);
+  return replaceEncoding(to, to.encoding ? [...to.encoding, link] : [link]);
+}
+function mapOrSame(as, f) {
+  let changed = false;
+  const out = new Array(as.length);
+  for (let i = 0;i < as.length; i++) {
+    const a = as[i];
+    const fa = f(a);
+    if (fa !== a) {
+      changed = true;
+    }
+    out[i] = fa;
+  }
+  return changed ? out : as;
+}
+function annotateKey(ast, annotations) {
+  const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, ast.context.constructorDefault, {
+    ...ast.context.annotations,
+    ...annotations
+  }) : new Context(false, false, undefined, annotations);
+  return replaceContext(ast, context);
+}
+var optionalKey = /* @__PURE__ */ memoizeIdempotent((ast) => {
+  const context = ast.context ? ast.context.isOptional === false ? new Context(true, ast.context.isMutable, ast.context.constructorDefault, ast.context.annotations) : ast.context : new Context(true, false);
+  return optionalKeyLastLink(replaceContext(ast, context));
+});
+var optionalKeyLastLink = /* @__PURE__ */ applyToLastLink(optionalKey);
+function withConstructorDefault(ast, defaultValue) {
+  const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, defaultValue, ast.context.annotations) : new Context(false, false, defaultValue);
+  return replaceContext(ast, context);
+}
+function decodeTo(from, to, transformation) {
+  return appendTransformation(from, transformation, to);
+}
+function isOptional(ast) {
+  return ast.context?.isOptional ?? false;
+}
+function isStructuralCheck(check) {
+  return check.annotations?.[STRUCTURAL_ANNOTATION_KEY] === true || check._tag === "FilterGroup" && check.checks.every(isStructuralCheck);
+}
+function extractStructuralChecks(checks) {
+  function extract(check) {
+    if (isStructuralCheck(check))
+      return [check];
+    return check._tag === "FilterGroup" ? check.checks.flatMap(extract) : [];
+  }
+  const out = checks.flatMap(extract);
+  return isArrayNonEmpty2(out) ? out : undefined;
+}
+var toType = /* @__PURE__ */ memoizeIdempotent((ast) => {
+  if (ast.encoding) {
+    return toType(replaceEncoding(ast, undefined));
+  }
+  const out = ast;
+  const type = out.recur?.(toType) ?? out;
+  const encodingChecks = type.encodingChecks;
+  if (encodingChecks) {
+    const checks = type === ast ? encodingChecks : isArrays(type) || isObjects(type) || isDeclaration(type) && type.typeParameters.length > 0 ? extractStructuralChecks(encodingChecks) : undefined;
+    return modifyOwnPropertyDescriptors(type, (d) => {
+      d.encodingChecks.value = undefined;
+      d.checks.value = combineChecks(type.checks, checks);
+    });
+  }
+  return type;
+});
+var toEncoded = /* @__PURE__ */ memoizeIdempotent((ast) => {
+  return toType(flip2(ast));
+});
+function flipEncoding(ast, encoding) {
+  const links = encoding;
+  const len = links.length;
+  const last = links[len - 1];
+  const ls = [new Link(flip2(replaceEncoding(ast, undefined)), links[0].transformation.flip())];
+  for (let i = 1;i < len; i++) {
+    ls.unshift(new Link(flip2(links[i - 1].to), links[i].transformation.flip()));
+  }
+  const to = flip2(last.to);
+  if (to.encoding) {
+    return replaceEncoding(to, [...to.encoding, ...ls]);
+  } else {
+    return replaceEncoding(to, ls);
+  }
+}
+var flip2 = /* @__PURE__ */ memoize((ast) => {
+  if (ast.encoding) {
+    return flipEncoding(ast, ast.encoding);
+  }
+  const out = ast;
+  return out.flip?.(flip2) ?? out.recur?.(flip2) ?? out;
+});
+function containsUndefined(ast) {
+  switch (ast._tag) {
+    case "Undefined":
+      return true;
+    case "Union":
+      return ast.types.some(containsUndefined);
+    default:
+      return false;
+  }
+}
+function fromConst(ast, value) {
+  const succeed = value === 0 ? sameExit : succeed7(value);
+  return (input, options) => {
+    if (input === missing)
+      return missingExit;
+    if (input === value)
+      return succeed;
+    return fail6(new InvalidType(ast, input, options));
+  };
+}
+function fromRefinement(ast, refinement) {
+  return (input, options) => {
+    if (input === missing)
+      return missingExit;
+    if (refinement(input))
+      return sameExit;
+    return fail6(new InvalidType(ast, input, options));
+  };
+}
+var parameterFromPropertyKey = /* @__PURE__ */ applyToSelfOrLastLinkEncodingIdempotent((ast) => {
+  switch (ast._tag) {
+    default:
+      return ast;
+    case "Number":
+      return ast.toCodecStringTree();
+    case "Union":
+      return ast.recur(parameterFromPropertyKey);
+  }
+});
+var isStringFiniteRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${FINITE_PATTERN}$`);
+var isStringNumberRegExp = /* @__PURE__ */ new globalThis.RegExp(`^(?:${FINITE_PATTERN}|Infinity|-Infinity|NaN)$`);
+function isStringFinite(annotations) {
+  return isPattern(isStringFiniteRegExp, {
+    expected: "a string representing a finite number",
+    representation: {
+      id: "effect/schema/isStringFinite",
+      payload: null
+    },
+    toJsonSchema: () => ({
+      pattern: isStringFiniteRegExp.source
+    }),
+    ...annotations
+  });
+}
+var finiteString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringFinite()]);
+var finiteToString = /* @__PURE__ */ new Link(finiteString, numberFromString);
+var numberToString = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finiteString, nonFiniteLiterals]), numberFromString);
+var BIGINT_PATTERN = "-?\\d+";
+var isStringBigIntRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${BIGINT_PATTERN}$`);
+var REGEXP_PATTERN = "Symbol\\(([\\s\\S]*)\\)";
+var isStringSymbolRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${REGEXP_PATTERN}$`);
+function collectIssues(checks, value, issues, ast, options) {
+  for (let i = 0;i < checks.length; i++) {
+    const check = checks[i];
+    if (check._tag === "FilterGroup") {
+      issues = collectIssues(check.checks, value, issues, ast, options);
+      if (issues && (options.errors !== "all" || issues[issues.length - 1].filter.aborted)) {
+        return issues;
+      }
+    } else {
+      const issue = check.run(value, ast, options);
+      if (issue) {
+        const filter = new Filter(check, issue, value, options);
+        if (issues)
+          issues.push(filter);
+        else
+          issues = [filter];
+        if (options.errors !== "all" || check.aborted) {
+          return issues;
+        }
+      }
+    }
+  }
+  return issues;
+}
+function getConstructorDescriptor(ast) {
+  if (!isDeclaration(ast))
+    return;
+  const getDescriptor = ast.annotations?.[CONSTRUCTOR_ANNOTATION_KEY];
+  return isFunction(getDescriptor) ? getDescriptor(ast.typeParameters) : undefined;
+}
+function isJsonLeaf(u) {
+  return u === null || typeof u === "string" || typeof u === "boolean" || typeof u === "number" && globalThis.Number.isFinite(u);
+}
+function isStringTreeLeaf(u) {
+  return u === undefined || typeof u === "string";
+}
+function isTree(u, isLeaf) {
+  const cache = new WeakMap;
+  const stack = [];
+  outer:
+    while (true) {
+      if (typeof u !== "object" || u === null) {
+        if (!isLeaf(u)) {
+          return false;
+        }
+      } else {
+        const value = u;
+        const cached = cache.get(value);
+        if (cached === false) {
+          return false;
+        }
+        if (cached === undefined) {
+          const isArray = Array.isArray(value);
+          if (!isArray) {
+            const prototype = Object.getPrototypeOf(value);
+            if (prototype !== null && prototype !== Object.prototype && Object.getPrototypeOf(prototype) !== null) {
+              return false;
+            }
+          }
+          cache.set(value, false);
+          stack.push({
+            value,
+            keys: isArray ? value.length : Object.keys(value),
+            index: 0
+          });
+        }
+      }
+      while (stack.length > 0) {
+        const frame = stack[stack.length - 1];
+        const keys = frame.keys;
+        if (typeof keys === "number") {
+          if (frame.index < keys) {
+            u = frame.value[frame.index++];
+            continue outer;
+          }
+        } else if (frame.index < keys.length) {
+          u = frame.value[keys[frame.index++]];
+          continue outer;
+        }
+        cache.set(frame.value, true);
+        stack.pop();
+      }
+      return true;
+    }
+}
+function isJson(u) {
+  return isTree(u, isJsonLeaf);
+}
+var Json = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isJson(input) ? sameExit : fail6(new InvalidType(ast, input, options)), {
+  representation: {
+    id: "effect/schema/Json",
+    payload: null
+  },
+  expected: "JSON value",
+  toCodecJson: () => {
+    return;
+  },
+  toCodecStringTree: () => unknownToStringTree
+});
+function isStringTree(u) {
+  return isTree(u, isStringTreeLeaf);
+}
+var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isStringTree(input) ? sameExit : fail6(new InvalidType(ast, input, options)), {
+  expected: "StringTree",
+  toCodecStringTree: () => {
+    return;
+  }
+});
+var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough2());
 
+// node_modules/effect/dist/Brand.js
+function nominal() {
+  return Object.assign((input) => input, {
+    option: (input) => some2(input),
+    result: (input) => succeed2(input),
+    is: (_) => true
+  });
+}
 // node_modules/effect/dist/Fiber.js
 var join = fiberJoin;
 var interrupt3 = fiberInterrupt;
@@ -4737,9 +6729,9 @@ var makeUnsafe4 = makeLatchUnsafe;
 var make6 = makeLatch;
 
 // node_modules/effect/dist/MutableRef.js
-var TypeId8 = "~effect/MutableRef";
+var TypeId10 = "~effect/MutableRef";
 var MutableRefProto = {
-  [TypeId8]: TypeId8,
+  [TypeId10]: TypeId10,
   ...PipeInspectableProto,
   toJSON() {
     return {
@@ -4832,7 +6824,7 @@ var take = (self) => {
 };
 
 // node_modules/effect/dist/Queue.js
-var TypeId9 = "~effect/Queue";
+var TypeId11 = "~effect/Queue";
 var EnqueueTypeId = "~effect/Queue/Enqueue";
 var DequeueTypeId = "~effect/Queue/Dequeue";
 var variance = {
@@ -4840,7 +6832,7 @@ var variance = {
   _E: identity
 };
 var QueueProto = {
-  [TypeId9]: variance,
+  [TypeId11]: variance,
   [EnqueueTypeId]: variance,
   [DequeueTypeId]: variance,
   ...PipeInspectableProto,
@@ -5224,10 +7216,10 @@ class SemaphoreImpl {
 }
 
 // node_modules/effect/dist/Channel.js
-var TypeId10 = "~effect/Channel";
-var isChannel = (u) => hasProperty(u, TypeId10);
+var TypeId12 = "~effect/Channel";
+var isChannel = (u) => hasProperty(u, TypeId12);
 var ChannelProto = {
-  [TypeId10]: {
+  [TypeId12]: {
     _Env: identity,
     _InErr: identity,
     _InElem: identity,
@@ -5256,31 +7248,31 @@ var asyncQueue = (scope, f, options) => make9({
   capacity: options?.bufferSize,
   strategy: options?.strategy
 }).pipe(tap2((queue) => addFinalizer2(scope, shutdown(queue))), tap2((queue) => forkIn2(provide(f(queue), scope), scope)));
-var callbackArray = (f, options) => fromTransform((_, scope) => map6(asyncQueue(scope, f, options), takeAll2));
+var callbackArray = (f, options) => fromTransform((_, scope) => map5(asyncQueue(scope, f, options), takeAll2));
 var suspend3 = (evaluate) => fromTransform((upstream, scope) => suspend2(() => toTransform(evaluate())(upstream, scope)));
-var succeed7 = (value) => fromEffect(succeed6(value));
-var empty3 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done3()));
+var succeed8 = (value) => fromEffect(succeed6(value));
+var empty3 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done2()));
 var fail7 = (error) => fromPull(succeed6(fail6(error)));
 var failCause5 = (cause) => fromPull(failCause3(cause));
 var fromEffect = (effect) => fromPull(sync3(() => {
   let done = false;
   return suspend2(() => {
     if (done)
-      return done3();
+      return done2();
     done = true;
     return effect;
   });
 }));
-var fromEffectDrain = (effect) => fromPull(flatMap3(effect, () => done3()));
-var map7 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => sync3(() => {
+var fromEffectDrain = (effect) => fromPull(flatMap3(effect, () => done2()));
+var map6 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => sync3(() => {
   let i = 0;
-  return map6(pull, (o) => f(o, i++));
+  return map5(pull, (o) => f(o, i++));
 })));
 var mapDone = /* @__PURE__ */ dual(2, (self, f) => mapDoneEffect(self, (o) => succeed6(f(o))));
-var mapDoneEffect = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => succeed6(catchDone(pull, (done) => flatMap3(f(done), done3)))));
+var mapDoneEffect = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => succeed6(catchDone(pull, (done) => flatMap3(f(done), done2)))));
 var concurrencyIsSequential = (concurrency) => concurrency === undefined || concurrency !== "unbounded" && concurrency <= 1;
 var flatMap4 = /* @__PURE__ */ dual((args) => isChannel(args[0]), (self, f, options) => concurrencyIsSequential(options?.concurrency) ? flatMapSequential(self, f) : flatMapConcurrent(self, f, options));
-var flatMapSequential = (self, f) => fromTransform((upstream, scope) => map6(toTransform(self)(upstream, scope), (pull) => {
+var flatMapSequential = (self, f) => fromTransform((upstream, scope) => map5(toTransform(self)(upstream, scope), (pull) => {
   let childPull;
   let childScope;
   const makePull = flatMap3(pull, (value) => {
@@ -5301,7 +7293,7 @@ var flatMapSequential = (self, f) => fromTransform((upstream, scope) => map6(toT
   });
   return suspend2(() => childPull ?? makePull);
 }));
-var flatMapConcurrent = (self, f, options) => self.pipe(map7(f), mergeAll3(options));
+var flatMapConcurrent = (self, f, options) => self.pipe(map6(f), mergeAll3(options));
 var flattenArray = (self) => transformPull(self, (pull) => {
   let array;
   let index = 0;
@@ -5334,7 +7326,7 @@ var drain = (self) => transformPull(self, (pull) => succeed6(forever2(pull, {
 })));
 var catchCause3 = /* @__PURE__ */ dual(2, (self, f) => fromTransform((upstream, scope) => {
   let forkedScope = forkUnsafe2(scope);
-  return map6(toTransform(self)(upstream, forkedScope), (pull) => {
+  return map5(toTransform(self)(upstream, forkedScope), (pull) => {
     let currentPull = pull.pipe(catchCause2((cause) => {
       if (isDoneCause(cause)) {
         return failCause3(cause);
@@ -5354,7 +7346,7 @@ var catchCauseFilter2 = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause3
   return isFailure2(result) ? failCause5(result.failure) : f(result.success, cause);
 }));
 var catch_3 = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter2(self, findError2, (e) => f(e)));
-var mapError3 = /* @__PURE__ */ dual(2, (self, f) => catch_3(self, (err) => fail7(f(err))));
+var mapError4 = /* @__PURE__ */ dual(2, (self, f) => catch_3(self, (err) => fail7(f(err))));
 var mergeAll3 = /* @__PURE__ */ dual(2, (channels, {
   bufferSize = 16,
   concurrency,
@@ -5503,7 +7495,7 @@ var splitLines = () => fromTransform((upstream, _scope) => sync3(() => {
   }
   const pullOrFlush = suspend2(() => {
     if (done._tag === "Some") {
-      return done3(done.value);
+      return done2(done.value);
     }
     return matchEffect2(upstream, {
       onSuccess: loop,
@@ -5516,7 +7508,7 @@ var splitLines = () => fromTransform((upstream, _scope) => sync3(() => {
           midCRLF = false;
           return succeed6([last]);
         }
-        return done3(leftover);
+        return done2(leftover);
       }
     });
   });
@@ -5537,7 +7529,7 @@ var unwrap = (channel) => fromTransform((upstream, scope) => {
 });
 var runWith = (self, f, onHalt) => suspend2(() => {
   const scope = makeUnsafe3();
-  const makePull = toTransform(self)(done3(), scope);
+  const makePull = toTransform(self)(done2(), scope);
   return catchDone(flatMap3(makePull, f), onHalt ? onHalt : succeed6).pipe(onExit2((exit) => close(scope, exit)));
 });
 var runForEach = /* @__PURE__ */ dual(2, (self, f) => runWith(self, (pull) => forever2(flatMap3(pull, f), {
@@ -5553,10 +7545,1152 @@ var runFold = /* @__PURE__ */ dual(3, (self, initial, f) => suspend2(() => {
     }
   }), () => succeed6(state));
 }));
-var toPullScoped = (self, scope) => toTransform(self)(done3(), scope);
+var toPullScoped = (self, scope) => toTransform(self)(done2(), scope);
+// node_modules/effect/dist/internal/schema/interpreter.js
+var flatMapTransformation = (result, current, f) => result === sameExit ? f(current) : flatMapEager2(result, f);
+function compileTransformation(transformation) {
+  if (transformation._tag === "Middleware") {
+    return (result, current, options) => {
+      const transformed = result === sameExit ? transformation.decode(succeed7(toOption(current)), options) : transformation.decode(mapEager2(result, toOption), options);
+      return fromOptionalEffect(transformed);
+    };
+  }
+  const getter = transformation.decode;
+  switch (getter._tag) {
+    case "Passthrough":
+      return (result, current) => result === sameExit ? succeed7(current) : result;
+    case "Transform": {
+      const transform = (value) => value === missing ? missingExit : succeed7(getter.transform(value));
+      return (result, current) => flatMapTransformation(result, current, transform);
+    }
+    case "TransformOptional": {
+      const transform = (value) => fromOptionExit(getter.transform(toOption(value)));
+      return (result, current) => flatMapTransformation(result, current, transform);
+    }
+    case "TransformEffect":
+      return (result, current, options) => flatMapTransformation(result, current, (value) => value === missing ? missingExit : getter.transform(value, options));
+    case "TransformOptionalEffect":
+      return (result, current, options) => flatMapTransformation(result, current, (value) => fromOptionalEffect(getter.transform(toOption(value), options)));
+  }
+}
+var fromOptionalEffect = (effect) => flatMapEager2(effect, fromOptionExit);
+var wrapEncoding = (ast, input, options, effect) => catchCause2(effect, (cause) => failCauseSync2(() => map4(cause, (issue) => new Encoding(ast, issue, input, options))));
+function makeConstructorParser(descriptor, compile) {
+  const transform = compileTransformation(descriptor.link.transformation);
+  let sourceParser;
+  return (input, options) => {
+    if (input === missing)
+      return missingExit;
+    if (descriptor.isConstructed(input))
+      return sameExit;
+    const result = (sourceParser ??= compile(descriptor.link.to))(input, options);
+    return transform(result, input, options);
+  };
+}
+function withDefault(ast, parser) {
+  const defaultValue = ast.context.constructorDefault;
+  return (input, options) => {
+    if (input !== missing && input !== undefined)
+      return parser(input, options);
+    const result = defaultValue;
+    if (effectIsExit(result) && result._tag === "Success") {
+      const local = parser(result[args], options);
+      return local === sameExit ? result : local;
+    }
+    return flatMapEager2(wrapEncoding(ast, input, options, result), (value) => {
+      const local = parser(value, options);
+      return local === sameExit ? succeed7(value) : local;
+    });
+  };
+}
+function compileField(ast, compile) {
+  const parser = compile(ast);
+  return ast.context?.constructorDefault === undefined ? parser : withDefault(ast, parser);
+}
+function compile(ast, compile, compileField, base, specialize) {
+  if (ast._tag === "Declaration") {
+    for (const parameter of ast.typeParameters)
+      compile(parameter);
+  }
+  const descriptor = compileField ? getConstructorDescriptor(ast) : undefined;
+  const parser = descriptor ? makeConstructorParser(descriptor, compile) : base ?? ast.getParser(compile, compileField);
+  const checks = ast.checks;
+  const links = ast.encoding;
+  const transformations = links?.map((link) => compileTransformation(link.transformation));
+  const encodingChecks = ast.encodingChecks;
+  if (!links && !checks && !encodingChecks) {
+    return parser;
+  }
+  let encodingParsers;
+  const parseChecks = (input, options) => {
+    let result = parser(input, options);
+    if (encodingChecks && !options.disableChecks) {
+      if (effectIsExit(result)) {
+        if (result._tag === "Success") {
+          const output = result === sameExit ? input : result[args];
+          if (input !== missing && output !== missing) {
+            const issues = collectIssues(encodingChecks, input, undefined, ast, options);
+            if (issues) {
+              result = fail6(new Composite(ast, issues, input, options));
+            }
+          }
+        }
+      } else {
+        result = flatMap3(result, (value) => {
+          if (input !== missing && value !== missing) {
+            const issues = collectIssues(encodingChecks, input, undefined, ast, options);
+            if (issues) {
+              return fail6(new Composite(ast, issues, input, options));
+            }
+          }
+          return succeed6(value);
+        });
+      }
+    }
+    if (checks && !options.disableChecks) {
+      if (effectIsExit(result)) {
+        if (result._tag === "Success") {
+          const value = result === sameExit ? input : result[args];
+          if (value === missing)
+            return result;
+          const issues = collectIssues(checks, value, undefined, ast, options);
+          if (issues) {
+            result = fail6(new Composite(ast, issues, value, options));
+          }
+        }
+      } else {
+        result = flatMap3(result, (value) => {
+          if (value !== missing) {
+            const issues = collectIssues(checks, value, undefined, ast, options);
+            if (issues) {
+              return fail6(new Composite(ast, issues, value, options));
+            }
+          }
+          return succeed6(value);
+        });
+      }
+    }
+    return result;
+  };
+  const parseLocal = specialize === undefined ? parseChecks : specialize(parseChecks);
+  if (!links) {
+    return parseLocal;
+  }
+  return (input, options) => {
+    const parsers = encodingParsers ??= links.map((link) => compile(link.to));
+    let current = input;
+    let result = parsers[parsers.length - 1](input, options);
+    for (let i = links.length - 1;i >= 0; i--) {
+      result = transformations[i](result, current, options);
+      if (i !== 0) {
+        const next = parsers[i - 1];
+        if (result._tag === "Success") {
+          current = result[args];
+          result = next(current, options);
+        } else {
+          result = flatMapEager2(result, (value) => {
+            const nextResult = next(value, options);
+            return nextResult === sameExit ? succeed7(value) : nextResult;
+          });
+        }
+      }
+    }
+    if (result._tag === "Success") {
+      const value = result[args];
+      const local = parseLocal(value, options);
+      return local === sameExit ? result : local;
+    }
+    result = wrapEncoding(ast, input, options, result);
+    return flatMapEager2(result, (value) => {
+      const local = parseLocal(value, options);
+      return local === sameExit ? succeed7(value) : local;
+    });
+  };
+}
+
+// node_modules/effect/dist/internal/schema/compilerRegistry.js
+var invalid3 = /* @__PURE__ */ Symbol();
+var cache = /* @__PURE__ */ new WeakMap;
+var compiler;
+var compilerAdaptersEnabled = false;
+var decodeChild = (ast) => compilerAdaptersEnabled ? lazyParser(resolve2, ast, "parser") : resolve2(ast).parser;
+var makeChild = (ast) => compilerAdaptersEnabled ? lazyParser(resolve2, ast, "makeEffect") : resolve2(ast).makeEffect;
+var makeField = (ast) => compileField(ast, makeChild);
+
+class InterpretedEntry {
+  ast;
+  constructor(ast) {
+    this.ast = ast;
+  }
+  get decodeEffect() {
+    return this.cachedDecodeEffect ??= compile(this.ast, decodeChild);
+  }
+  get parser() {
+    return this.decodeEffect;
+  }
+  get makeEffect() {
+    return this.cachedMakeEffect ??= compile(this.ast, makeChild, makeField);
+  }
+}
+
+class CompilerEntry extends InterpretedEntry {
+  compiled;
+  resolve;
+  constructor(ast, compiled, resolve) {
+    super(ast);
+    this.compiled = compiled;
+    this.resolve = resolve;
+  }
+  save(key, value) {
+    Object.defineProperty(this, key, {
+      value
+    });
+    return value;
+  }
+  operation(key) {
+    const compiled = this.compiled;
+    return typeof compiled === "function" ? compiled(this.ast, this.resolve, key) : compiled?.[key];
+  }
+  get is() {
+    return this.save("is", this.operation("is"));
+  }
+  get decode() {
+    return this.save("decode", this.operation("decode"));
+  }
+  get make() {
+    return this.save("make", this.operation("make"));
+  }
+  get decodeEffect() {
+    return this.save("decodeEffect", this.operation("decodeEffect") ?? compile(this.ast, (ast) => lazyParser(this.resolve, ast, "parser")));
+  }
+  get parser() {
+    const decode = this.decode;
+    return decode === undefined ? this.decodeEffect : this.save("parser", withDecode(decode, () => this.decodeEffect));
+  }
+  get makeEffect() {
+    const makeEffect = this.operation("makeEffect");
+    if (makeEffect !== undefined)
+      return this.save("makeEffect", makeEffect);
+    const child = (ast) => lazyParser(this.resolve, ast, "makeEffect");
+    return this.save("makeEffect", compile(this.ast, child, (ast) => compileField(ast, child)));
+  }
+}
+function withDecode(fastDecode, decodeEffect) {
+  let detailed;
+  return (input, options) => {
+    if (input !== missing) {
+      try {
+        const value = fastDecode(input, options);
+        if (value !== invalid3)
+          return value === input ? sameExit : succeed7(value);
+      } catch (error) {
+        return die3(error);
+      }
+    }
+    return (detailed ??= decodeEffect())(input, options);
+  };
+}
+function lazyParser(resolve, ast, operation) {
+  const entry = resolve(ast);
+  if (entry.compiled === undefined || Object.hasOwn(entry, operation)) {
+    return entry[operation];
+  }
+  let parser;
+  return (input, options) => (parser ??= entry[operation])(input, options);
+}
+function resolve2(ast) {
+  const cached = cache.get(ast);
+  if (cached !== undefined)
+    return cached;
+  const entry = compiler === undefined ? new InterpretedEntry(ast) : new CompilerEntry(ast, compiler(ast, resolve2), resolve2);
+  cache.set(ast, entry);
+  return entry;
+}
+
+// node_modules/effect/dist/SchemaParser.js
+function makeEffect(schema) {
+  const ast = schema.ast;
+  let parser;
+  return (input, options) => {
+    return (parser ??= runWithCompiler(constructorCompiler, toType(ast)))(input, options?.disableChecks ? options?.parseOptions ? {
+      ...options.parseOptions,
+      disableChecks: true
+    } : {
+      disableChecks: true
+    } : options?.parseOptions);
+  };
+}
+function makeOption(schema) {
+  const parser = makeEffect(schema);
+  return (input, options) => {
+    const exit = runSyncExit2(parser(input, options));
+    if (isSuccess3(exit)) {
+      return some2(exit.value);
+    }
+    getSchemaIssueOrThrow(exit.cause, "Option adapter can only return none for schema issues");
+    return none2();
+  };
+}
+function make10(schema) {
+  return makeConstructorSync(toType(schema.ast));
+}
+function is(schema) {
+  return _is(schema.ast);
+}
+function makeIs(ast) {
+  if (!compilerAdaptersEnabled) {
+    const parser = asExit(run(ast));
+    return (input) => {
+      const exit = parser(input, defaultParseOptions);
+      if (isSuccess3(exit))
+        return true;
+      getSchemaIssueOrThrow(exit.cause, "Type guard adapter can only return false for schema issues");
+      return false;
+    };
+  }
+  const entry = resolve2(ast);
+  const guard = entry.is;
+  if (guard !== undefined) {
+    return (input) => {
+      try {
+        return guard(input, defaultParseOptions);
+      } catch (error) {
+        getSchemaIssueOrThrow(die2(error), "Type guard adapter can only return false for schema issues");
+        return false;
+      }
+    };
+  }
+  const parser = entry.parser;
+  return (input) => {
+    const exit = runSyncExit2(parserResult(parser(input, defaultParseOptions), input));
+    if (isSuccess3(exit))
+      return true;
+    getSchemaIssueOrThrow(exit.cause, "Type guard adapter can only return false for schema issues");
+    return false;
+  };
+}
+function _is(ast) {
+  const typeAST = toType(ast);
+  let guard = (input) => {
+    guard = makeIs(typeAST);
+    return guard(input);
+  };
+  return (input) => {
+    return guard(input);
+  };
+}
+function decodeUnknownEffect(schema, options) {
+  const parser = run(schema.ast);
+  return options === undefined ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
+}
+var mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
+  ...options,
+  ...overrideOptions
+} : options;
+var getValue = (value) => {
+  if (value === missing) {
+    return fail6(new InvalidValue);
+  }
+  return succeed6(value);
+};
+function run(ast) {
+  return runWithCompiler(normalCompiler, ast);
+}
+function parserResult(result, input) {
+  if (result === sameExit) {
+    return succeed6(input);
+  }
+  if (!effectIsExit(result)) {
+    return flatMapEager2(result, getValue);
+  }
+  return result[args] === missing ? getValue(missing) : result;
+}
+function runWithCompiler(compiler, ast) {
+  let parser;
+  return (input, options) => {
+    const result = (parser ??= compiler(ast))(input, options ?? defaultParseOptions);
+    if (result === sameExit) {
+      return succeed6(input);
+    }
+    if (!effectIsExit(result)) {
+      return flatMapEager2(result, getValue);
+    }
+    return result[args] === missing ? getValue(missing) : result;
+  };
+}
+function asExit(parser) {
+  return (input, options) => runSyncExit2(parser(input, options));
+}
+function runSync2(effect, message) {
+  const exit = runSyncExit2(effect);
+  if (isSuccess3(exit)) {
+    return exit.value;
+  }
+  const issue = getSchemaIssueOrThrow(exit.cause, message);
+  throw new Error("Schema validation failed", {
+    cause: issue
+  });
+}
+function makeConstructorSync(ast) {
+  let entry;
+  let parser;
+  return (input, options) => {
+    entry ??= resolve2(ast);
+    const parseOptions = options?.disableChecks ? options.parseOptions ? {
+      ...options.parseOptions,
+      disableChecks: true
+    } : {
+      disableChecks: true
+    } : options?.parseOptions ?? defaultParseOptions;
+    const make = entry.make;
+    if (make !== undefined && input !== missing) {
+      let output;
+      try {
+        output = make(input, parseOptions);
+      } catch (error) {
+        getSchemaIssueOrThrow(die2(error), "Constructor adapter can only throw schema issues");
+        throw error;
+      }
+      if (output !== invalid3 && output !== missing)
+        return output;
+    }
+    const result = (parser ??= entry.makeEffect)(input, parseOptions);
+    return runSync2(parserResult(result, input), "Constructor adapter can only throw schema issues");
+  };
+}
+var normalCompiler = (ast) => resolve2(ast).parser;
+var constructorCompiler = (ast) => resolve2(ast).makeEffect;
+
+// node_modules/effect/dist/internal/schema/make.js
+var TypeId13 = "~effect/Schema/Schema";
+var SchemaProto = {
+  [TypeId13]: TypeId13,
+  pipe() {
+    return pipeArguments(this, arguments);
+  },
+  annotate(annotations) {
+    return this.rebuild(annotate(this.ast, annotations));
+  },
+  annotateKey(annotations) {
+    return this.rebuild(annotateKey(this.ast, annotations));
+  },
+  check(...checks) {
+    return this.rebuild(appendChecks(this.ast, checks));
+  }
+};
+function make11(ast, options) {
+  function Schema() {}
+  const self = Object.setPrototypeOf(Schema, SchemaProto);
+  if (options && (Object.hasOwn(options, "name") || Object.hasOwn(options, "length") || Object.hasOwn(options, "__proto__"))) {
+    Object.defineProperties(self, Object.getOwnPropertyDescriptors({
+      ...options
+    }));
+  } else {
+    Object.assign(self, options);
+  }
+  self.ast = ast;
+  self.rebuild = (ast) => make11(ast, options);
+  self.makeEffect = makeEffect(self);
+  self.make = make10(self);
+  self.makeOption = makeOption(self);
+  return self;
+}
+
+// node_modules/effect/dist/Struct.js
+var lambda = (f) => f;
+
+// node_modules/effect/dist/internal/schemaError.js
+var SchemaErrorTypeId = "~effect/Schema/SchemaError";
+function isSchemaError(u) {
+  return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
+}
+
+// node_modules/effect/dist/Schema.js
+var TypeId14 = TypeId13;
+function declareConstructor() {
+  return (typeParameters, run, annotations) => {
+    return make12(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make12(ast))), annotations));
+  };
+}
+function declare(is, annotations) {
+  return declareConstructor()([], () => (input, ast, options) => is(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options)), annotations);
+}
+class SchemaError extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
+  [SchemaErrorTypeId] = SchemaErrorTypeId;
+  constructor(issue) {
+    const stackTraceLimit = getStackTraceLimit();
+    setStackTraceLimit(0);
+    try {
+      super({
+        issue
+      });
+    } finally {
+      setStackTraceLimit(stackTraceLimit);
+    }
+  }
+  get message() {
+    return defaultFormatter(this.issue);
+  }
+  toString() {
+    return `SchemaError(${this.message})`;
+  }
+}
+function isSchemaError2(u) {
+  return isSchemaError(u);
+}
+function fromIssueEffect(self) {
+  if (effectIsExit(self)) {
+    return fromIssueExit(self);
+  }
+  return catchCause2(self, (cause) => failCauseSync2(() => map4(cause, (issue) => new SchemaError(issue))));
+}
+function fromIssueExit(exit) {
+  return isSuccess3(exit) ? exit : failCause2(map4(exit.cause, (issue) => new SchemaError(issue)));
+}
+function decodeUnknownEffect2(schema, options) {
+  const parser = decodeUnknownEffect(schema, options);
+  return (input, options) => {
+    return fromIssueEffect(parser(input, options));
+  };
+}
+var decodeEffect2 = decodeUnknownEffect2;
+var make12 = make11;
+function isSchema(u) {
+  return hasProperty(u, TypeId14) && u[TypeId14] === TypeId14;
+}
+var optionalKey2 = /* @__PURE__ */ lambda((schema) => make12(optionalKey(schema.ast), {
+  schema
+}));
+var toType2 = /* @__PURE__ */ lambda((schema) => make12(toType(schema.ast), {
+  schema
+}));
+function Literal2(literal) {
+  const out = make12(new Literal(literal), {
+    literal,
+    transform(to) {
+      return out.pipe(decodeTo2(Literal2(to), {
+        decode: transform(() => to),
+        encode: transform(() => literal)
+      }));
+    }
+  });
+  return out;
+}
+var Unknown2 = /* @__PURE__ */ make12(unknown);
+var String4 = /* @__PURE__ */ make12(string2);
+var Number5 = /* @__PURE__ */ make12(number2);
+var Boolean2 = /* @__PURE__ */ make12(boolean);
+function makeStruct(ast, fields) {
+  return make12(ast, {
+    fields,
+    mapFields(f, options) {
+      const fields = f(this.fields);
+      return makeStruct(struct(fields, options?.unsafePreserveChecks ? this.ast.checks : undefined), fields);
+    }
+  });
+}
+function Struct(fields) {
+  return makeStruct(struct(fields, undefined), fields);
+}
+function makeTuple(ast, elements) {
+  return make12(ast, {
+    elements,
+    mapElements(f, options) {
+      const elements = f(this.elements);
+      return makeTuple(tuple(elements, options?.unsafePreserveChecks ? this.ast.checks : undefined), elements);
+    }
+  });
+}
+function Tuple(elements) {
+  return makeTuple(tuple(elements), elements);
+}
+var ArraySchema = /* @__PURE__ */ lambda((schema) => make12(new Arrays(false, [], [schema.ast]), {
+  value: schema
+}));
+function makeUnion(ast, members) {
+  return make12(ast, {
+    members,
+    mapMembers(f, options) {
+      const members = f(this.members);
+      return makeUnion(union(members, this.ast.options, options?.unsafePreserveChecks ? this.ast.checks : undefined), members);
+    }
+  });
+}
+function Union2(members, options) {
+  return makeUnion(union(members, options, undefined), members);
+}
+function Literals(literals) {
+  const members = literals.map(Literal2);
+  return make12(union(members, undefined, undefined), {
+    literals,
+    members,
+    mapMembers(f) {
+      return Union2(f(this.members));
+    },
+    pick(literals) {
+      return Literals(literals);
+    },
+    transform(to) {
+      return Union2(members.map((member, index) => member.transform(to[index])));
+    }
+  });
+}
+function decodeTo2(to, transformation) {
+  return (from) => {
+    return make12(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough2()), {
+      from,
+      to
+    });
+  };
+}
+function withConstructorDefault2(defaultValue) {
+  return (schema) => make12(withConstructorDefault(schema.ast, defaultValue), {
+    schema
+  });
+}
+function tag(literal) {
+  return Literal2(literal).pipe(withConstructorDefault2(succeed6(literal)));
+}
+function TaggedStruct(value, fields) {
+  return Struct({
+    _tag: tag(value),
+    ...fields
+  });
+}
+function toTaggedUnion(tag) {
+  return (self) => {
+    const cases = {};
+    const discriminants = [];
+    const discriminantKeys = new Set;
+    const guards = {};
+    const isAnyOf = (keys) => (value) => keys.includes(value[tag]);
+    walk(self);
+    return Object.assign(self, {
+      cases,
+      discriminants,
+      isAnyOf,
+      guards,
+      match,
+      matchOrElse
+    });
+    function walk(schema) {
+      const ast = schema.ast;
+      if (isUnion(ast) && "members" in schema && globalThis.Array.isArray(schema.members) && schema.members.every(isSchema)) {
+        return schema.members.forEach(walk);
+      }
+      const sentinels = collectSentinels(ast);
+      if (sentinels.length > 0) {
+        const literal = sentinels.find((s) => s.key === tag)?.literal;
+        if (isPropertyKey(literal)) {
+          const key = typeof literal === "number" ? globalThis.String(literal) : literal;
+          if (discriminantKeys.has(key)) {
+            throw new globalThis.Error(`Duplicate discriminant: ${globalThis.String(literal)}`);
+          }
+          discriminantKeys.add(key);
+          discriminants.push(literal);
+          assignProperty(cases, literal, schema);
+          assignProperty(guards, literal, is(toType2(schema)));
+          return;
+        }
+      }
+      throw new globalThis.Error("No literal or unique symbol found");
+    }
+    function match() {
+      if (arguments.length === 1) {
+        const cases = arguments[0];
+        return function(value) {
+          const key = value[tag];
+          const handler = Object.hasOwn(cases, key) ? cases[key] : undefined;
+          return handler(value);
+        };
+      }
+      const value = arguments[0];
+      const cases = arguments[1];
+      const key = value[tag];
+      const handler = Object.hasOwn(cases, key) ? cases[key] : undefined;
+      return handler(value);
+    }
+    function matchOrElse() {
+      if (arguments.length === 2) {
+        const cases = arguments[0];
+        const orElse = arguments[1];
+        return function(value) {
+          const key = value[tag];
+          const handler = Object.hasOwn(cases, key) ? cases[key] ?? orElse : orElse;
+          return handler(value);
+        };
+      }
+      const value = arguments[0];
+      const cases = arguments[1];
+      const orElse = arguments[2];
+      const key = value[tag];
+      const handler = Object.hasOwn(cases, key) ? cases[key] ?? orElse : orElse;
+      return handler(value);
+    }
+  };
+}
+function TaggedUnion(casesByTag) {
+  const cases = {};
+  const members = [];
+  for (const key of Object.keys(casesByTag)) {
+    const member = TaggedStruct(key, casesByTag[key]);
+    assignProperty(cases, key, member);
+    members.push(member);
+  }
+  const union = Union2(members);
+  const {
+    guards,
+    isAnyOf,
+    match,
+    matchOrElse
+  } = toTaggedUnion("_tag")(union);
+  return make12(union.ast, {
+    cases,
+    isAnyOf,
+    guards,
+    match,
+    matchOrElse
+  });
+}
+function instanceOf(constructor, annotations) {
+  return declare((u) => u instanceof constructor, annotations);
+}
+function link() {
+  return (encodeTo, transformation) => {
+    return new Link(encodeTo.ast, makeTransformation(transformation));
+  };
+}
+var makeFilter2 = makeFilter;
+function isPattern2(regExp, annotations) {
+  const source = regExp.source;
+  const flags = regExp.flags;
+  const runtimeRegExp = flags === "" ? `new RegExp(${format(source)})` : `new RegExp(${format(source)}, ${format(flags)})`;
+  return isPattern(regExp, {
+    toCode: () => ({
+      runtime: `Schema.isPattern(${runtimeRegExp})`
+    }),
+    ...annotations
+  });
+}
+function isBase64(annotations) {
+  const regExp = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
+  return isPattern2(regExp, {
+    expected: "a base64 encoded string",
+    representation: {
+      id: "effect/schema/isBase64",
+      payload: null
+    },
+    toJsonSchema: () => ({
+      pattern: regExp.source
+    }),
+    toCode: () => ({
+      runtime: "Schema.isBase64()"
+    }),
+    ...annotations
+  });
+}
+var Finite = /* @__PURE__ */ make12(finite);
+function isInt(annotations) {
+  return makeFilter2((n) => globalThis.Number.isSafeInteger(n), {
+    expected: "an integer",
+    representation: {
+      id: "effect/schema/isInt",
+      payload: null
+    },
+    toJsonSchema: () => ({
+      type: "integer"
+    }),
+    toCode: () => ({
+      runtime: "Schema.isInt()"
+    }),
+    arbitraryConstraint: {
+      number: "integer"
+    },
+    ...annotations
+  });
+}
+var Int = /* @__PURE__ */ Number5.check(/* @__PURE__ */ isInt());
+var getErrorOptionsKey = (options) => (options?.includeStack === true ? 1 : 0) | (options?.excludeCause === true ? 2 : 0);
+var getErrorOptions = (key) => {
+  switch (key) {
+    case 0:
+      return;
+    case 1:
+      return {
+        includeStack: true
+      };
+    case 2:
+      return {
+        excludeCause: true
+      };
+    case 3:
+      return {
+        includeStack: true,
+        excludeCause: true
+      };
+  }
+};
+var defectSchemaCache = [];
+function Defect(options) {
+  const key = getErrorOptionsKey(options);
+  const cached = defectSchemaCache[key];
+  if (cached !== undefined) {
+    return cached;
+  }
+  const schema = Json2.pipe(decodeTo2(Unknown2, defectFromJson(getErrorOptions(key))));
+  defectSchemaCache[key] = schema;
+  return schema;
+}
+var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
+  representation: {
+    id: "effect/schema/RegExp",
+    payload: null
+  },
+  toCode: () => ({
+    runtime: `Schema.RegExp`,
+    Type: `globalThis.RegExp`
+  }),
+  expected: "RegExp",
+  toCodecJson: () => link()(Struct({
+    source: String4,
+    flags: String4
+  }), transformEffect2({
+    decode: (e, options) => try_2({
+      try: () => new globalThis.RegExp(e.source, e.flags),
+      catch: () => new InvalidValue({
+        expected: "valid RegExp source and flags"
+      }, e, options)
+    }),
+    encode: (regExp) => succeed6({
+      source: regExp.source,
+      flags: regExp.flags
+    })
+  }))
+});
+var URLString = /* @__PURE__ */ String4.annotate({
+  expected: "a string that will be decoded as a URL"
+});
+var URL2 = /* @__PURE__ */ instanceOf(globalThis.URL, {
+  representation: {
+    id: "effect/schema/URL",
+    payload: null
+  },
+  toCode: () => ({
+    runtime: `Schema.URL`,
+    Type: `globalThis.URL`
+  }),
+  expected: "URL",
+  toCodecJson: () => link()(URLString, urlFromString)
+});
+var JsonString = /* @__PURE__ */ String4.annotate({
+  expected: "a string that will be decoded as JSON",
+  contentMediaType: "application/json"
+});
+function fromJsonString2(schema, options) {
+  return JsonString.pipe(decodeTo2(schema, fromJsonString(options)));
+}
+var File = /* @__PURE__ */ instanceOf(globalThis.File, {
+  representation: {
+    id: "effect/schema/File",
+    payload: null
+  },
+  toCode: () => ({
+    runtime: `Schema.File`,
+    Type: `globalThis.File`
+  }),
+  expected: "File",
+  toCodecJson: () => link()(Struct({
+    data: String4.check(isBase64()),
+    type: String4,
+    name: String4,
+    lastModified: Int
+  }), transformEffect2({
+    decode: (e, options) => match2(decodeBase64(e.data), {
+      onFailure: () => fail6(new InvalidValue({
+        expected: "a valid Base64 string"
+      }, e.data, options)),
+      onSuccess: (bytes) => {
+        const buffer = new globalThis.Uint8Array(bytes);
+        return succeed6(new globalThis.File([buffer], e.name, {
+          type: e.type,
+          lastModified: e.lastModified
+        }));
+      }
+    }),
+    encode: (file, options) => tryPromise2({
+      try: async () => {
+        const bytes = new globalThis.Uint8Array(await file.arrayBuffer());
+        return {
+          data: encodeBase64(bytes),
+          type: file.type,
+          name: file.name,
+          lastModified: file.lastModified
+        };
+      },
+      catch: () => new InvalidValue({
+        expected: "a readable File"
+      }, file, options)
+    })
+  }))
+});
+var FormData2 = /* @__PURE__ */ instanceOf(globalThis.FormData, {
+  representation: {
+    id: "effect/schema/FormData",
+    payload: null
+  },
+  toCode: () => ({
+    runtime: `Schema.FormData`,
+    Type: `globalThis.FormData`
+  }),
+  expected: "FormData",
+  toCodecJson: () => link()(ArraySchema(Tuple([String4, Union2([Struct({
+    _tag: tag("String"),
+    value: String4
+  }), Struct({
+    _tag: tag("File"),
+    value: File
+  })])])), transformEffect2({
+    decode: (e) => {
+      const out = new globalThis.FormData;
+      for (const [key, entry] of e) {
+        out.append(key, entry.value);
+      }
+      return succeed6(out);
+    },
+    encode: (formData) => {
+      return succeed6(globalThis.Array.from(formData.entries()).map(([key, value]) => {
+        if (typeof value === "string") {
+          return [key, {
+            _tag: "String",
+            value
+          }];
+        } else {
+          return [key, {
+            _tag: "File",
+            value
+          }];
+        }
+      }));
+    }
+  }))
+});
+var URLSearchParams2 = /* @__PURE__ */ instanceOf(globalThis.URLSearchParams, {
+  representation: {
+    id: "effect/schema/URLSearchParams",
+    payload: null
+  },
+  toCode: () => ({
+    runtime: `Schema.URLSearchParams`,
+    Type: `globalThis.URLSearchParams`
+  }),
+  expected: "URLSearchParams",
+  toCodecJson: () => link()(String4.annotate({
+    expected: "a query string that will be decoded as URLSearchParams"
+  }), transform2({
+    decode: (e) => new globalThis.URLSearchParams(e),
+    encode: (params) => params.toString()
+  }))
+});
+var Base64String = /* @__PURE__ */ String4.annotate({
+  expected: "a base64 encoded string that will be decoded as Uint8Array",
+  format: "byte",
+  contentEncoding: "base64"
+});
+var Uint8Array2 = /* @__PURE__ */ instanceOf(globalThis.Uint8Array, {
+  representation: {
+    id: "effect/schema/Uint8Array",
+    payload: null
+  },
+  toCode: () => ({
+    runtime: `Schema.Uint8Array`,
+    Type: `globalThis.Uint8Array`
+  }),
+  expected: "Uint8Array",
+  toCodecJson: () => link()(Base64String, uint8ArrayFromBase64String)
+});
+var arbitraryMinimumDateTimestamp = -8640000000000000;
+var arbitraryMaximumDateTimestamp = 8640000000000000;
+var arbitraryMinimumZonedDateTimeTimestamp = arbitraryMinimumDateTimestamp + 14 * 60 * 60 * 1000;
+var arbitraryMaximumZonedDateTimeTimestamp = arbitraryMaximumDateTimestamp - 14 * 60 * 60 * 1000;
+var arbitraryMinimumTimeZoneOffset = -12 * 60 * 60 * 1000;
+var arbitraryMaximumTimeZoneOffset = 14 * 60 * 60 * 1000;
+var immerable = /* @__PURE__ */ globalThis.Symbol.for("immer-draftable");
+var payloadToken = {};
+function makeClass(Inherited, identifier, struct2, annotations, proto) {
+  const getClassSchema = getClassSchemaFactory(struct2, identifier, annotations);
+  const ClassTypeId = getClassTypeId(identifier);
+  const out = class extends Inherited {
+    constructor(...[input, options]) {
+      const internalOptions = options;
+      const payload = internalOptions?.["~payload"];
+      const value = payload?.token === payloadToken ? payload.value : struct2.make(input ?? {}, options);
+      super(value, {
+        ...options,
+        disableChecks: true,
+        "~payload": {
+          token: payloadToken,
+          value
+        }
+      });
+    }
+    static [TypeId14] = TypeId14;
+    get [ClassTypeId]() {
+      return ClassTypeId;
+    }
+    static [immerable] = true;
+    static identifier = identifier;
+    static fields = struct2.fields;
+    static get ast() {
+      return getClassSchema(this).ast;
+    }
+    static pipe() {
+      return pipeArguments(this, arguments);
+    }
+    static rebuild(ast) {
+      return getClassSchema(this).rebuild(ast);
+    }
+    static make(input, options) {
+      return make10(getClassSchema(this))(input ?? {}, options);
+    }
+    static makeOption(input, options) {
+      return makeOption(getClassSchema(this))(input ?? {}, options);
+    }
+    static makeEffect(input, options) {
+      return getClassSchema(this).makeEffect(input ?? {}, options);
+    }
+    static annotate(annotations) {
+      return this.rebuild(annotate(this.ast, annotations));
+    }
+    static annotateKey(annotations) {
+      return this.rebuild(annotateKey(this.ast, annotations));
+    }
+    static check(...checks) {
+      return this.rebuild(appendChecks(this.ast, checks));
+    }
+    static extend(identifier2) {
+      return (schema, annotations) => {
+        const extension = isStruct(schema) ? schema : Struct(schema);
+        const fields = {
+          ...struct2.fields,
+          ...extension.fields
+        };
+        const ast = struct(fields, struct2.ast.checks, {
+          identifier: identifier2
+        });
+        return makeClass(this, identifier2, makeStruct(appendChecks(ast, extension.ast.checks), fields), annotations, proto);
+      };
+    }
+    static mapFields(f, options) {
+      return struct2.mapFields(f, options);
+    }
+  };
+  if (proto !== undefined) {
+    Object.assign(out.prototype, proto(identifier));
+  }
+  return out;
+}
+function getClassTransformation(self) {
+  return new Transformation(transform((input) => new self(input, {
+    "~payload": {
+      token: payloadToken,
+      value: input
+    }
+  })), passthrough());
+}
+function getClassTypeId(identifier) {
+  return `~effect/Schema/Class/${identifier}`;
+}
+function getClassSchemaFactory(from, identifier, annotations) {
+  let memo;
+  return (self) => {
+    if (memo !== undefined) {
+      return memo;
+    }
+    const ClassTypeId = getClassTypeId(identifier);
+    const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
+    const transformation = getClassTransformation(self);
+    const to = make12(new Declaration([from.ast], () => (input, ast, options) => {
+      return isClassValue(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options));
+    }, {
+      identifier,
+      [CONSTRUCTOR_ANNOTATION_KEY]: ([from]) => ({
+        isConstructed: isClassValue,
+        link: new Link(from, transformation)
+      }),
+      toCodec: ([from]) => new Link(from.ast, transformation),
+      toEquivalence: ([from]) => from,
+      toFormatter: ([from]) => (t) => `${self.identifier}(${from(t)})`,
+      [SENTINELS_ANNOTATION_KEY]: collectSentinels(from.ast),
+      ...annotations
+    }));
+    return memo = decodeTo2(to, transformation)(from);
+  };
+}
+function isStruct(schema) {
+  return isSchema(schema);
+}
+var Error4 = (identifier) => (schema, annotations) => {
+  const struct = isStruct(schema) ? schema : Struct(schema);
+  const self = makeClass(Error2, identifier, struct, annotations, (identifier) => ({
+    name: identifier
+  }));
+  return self;
+};
+var TaggedError3 = (identifier) => {
+  return (tagValue, schema, annotations) => {
+    const struct = isStruct(schema) ? schema.mapFields((fields) => ({
+      _tag: tag(tagValue),
+      ...fields
+    }), {
+      unsafePreserveChecks: true
+    }) : TaggedStruct(tagValue, schema);
+    return Error4(identifier ?? tagValue)(struct, annotations);
+  };
+};
+var Json2 = /* @__PURE__ */ make12(/* @__PURE__ */ annotate(Json, {
+  toCode: () => ({
+    runtime: "Schema.Json",
+    Type: "Schema.Json"
+  })
+}));
+// node_modules/effect/dist/PlatformError.js
+var TypeId15 = "~effect/PlatformError";
+
+class BadArgument extends (/* @__PURE__ */ TaggedError2("BadArgument")) {
+  get message() {
+    return `${this.module}.${this.method}${this.description ? `: ${this.description}` : ""}`;
+  }
+}
+
+class SystemError extends Error3 {
+  get message() {
+    return `${this._tag}: ${this.module}.${this.method}${this.pathOrDescriptor !== undefined ? ` (${this.pathOrDescriptor})` : ""}${this.description ? `: ${this.description}` : ""}`;
+  }
+}
+
+class PlatformError extends (/* @__PURE__ */ TaggedError2("PlatformError")) {
+  constructor(reason) {
+    if ("cause" in reason) {
+      super({
+        reason,
+        cause: reason.cause
+      });
+    } else {
+      super({
+        reason
+      });
+    }
+  }
+  [TypeId15] = TypeId15;
+  get message() {
+    return this.reason.message;
+  }
+}
+var systemError = (options) => new PlatformError(new SystemError(options));
+var badArgument = (options) => new PlatformError(new BadArgument(options));
 
 // node_modules/effect/dist/internal/stream.js
-var TypeId11 = "~effect/Stream";
+var TypeId16 = "~effect/Stream";
 var streamVariance = {
   _R: identity,
   _E: identity,
@@ -5566,7 +8700,7 @@ var Stream = function(channel) {
   this.channel = channel;
 };
 Stream.prototype = {
-  [TypeId11]: streamVariance,
+  [TypeId16]: streamVariance,
   pipe() {
     return pipeArguments(this, arguments);
   }
@@ -5574,7 +8708,7 @@ Stream.prototype = {
 var fromChannel = (channel) => new Stream(channel);
 
 // node_modules/effect/dist/Sink.js
-var TypeId12 = "~effect/Sink";
+var TypeId17 = "~effect/Sink";
 var endVoid = /* @__PURE__ */ succeed6([undefined]);
 var sinkVariance = {
   _A: identity,
@@ -5584,12 +8718,12 @@ var sinkVariance = {
   _R: identity
 };
 var SinkProto = {
-  [TypeId12]: sinkVariance,
+  [TypeId17]: sinkVariance,
   pipe() {
     return pipeArguments(this, arguments);
   }
 };
-var isSink = (u) => hasProperty(u, TypeId12);
+var isSink = (u) => hasProperty(u, TypeId17);
 var fromChannel2 = (channel) => fromTransform2((upstream, scope) => toTransform(channel)(upstream, scope).pipe(flatMap3(forever2({
   disableYield: true
 })), catchDone(succeed6)));
@@ -5598,7 +8732,7 @@ var fromTransform2 = (transform) => {
   self.transform = transform;
   return self;
 };
-var toChannel = (self) => fromTransform((upstream, scope) => succeed6(flatMap3(self.transform(upstream, scope), done3)));
+var toChannel = (self) => fromTransform((upstream, scope) => succeed6(flatMap3(self.transform(upstream, scope), done2)));
 var drain2 = /* @__PURE__ */ fromTransform2((upstream) => catchDone(forever2(upstream, {
   disableYield: true
 }), () => endVoid));
@@ -5608,10 +8742,10 @@ var forEach3 = (f) => forEachArray(forEach2((_) => f(_), {
 var forEachArray = (f) => fromTransform2((upstream) => upstream.pipe(flatMap3(f), forever2({
   disableYield: true
 }), catchDone(() => endVoid)));
-var unwrap2 = (effect) => fromChannel2(unwrap(map6(effect, toChannel)));
+var unwrap2 = (effect) => fromChannel2(unwrap(map5(effect, toChannel)));
 
 // node_modules/effect/dist/internal/rcRef.js
-var TypeId13 = "~effect/RcRef";
+var TypeId18 = "~effect/RcRef";
 var stateEmpty = {
   _tag: "Empty"
 };
@@ -5624,7 +8758,7 @@ var variance2 = {
 };
 
 class RcRefImpl {
-  [TypeId13] = variance2;
+  [TypeId18] = variance2;
   pipe() {
     return pipeArguments(this, arguments);
   }
@@ -5641,10 +8775,10 @@ class RcRefImpl {
     this.idleTimeToLive = idleTimeToLive;
   }
 }
-var make10 = (options) => withFiber2((fiber) => {
+var make13 = (options) => withFiber2((fiber) => {
   const context = fiber.context;
   const scope = get(context, Scope);
-  const ref = new RcRefImpl(options.acquire, context, scope, options.idleTimeToLive ? fromInputUnsafe(options.idleTimeToLive) : undefined);
+  const ref = new RcRefImpl(options.acquire, context, scope, options.idleTimeToLive !== undefined ? fromInputUnsafe(options.idleTimeToLive) : undefined);
   return as2(addFinalizerExit(scope, () => {
     const close2 = ref.state._tag === "Acquired" ? close(ref.state.scope, void_2) : void_3;
     ref.state = stateClosed;
@@ -5718,26 +8852,26 @@ var get2 = /* @__PURE__ */ fnUntraced2(function* (self_) {
 });
 
 // node_modules/effect/dist/RcRef.js
-var make11 = make10;
+var make14 = make13;
 var get3 = get2;
 
 // node_modules/effect/dist/Stream.js
-var TypeId14 = "~effect/Stream";
-var isStream = (u) => hasProperty(u, TypeId14);
+var TypeId19 = "~effect/Stream";
+var isStream = (u) => hasProperty(u, TypeId19);
 var fromChannel3 = fromChannel;
-var fromEffect2 = (effect) => fromChannel3(fromEffect(map6(effect, of)));
+var fromEffect2 = (effect) => fromChannel3(fromEffect(map5(effect, of)));
 var fromPull2 = (pull) => fromChannel3(fromPull(pull));
 var transformPull2 = (self, f) => fromChannel3(fromTransform((_, scope) => flatMap3(toPullScoped(self.channel, scope), (pull) => f(pull, scope))));
 var toChannel2 = (stream) => stream.channel;
 var callback3 = (f, options) => fromChannel3(callbackArray(f, options));
 var empty4 = /* @__PURE__ */ fromChannel3(empty3);
-var succeed8 = (value) => fromChannel3(succeed7(of(value)));
+var succeed9 = (value) => fromChannel3(succeed8(of(value)));
 var suspend4 = (stream) => fromChannel3(suspend3(() => stream().channel));
-var fromArray2 = (array) => isReadonlyArrayNonEmpty(array) ? fromChannel3(succeed7(array)) : empty4;
-var unwrap3 = (effect) => fromChannel3(unwrap(map6(effect, toChannel2)));
-var map8 = /* @__PURE__ */ dual(2, (self, f) => suspend4(() => {
+var fromArray2 = (array) => isReadonlyArrayNonEmpty(array) ? fromChannel3(succeed8(array)) : empty4;
+var unwrap3 = (effect) => fromChannel3(unwrap(map5(effect, toChannel2)));
+var map7 = /* @__PURE__ */ dual(2, (self, f) => suspend4(() => {
   let i = 0;
-  return fromChannel3(map7(self.channel, map2((o) => f(o, i++))));
+  return fromChannel3(map6(self.channel, map((o) => f(o, i++))));
 }));
 var flatMap5 = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, f, options) => self.channel.pipe(flattenArray, flatMap4((a) => f(a).channel, options), fromChannel3));
 var flatten4 = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, options) => flatMap5(self, identity, options));
@@ -5745,7 +8879,7 @@ var drain3 = (self) => fromChannel3(drain(self.channel));
 var concat = /* @__PURE__ */ dual(2, (self, that) => flatten4(fromArray2([self, that])));
 var merge3 = /* @__PURE__ */ dual((args) => isStream(args[0]) && isStream(args[1]), (self, that, options) => fromChannel3(merge2(toChannel2(self), toChannel2(that), options)));
 var mergeEffect2 = /* @__PURE__ */ dual(2, (self, effect) => self.channel.pipe(mergeEffect(effect), fromChannel3));
-var mapError4 = /* @__PURE__ */ dual(2, (self, f) => fromChannel3(mapError3(self.channel, f)));
+var mapError5 = /* @__PURE__ */ dual(2, (self, f) => fromChannel3(mapError4(self.channel, f)));
 var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (upstream, scope) => sync3(() => {
   let done;
   let leftover;
@@ -5757,10 +8891,10 @@ var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (up
     }
     return upstream;
   }).pipe(catch_2((error) => {
-    done = fail4(error);
-    return done3();
+    done = fail5(error);
+    return done2();
   }));
-  const pull = map6(suspend2(() => sink.transform(upstreamWithLeftover, scope)), ([value, leftover_]) => {
+  const pull = map5(suspend2(() => sink.transform(upstreamWithLeftover, scope)), ([value, leftover_]) => {
     leftover = leftover_;
     return of(value);
   });
@@ -5768,12 +8902,12 @@ var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (up
 })));
 var decodeText = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, options) => suspend4(() => {
   const decoder = new TextDecoder(options?.encoding);
-  return map8(self, (chunk) => decoder.decode(chunk, {
+  return map7(self, (chunk) => decoder.decode(chunk, {
     stream: true
   }));
 }));
 var splitLines2 = (self) => self.channel.pipe(pipeTo(splitLines()), fromChannel3);
-var run = /* @__PURE__ */ dual(2, (self, sink) => scopedWith2((scope) => toPullScoped(self.channel, scope).pipe(flatMap3((upstream) => sink.transform(upstream, scope)), map6(([a]) => a))));
+var run2 = /* @__PURE__ */ dual(2, (self, sink) => scopedWith2((scope) => toPullScoped(self.channel, scope).pipe(flatMap3((upstream) => sink.transform(upstream, scope)), map5(([a]) => a))));
 var runCollect = (self) => runFold(self.channel, () => [], (acc, chunk) => {
   for (let i = 0;i < chunk.length; i++) {
     acc.push(chunk[i]);
@@ -5797,11 +8931,11 @@ var runForEach2 = /* @__PURE__ */ dual(2, (self, f) => runForEach(self.channel, 
 var mkString = (self) => runFold(self.channel, () => "", (acc, chunk) => acc + chunk.join(""));
 
 // node_modules/effect/dist/FileSystem.js
-var TypeId15 = "~effect/FileSystem";
+var TypeId20 = "~effect/FileSystem";
 var FileSystem = /* @__PURE__ */ Service("effect/FileSystem");
-var make12 = (impl) => FileSystem.of({
+var make15 = (impl) => FileSystem.of({
   ...impl,
-  [TypeId15]: TypeId15,
+  [TypeId20]: TypeId20,
   exists: (path) => pipe(impl.access(path), as2(true), catchTag2("PlatformError", (e) => e.reason._tag === "NotFound" ? succeed6(false) : fail6(e))),
   readFileString: (path, encoding) => flatMap3(impl.readFile(path), (_) => try_2({
     try: () => new TextDecoder(encoding).decode(_),
@@ -5826,11 +8960,11 @@ var make12 = (impl) => FileSystem.of({
     const readChunk = file.readAlloc(chunkSize);
     return fromPull2(succeed6(flatMap3(suspend2(() => {
       if (bytesToRead !== undefined && bytesToRead <= totalBytesRead) {
-        return done3();
+        return done2();
       }
       return bytesToRead !== undefined && bytesToRead - totalBytesRead < chunkSize ? file.readAlloc(Number(bytesToRead - totalBytesRead)) : readChunk;
     }), match({
-      onNone: () => done3(),
+      onNone: () => done2(),
       onSome: (buf) => {
         totalBytesRead += BigInt(buf.length);
         return succeed6(of(buf));
@@ -5840,7 +8974,7 @@ var make12 = (impl) => FileSystem.of({
   sink: (path, options) => pipe(impl.open(path, {
     ...options,
     flag: options?.flag ?? "w"
-  }), map6((file) => forEach3((_) => file.writeAll(_))), unwrap2),
+  }), map5((file) => forEach3((_) => file.writeAll(_))), unwrap2),
   writeFileString: (path, data, options) => flatMap3(try_2({
     try: () => new TextEncoder().encode(data),
     catch: (cause) => badArgument({
@@ -5854,3472 +8988,10 @@ var make12 = (impl) => FileSystem.of({
 var FileTypeId = "~effect/FileSystem/File";
 class WatchBackend extends (/* @__PURE__ */ Service()("effect/FileSystem/WatchBackend")) {
 }
-// node_modules/effect/dist/internal/matcher.js
-var TypeId16 = "~effect/Match/Matcher";
-var TypeMatcherProto = {
-  [TypeId16]: {
-    _input: identity,
-    _filters: identity,
-    _remaining: identity,
-    _result: identity,
-    _return: identity,
-    _args: identity
-  },
-  _tag: "TypeMatcher",
-  add(_case) {
-    return makeTypeMatcher(this.select, [...this.cases, _case]);
-  },
-  pipe() {
-    return pipeArguments(this, arguments);
-  }
-};
-function makeTypeMatcher(select, cases) {
-  const matcher = Object.create(TypeMatcherProto);
-  matcher.select = select;
-  matcher.cases = cases;
-  return matcher;
-}
-var ValueMatcherProto = {
-  [TypeId16]: {
-    _input: identity,
-    _filters: identity,
-    _result: identity,
-    _return: identity,
-    _flavor: identity
-  },
-  _tag: "ValueMatcher",
-  add(_case) {
-    if (isSuccess2(this.value)) {
-      return this;
-    }
-    if (_case._tag === "When" && _case.guard(this.provided) === true) {
-      return makeValueMatcher(this.provided, succeed2(_case.evaluate(this.provided)));
-    } else if (_case._tag === "Not" && _case.guard(this.provided) === false) {
-      return makeValueMatcher(this.provided, succeed2(_case.evaluate(this.provided)));
-    }
-    return this;
-  },
-  pipe() {
-    return pipeArguments(this, arguments);
-  }
-};
-function makeValueMatcher(provided, value) {
-  const matcher = Object.create(ValueMatcherProto);
-  matcher.provided = provided;
-  matcher.value = value;
-  return matcher;
-}
-var makeWhen = (guard, evaluate) => ({
-  _tag: "When",
-  guard,
-  evaluate
-});
-var value = (i) => makeValueMatcher(i, fail2(i));
-var discriminator = (field) => (...pattern) => {
-  const f = pattern[pattern.length - 1];
-  const values = pattern.slice(0, -1);
-  const pred = values.length === 1 ? (_) => _ != null && _[field] === values[0] : (_) => _ != null && values.includes(_[field]);
-  return (self) => self.add(makeWhen(pred, f));
-};
-var tag = /* @__PURE__ */ discriminator("_tag");
-var result2 = (self) => {
-  if (self._tag === "ValueMatcher") {
-    return self.value;
-  }
-  const len = self.cases.length;
-  if (len === 1) {
-    const _case = self.cases[0];
-    return (...args) => {
-      const input = self.select(...args);
-      if (_case._tag === "When" && _case.guard(input) === true) {
-        return succeed2(_case.evaluate(input, ...args));
-      } else if (_case._tag === "Not" && _case.guard(input) === false) {
-        return succeed2(_case.evaluate(input, ...args));
-      }
-      return fail2(input);
-    };
-  }
-  return (...args) => {
-    const input = self.select(...args);
-    for (let i = 0;i < len; i++) {
-      const _case = self.cases[i];
-      if (_case._tag === "When" && _case.guard(input) === true) {
-        return succeed2(_case.evaluate(input, ...args));
-      } else if (_case._tag === "Not" && _case.guard(input) === false) {
-        return succeed2(_case.evaluate(input, ...args));
-      }
-    }
-    return fail2(input);
-  };
-};
-var getExhaustiveAbsurdErrorMessage = "effect/match/Match/exhaustive: absurd";
-var exhaustive = (self) => {
-  const toResult = result2(self);
-  if (isResult2(toResult)) {
-    if (isSuccess2(toResult)) {
-      return toResult.success;
-    }
-    throw new Error(getExhaustiveAbsurdErrorMessage);
-  }
-  return (...args) => {
-    const result = toResult(...args);
-    if (isSuccess2(result)) {
-      return result.success;
-    }
-    throw new Error(getExhaustiveAbsurdErrorMessage);
-  };
-};
 
-// node_modules/effect/dist/Match.js
-var value2 = value;
-var tag2 = tag;
-var exhaustive2 = exhaustive;
-// node_modules/effect/dist/Ref.js
-var TypeId17 = "~effect/Ref";
-var RefProto = {
-  [TypeId17]: {
-    _A: identity
-  },
-  ...PipeInspectableProto,
-  toJSON() {
-    return {
-      _id: "Ref",
-      ref: this.ref
-    };
-  }
-};
-var makeUnsafe6 = (value) => {
-  const self = Object.create(RefProto);
-  self.ref = make7(value);
-  return self;
-};
-var make13 = (value) => sync3(() => makeUnsafe6(value));
-var get4 = (self) => sync3(() => self.ref.current);
-var update = /* @__PURE__ */ dual(2, (self, f) => sync3(() => {
-  self.ref.current = f(self.ref.current);
-}));
-// node_modules/effect/dist/internal/schema/annotations.js
-function resolve(ast) {
-  return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
-}
-var STRUCTURAL_ANNOTATION_KEY = "~structural";
-var SENTINELS_ANNOTATION_KEY = "~sentinels";
-var CONSTRUCTOR_ANNOTATION_KEY = "~constructor";
-var getExpected = /* @__PURE__ */ memoize((ast) => {
-  const identifier = resolve(ast)?.identifier;
-  if (typeof identifier === "string")
-    return identifier;
-  return ast.getExpected(getExpected);
-});
-
-// node_modules/effect/dist/internal/schema/parser.js
-var missing = /* @__PURE__ */ Symbol();
-var succeed9 = succeed4;
-var missingExit = /* @__PURE__ */ succeed9(missing);
-var sameExit = /* @__PURE__ */ succeed9(missing);
-var toOption = (value) => value === missing ? none2() : some2(value);
-var fromOptionExit = (option) => option._tag === "None" ? missingExit : succeed9(option.value);
-
-// node_modules/effect/dist/SchemaIssue.js
-var TypeId18 = "~effect/SchemaIssue/Issue";
-function isIssue(u) {
-  return hasProperty(u, TypeId18) && u[TypeId18] === TypeId18;
-}
-function hasInput(issue) {
-  return Object.hasOwn(issue, "input");
-}
-
-class IssueNodeImpl {
-  [TypeId18] = TypeId18;
-  constructor(input, options) {
-    if (options?.reportInput === true && input !== missing) {
-      this.input = input;
-    }
-  }
-}
-var Filter = class extends IssueNodeImpl {
-  _tag = "Filter";
-  filter;
-  issue;
-  constructor(filter, issue, input, options) {
-    super(input, options);
-    this.filter = filter;
-    this.issue = issue;
-  }
-};
-var Encoding = class extends IssueNodeImpl {
-  _tag = "Encoding";
-  ast;
-  issue;
-  constructor(ast, issue, input, options) {
-    super(input, options);
-    this.ast = ast;
-    this.issue = issue;
-  }
-};
-var Pointer = class extends IssueNodeImpl {
-  _tag = "Pointer";
-  path;
-  issue;
-  constructor(path, issue) {
-    super();
-    this.path = path;
-    this.issue = issue;
-  }
-};
-var MissingKey = class extends IssueNodeImpl {
-  _tag = "MissingKey";
-  annotations;
-  constructor(annotations) {
-    super();
-    this.annotations = annotations;
-  }
-};
-var UnexpectedKey = class extends IssueNodeImpl {
-  _tag = "UnexpectedKey";
-  ast;
-  constructor(ast, input, options) {
-    super(input, options);
-    this.ast = ast;
-  }
-};
-var Composite = class extends IssueNodeImpl {
-  _tag = "Composite";
-  ast;
-  issues;
-  constructor(ast, issues, input, options) {
-    super(input, options);
-    this.ast = ast;
-    this.issues = issues;
-  }
-};
-var InvalidType = class extends IssueNodeImpl {
-  _tag = "InvalidType";
-  ast;
-  constructor(ast, input, options) {
-    super(input, options);
-    this.ast = ast;
-  }
-};
-var InvalidValue = class extends IssueNodeImpl {
-  _tag = "InvalidValue";
-  annotations;
-  constructor(annotations, input, options) {
-    super(input, options);
-    this.annotations = annotations;
-  }
-};
-var AnyOf = class extends IssueNodeImpl {
-  _tag = "AnyOf";
-  ast;
-  issues;
-  constructor(ast, issues, input, options) {
-    super(input, options);
-    this.ast = ast;
-    this.issues = issues;
-  }
-};
-var OneOf = class extends IssueNodeImpl {
-  _tag = "OneOf";
-  ast;
-  successes;
-  constructor(ast, successes, input, options) {
-    super(input, options);
-    this.ast = ast;
-    this.successes = successes;
-  }
-};
-function makeFilterIssue(entry, input, options) {
-  if (isIssue(entry)) {
-    return entry;
-  }
-  if (typeof entry === "string") {
-    return new InvalidValue({
-      message: entry
-    }, input, options);
-  }
-  const inner = typeof entry.issue === "string" ? new InvalidValue({
-    message: entry.issue
-  }, input, options) : entry.issue;
-  return new Pointer(entry.path, inner);
-}
-function makeSingle(out, input, options) {
-  if (out === undefined) {
-    return;
-  }
-  if (typeof out === "boolean") {
-    return out ? undefined : new InvalidValue(undefined, input, options);
-  }
-  return makeFilterIssue(out, input, options);
-}
-function normalizeFilterOutput(ast, out, input, options) {
-  if (Array.isArray(out)) {
-    if (!isReadonlyArrayNonEmpty(out)) {
-      return;
-    }
-    return out.length === 1 ? makeFilterIssue(out[0], input, options) : new Composite(ast, map2(out, (entry) => makeFilterIssue(entry, input, options)), input, options);
-  }
-  return makeSingle(out, input, options);
-}
-var defaultLeafHook = (issue) => {
-  const message = findMessage(issue);
-  if (message !== undefined)
-    return message;
-  switch (issue._tag) {
-    case "InvalidType":
-      return getExpectedMessage(getExpected(issue.ast), issue);
-    case "InvalidValue": {
-      const expected = findExpected(issue);
-      if (expected !== undefined)
-        return getExpectedMessage(expected, issue);
-      const input = formatInput(issue);
-      return input === undefined ? "Expected a valid value" : `Invalid data ${input}`;
-    }
-    case "MissingKey":
-      return "Missing key";
-    case "UnexpectedKey": {
-      const input = formatInput(issue);
-      return input === undefined ? "Expected no excess property" : `Unexpected key with value ${input}`;
-    }
-    case "Forbidden":
-      return "Forbidden operation";
-    case "OneOf": {
-      const input = formatInput(issue);
-      return input === undefined ? "Expected exactly one member to match" : `Expected exactly one member to match the input ${input}`;
-    }
-  }
-};
-var defaultCheckHook = (issue) => findMessage(issue.issue) ?? findMessage(issue);
-function formatInput(issue) {
-  return hasInput(issue) ? format(issue.input) : undefined;
-}
-function findExpected(issue) {
-  const expected = issue.annotations?.expected;
-  return typeof expected === "string" ? expected : undefined;
-}
-function getExpectedMessage(expected, issue) {
-  const input = formatInput(issue);
-  return input === undefined ? `Expected ${expected}` : `Expected ${expected}, got ${input}`;
-}
-function formatCheck(check) {
-  const expected = check.annotations?.expected;
-  if (typeof expected === "string")
-    return expected;
-  switch (check._tag) {
-    case "Filter":
-      return "<filter>";
-    case "FilterGroup":
-      return check.checks.map((check) => formatCheck(check)).join(" & ");
-  }
-}
-function makeFormatterDefault() {
-  return (issue) => formatIssue(issue, "");
-}
-var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
-function formatIssue(issue, path) {
-  let message;
-  switch (issue._tag) {
-    case "Filter": {
-      const annotated = defaultCheckHook(issue);
-      if (annotated !== undefined) {
-        message = annotated;
-      } else {
-        if (issue.issue._tag !== "InvalidValue") {
-          return formatIssue(issue.issue, path);
-        }
-        const expected = findExpected(issue.issue);
-        message = expected === undefined ? getExpectedMessage(formatCheck(issue.filter), issue) : getExpectedMessage(expected, issue.issue);
-      }
-      break;
-    }
-    case "Encoding":
-      return formatIssue(issue.issue, path);
-    case "Pointer":
-      return formatIssue(issue.issue, path + formatPath(issue.path));
-    case "Composite":
-    case "AnyOf": {
-      if (issue._tag === "Composite" || issue.issues.length > 0) {
-        return issue.issues.map((issue) => formatIssue(issue, path)).join(`
-`);
-      }
-      message = findMessage(issue) ?? getExpectedMessage(getExpected(issue.ast), issue);
-      break;
-    }
-    default:
-      message = defaultLeafHook(issue);
-      break;
-  }
-  return path ? `${message}
-  at ${path}` : message;
-}
-function findMessage(issue) {
-  if (issue._tag === "Pointer")
-    return;
-  if (issue._tag === "Encoding")
-    return findMessage(issue.issue);
-  const annotations = issue._tag === "Filter" ? issue.filter.annotations : ("annotations" in issue) ? issue.annotations : issue.ast.annotations;
-  const message = annotations?.[issue._tag === "MissingKey" ? "messageMissingKey" : issue._tag === "UnexpectedKey" ? "messageUnexpectedKey" : "message"];
-  if (typeof message === "string")
-    return message;
-}
-
-// node_modules/effect/dist/internal/schema/cause.js
-function getSchemaIssue(cause) {
-  let issue;
-  for (const reason of cause.reasons) {
-    if (!isFailReason2(reason) || !isIssue(reason.error)) {
-      return;
-    }
-    issue ??= reason.error;
-  }
-  return issue;
-}
-function getSchemaIssueOrThrow(cause, message) {
-  const issue = getSchemaIssue(cause);
-  if (issue === undefined) {
-    throw new Error(message, {
-      cause
-    });
-  }
-  return issue;
-}
-
-// node_modules/effect/dist/SchemaGetter.js
-var Getter = class extends Class {
-  run;
-  constructor(run) {
-    super();
-    this.run = run;
-  }
-  map(f) {
-    return new Getter((oe, options) => this.run(oe, options).pipe(mapEager2(map(f))));
-  }
-  compose(other) {
-    if (isPassthrough(this)) {
-      return other;
-    }
-    if (isPassthrough(other)) {
-      return this;
-    }
-    return new Getter((oe, options) => this.run(oe, options).pipe(flatMapEager2((ot) => other.run(ot, options))));
-  }
-};
-var passthrough_ = /* @__PURE__ */ new Getter(succeed6);
-function isPassthrough(getter) {
-  return getter.run === passthrough_.run;
-}
-function passthrough() {
-  return passthrough_;
-}
-function onSome(f) {
-  return new Getter((oe, options) => isNone2(oe) ? succeedNone2 : f(oe.value, options));
-}
-function transform(f) {
-  return transformOptional(map(f));
-}
-function transformEffect(f) {
-  return onSome((e, options) => f(e, options).pipe(mapEager2(some2)));
-}
-function transformOptional(f) {
-  return new Getter((oe) => succeed6(f(oe)));
-}
-function withDefault(defaultValue) {
-  return new Getter((o) => {
-    const filtered = filter(o, isNotUndefined);
-    return isSome2(filtered) ? succeed6(filtered) : mapEager2(defaultValue, some2);
-  });
-}
-function String2() {
-  return transform(globalThis.String);
-}
-function Number3() {
-  return transform(globalThis.Number);
-}
-function parseJson(options) {
-  return onSome((input, parseOptions) => try_2({
-    try: () => some2(JSON.parse(input, options?.reviver)),
-    catch: () => new InvalidValue({
-      expected: "a valid JSON string"
-    }, input, parseOptions)
-  }));
-}
-function stringifyJson(options) {
-  return onSome((input, parseOptions) => try_2({
-    try: () => {
-      const output = JSON.stringify(input, options?.replacer, options?.space);
-      if (output === undefined) {
-        throw new TypeError("Value cannot be represented as JSON");
-      }
-      return some2(output);
-    },
-    catch: () => new InvalidValue({
-      expected: "a JSON-serializable value"
-    }, input, parseOptions)
-  }));
-}
-function encodeBase642() {
-  return transform(encodeBase64);
-}
-function decodeBase642() {
-  return transformEffect((input, options) => mapErrorEager2(fromResult2(decodeBase64(input)), () => new InvalidValue({
-    expected: "a valid Base64 string"
-  }, input, options)));
-}
-
-// node_modules/effect/dist/SchemaTransformation.js
-var TypeId19 = "~effect/SchemaTransformation/Transformation";
-var Transformation = class {
-  [TypeId19] = TypeId19;
-  _tag = "Transformation";
-  decode;
-  encode;
-  constructor(decode, encode) {
-    this.decode = decode;
-    this.encode = encode;
-  }
-  flip() {
-    return new Transformation(this.encode, this.decode);
-  }
-  compose(other) {
-    return new Transformation(this.decode.compose(other.decode), other.encode.compose(this.encode));
-  }
-};
-function isTransformation(u) {
-  return hasProperty(u, TypeId19) && u[TypeId19] === TypeId19;
-}
-var make14 = (options) => {
-  if (isTransformation(options)) {
-    return options;
-  }
-  return new Transformation(options.decode, options.encode);
-};
-function transformEffect2(options) {
-  return new Transformation(transformEffect(options.decode), transformEffect(options.encode));
-}
-function transform2(options) {
-  return new Transformation(transform(options.decode), transform(options.encode));
-}
-var passthrough_2 = /* @__PURE__ */ new Transformation(/* @__PURE__ */ passthrough(), /* @__PURE__ */ passthrough());
-function passthrough2() {
-  return passthrough_2;
-}
-var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ String2());
-var isJsonError = (input) => isObject(input) && typeof input["message"] === "string";
-var decodeJsonError = (input) => {
-  const hasCause = Object.hasOwn(input, "cause");
-  const err = hasCause ? new Error(input.message, {
-    cause: decodeDefect(input.cause)
-  }) : new Error(input.message);
-  if (typeof input.name === "string" && input.name !== "Error")
-    err.name = input.name;
-  if (typeof input.stack === "string")
-    err.stack = input.stack;
-  return err;
-};
-var encodeUnknownAsJson = (input) => {
-  try {
-    const json = formatJson(input);
-    return json === undefined ? format(input) : JSON.parse(json);
-  } catch {
-    return format(input);
-  }
-};
-var encodeJsonError = (input, options, encodeDefect) => {
-  const encoded = {
-    name: input.name,
-    message: typeof input.message === "string" ? input.message : ""
-  };
-  if (options?.includeStack && typeof input.stack === "string") {
-    encoded.stack = input.stack;
-  }
-  if (!options?.excludeCause && input.cause !== undefined) {
-    encoded.cause = encodeDefect(input.cause);
-  }
-  return encoded;
-};
-var makeEncodeDefect = (options) => {
-  const seen = new WeakSet;
-  const encode = (input) => {
-    if (isError(input)) {
-      if (seen.has(input)) {
-        return "[Circular]";
-      }
-      seen.add(input);
-      const encoded = encodeJsonError(input, options, encode);
-      seen.delete(input);
-      return encoded;
-    }
-    return encodeUnknownAsJson(input);
-  };
-  return encode;
-};
-var decodeDefect = (input) => isJsonError(input) ? decodeJsonError(input) : input;
-var defectFromJson = (options) => transform2({
-  decode: decodeDefect,
-  encode: makeEncodeDefect(options)
-});
-var urlFromString = /* @__PURE__ */ transformEffect2({
-  decode: (s, options) => URL.canParse(s) ? succeed6(new URL(s)) : fail6(new InvalidValue({
-    expected: "a valid URL string"
-  }, s, options)),
-  encode: (url) => succeed6(url.href)
-});
-var uint8ArrayFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase642(), /* @__PURE__ */ encodeBase642());
-function fromJsonString(options) {
-  return new Transformation(parseJson(options ?? {}), stringifyJson(options));
-}
-
-// node_modules/effect/dist/SchemaAST.js
-function makeGuard(tag) {
-  return (ast) => ast._tag === tag;
-}
-var isDeclaration = /* @__PURE__ */ makeGuard("Declaration");
-var isNever2 = /* @__PURE__ */ makeGuard("Never");
-var isLiteral = /* @__PURE__ */ makeGuard("Literal");
-var isUniqueSymbol = /* @__PURE__ */ makeGuard("UniqueSymbol");
-var isArrays = /* @__PURE__ */ makeGuard("Arrays");
-var isObjects = /* @__PURE__ */ makeGuard("Objects");
-var isUnion = /* @__PURE__ */ makeGuard("Union");
-var isSuspend = /* @__PURE__ */ makeGuard("Suspend");
-var Link = class {
-  to;
-  transformation;
-  constructor(to, transformation) {
-    this.to = to;
-    this.transformation = transformation;
-  }
-};
-var defaultParseOptions = {};
-var Context = class {
-  isOptional;
-  isMutable;
-  constructorDefault;
-  annotations;
-  constructor(isOptional, isMutable, constructorDefault = undefined, annotations = undefined) {
-    this.isOptional = isOptional;
-    this.isMutable = isMutable;
-    this.constructorDefault = constructorDefault;
-    this.annotations = annotations;
-  }
-};
-var TypeId20 = "~effect/Schema";
-
-class ASTNodeImpl {
-  [TypeId20] = TypeId20;
-  annotations;
-  checks;
-  encoding;
-  context;
-  constructor(annotations = undefined, checks = undefined, encoding = undefined, context = undefined) {
-    this.annotations = annotations;
-    this.checks = checks;
-    this.encoding = encoding;
-    this.context = context;
-  }
-  toString() {
-    return `<${this._tag}>`;
-  }
-}
-var Declaration = class extends ASTNodeImpl {
-  _tag = "Declaration";
-  typeParameters;
-  run;
-  encodingChecks;
-  encodingRun;
-  constructor(typeParameters, run, annotations, checks, encoding, context, encodingChecks, encodingRun) {
-    super(annotations, checks, encoding, context);
-    this.typeParameters = typeParameters;
-    this.run = run;
-    this.encodingChecks = encodingChecks;
-    this.encodingRun = encodingRun;
-  }
-  getParser() {
-    let run;
-    return (input, options) => {
-      if (input === missing)
-        return missingExit;
-      return (run ??= this.run(this.typeParameters))(input, this, options);
-    };
-  }
-  _rebuild(recur, checks, encodingChecks, run, encodingRun) {
-    const tps = mapOrSame(this.typeParameters, recur);
-    return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run, this.annotations, checks, undefined, this.context, encodingChecks, encodingRun);
-  }
-  recur(recur) {
-    return this._rebuild(recur, this.checks, this.encodingChecks, this.run, this.encodingRun);
-  }
-  flip(recur) {
-    return this._rebuild(recur, this.encodingChecks, this.checks, this.encodingRun ?? this.run, this.run);
-  }
-  getExpected() {
-    const expected = this.annotations?.expected;
-    if (typeof expected === "string")
-      return expected;
-    return "<Declaration>";
-  }
-};
-var Unknown = class extends ASTNodeImpl {
-  _tag = "Unknown";
-  getParser() {
-    return fromRefinement(this, isUnknown);
-  }
-  getExpected() {
-    return "unknown";
-  }
-};
-var unknown = /* @__PURE__ */ new Unknown;
-var Literal = class extends ASTNodeImpl {
-  _tag = "Literal";
-  literal;
-  constructor(literal, annotations, checks, encoding, context) {
-    super(annotations, checks, encoding, context);
-    if (typeof literal === "number" && !globalThis.Number.isFinite(literal)) {
-      throw new Error(`A numeric literal must be finite, got ${format(literal)}`);
-    }
-    this.literal = literal;
-  }
-  getParser() {
-    return fromConst(this, this.literal);
-  }
-  matchPart(s, _options) {
-    return s === globalThis.String(this.literal) ? this.literal : undefined;
-  }
-  toCodecJson() {
-    return typeof this.literal === "bigint" ? literalToString(this) : this;
-  }
-  toCodecStringTree() {
-    return typeof this.literal === "string" ? this : literalToString(this);
-  }
-  getExpected() {
-    return typeof this.literal === "string" ? JSON.stringify(this.literal) : globalThis.String(this.literal);
-  }
-};
-function literalToString(ast) {
-  const literalAsString = globalThis.String(ast.literal);
-  return replaceEncoding(ast, [new Link(new Literal(literalAsString), new Transformation(transform(() => ast.literal), transform(() => literalAsString)))]);
-}
-var String3 = class extends ASTNodeImpl {
-  _tag = "String";
-  getParser() {
-    return fromRefinement(this, isString);
-  }
-  matchPart(s, options) {
-    const checks = this.checks;
-    return checks && !options.disableChecks && collectIssues(checks, s, undefined, this, options) ? undefined : s;
-  }
-  getExpected() {
-    return "string";
-  }
-};
-var string2 = /* @__PURE__ */ new String3;
-var Number4 = class extends ASTNodeImpl {
-  _tag = "Number";
-  getParser() {
-    return fromRefinement(this, isNumber);
-  }
-  matchKey(s, options) {
-    return this._match(isStringNumberRegExp, s, options);
-  }
-  matchPart(s, options) {
-    return this._match(isStringFiniteRegExp, s, options);
-  }
-  _match(regexp, s, options) {
-    if (!regexp.test(s))
-      return;
-    const value = globalThis.Number(s);
-    if (options.disableChecks || !this.checks)
-      return value;
-    return collectIssues(this.checks, value, undefined, this, options) ? undefined : value;
-  }
-  toCodecJson() {
-    if (this.checks && (hasCheck(this.checks, "effect/schema/isFinite") || hasCheck(this.checks, "effect/schema/isInt"))) {
-      return this;
-    }
-    return replaceEncoding(this, [numberToJson]);
-  }
-  toCodecStringTree() {
-    if (this.toCodecJson() === this) {
-      return replaceEncoding(this, [finiteToString]);
-    }
-    return replaceEncoding(this, [numberToString]);
-  }
-  getExpected() {
-    return "number";
-  }
-};
-function hasCheck(checks, id) {
-  return checks.some((check) => check.annotations?.representation?.id === id || check._tag === "FilterGroup" && hasCheck(check.checks, id));
-}
-var number2 = /* @__PURE__ */ new Number4;
-var Boolean = class extends ASTNodeImpl {
-  _tag = "Boolean";
-  getParser() {
-    return fromRefinement(this, isBoolean);
-  }
-  getExpected() {
-    return "boolean";
-  }
-};
-var boolean = /* @__PURE__ */ new Boolean;
-var Arrays = class extends ASTNodeImpl {
-  _tag = "Arrays";
-  isMutable;
-  elements;
-  rest;
-  encodingChecks;
-  constructor(isMutable, elements, rest, annotations, checks, encoding, context, encodingChecks) {
-    super(annotations, checks, encoding, context);
-    this.isMutable = isMutable;
-    this.elements = elements;
-    this.rest = rest;
-    this.encodingChecks = encodingChecks;
-    let hasOptional = false;
-    for (let i = 0;i < elements.length; i++) {
-      if (isOptional(elements[i])) {
-        hasOptional = true;
-      } else if (hasOptional) {
-        throw new Error("A required element cannot follow an optional element. ts(1257)");
-      }
-    }
-    if (hasOptional && rest.length > 1) {
-      throw new Error("A required element cannot follow an optional element. ts(1257)");
-    }
-    for (let i = 1;i < rest.length; i++) {
-      if (isOptional(rest[i])) {
-        throw new Error("An optional element cannot follow a rest element. ts(1266)");
-      }
-    }
-  }
-  getParser(compile, compileConstructorDefault = compile) {
-    const ast = this;
-    let elements;
-    let rest;
-    const elementLen = ast.elements.length;
-    const tailLen = Math.max(0, ast.rest.length - 1);
-    function getParser(tailThreshold, index) {
-      if (index < elementLen) {
-        return elements[index];
-      } else if (index >= tailThreshold) {
-        return rest[index - tailThreshold + 1];
-      }
-      return rest[0];
-    }
-    return fnUntracedEager2(function* (input, options) {
-      if (input === missing) {
-        return missing;
-      }
-      if (!Array.isArray(input)) {
-        return yield* fail6(new InvalidType(ast, input, options));
-      }
-      if (!elements) {
-        elements = ast.elements.map((ast) => ({
-          ast,
-          parser: compileConstructorDefault(ast)
-        }));
-        rest = ast.rest.map((ast) => ({
-          ast,
-          parser: compileConstructorDefault(ast)
-        }));
-      }
-      const len = input.length;
-      const state = {
-        ast,
-        getParser,
-        input,
-        len,
-        tailThreshold: Math.max(elementLen, len - tailLen),
-        output: new globalThis.Array(len),
-        issues: undefined,
-        options
-      };
-      const end = ast.rest.length === 0 ? elementLen : Math.max(len, elementLen + tailLen);
-      const concurrency = options.concurrency === undefined ? 1 : resolveConcurrency(options.concurrency);
-      const eff = concurrency === 1 ? parseArray(state, input, 0, end) : parseArrayConcurrent(state, input, {
-        concurrency,
-        end
-      });
-      if (eff)
-        yield* eff;
-      if (ast.rest.length === 0 && len > elementLen) {
-        for (let i = elementLen;i <= len - 1; i++) {
-          const unexpected = new UnexpectedKey(ast, input[i], options);
-          const issue = new Pointer([i], unexpected);
-          if (options.errors === "all") {
-            if (state.issues)
-              state.issues.push(issue);
-            else
-              state.issues = [issue];
-          } else {
-            return yield* fail6(new Composite(ast, [issue], input, options));
-          }
-        }
-      }
-      if (state.issues) {
-        return yield* fail6(new Composite(ast, state.issues, input, options));
-      }
-      return state.output;
-    });
-  }
-  _rebuild(recur, checks, encodingChecks) {
-    const elements = mapOrSame(this.elements, recur);
-    const rest = mapOrSame(this.rest, recur);
-    return elements === this.elements && rest === this.rest && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Arrays(this.isMutable, elements, rest, this.annotations, checks, undefined, this.context, encodingChecks);
-  }
-  recur(recur) {
-    return this._rebuild(recur, this.checks, this.encodingChecks);
-  }
-  flip(recur) {
-    return this._rebuild(recur, this.encodingChecks, this.checks);
-  }
-  getExpected() {
-    return "array";
-  }
-};
-var parseArrayOptions = {
-  onItem(s, item, i) {
-    const value = i < s.len ? item : missing;
-    return s.getParser(s.tailThreshold, i).parser(value, s.options);
-  },
-  step(s, item, exit, i) {
-    if (exit._tag === "Failure") {
-      return wrapPropertyKeyIssue(s, s.ast, i, exit);
-    }
-    const value = exit === sameExit ? item : exit[args];
-    if (value !== missing) {
-      s.output[i] = value;
-    } else {
-      const p = s.getParser(s.tailThreshold, i);
-      if (isOptional(p.ast))
-        return;
-      const issue = new Pointer([i], new MissingKey(p.ast.context?.annotations));
-      if (s.options.errors === "all") {
-        if (s.issues)
-          s.issues.push(issue);
-        else
-          s.issues = [issue];
-      } else {
-        return fail4(new Composite(s.ast, [issue], s.input, s.options));
-      }
-    }
-  }
-};
-var parseArray = /* @__PURE__ */ iterateEager()(parseArrayOptions);
-var parseArrayConcurrent = /* @__PURE__ */ iterateConcurrent()(parseArrayOptions);
-var wrapPropertyKeyIssue = (s, ast, key, exit) => {
-  if (exit.cause.reasons.length === 0) {
-    return exit;
-  }
-  const issue = getSchemaIssue(exit.cause);
-  if (issue === undefined) {
-    return failCause2(map5(exit.cause, (issue) => new Composite(ast, [new Pointer([key], issue)], s.input, s.options)));
-  }
-  const pointer = new Pointer([key], issue);
-  if (s.options.errors === "all") {
-    if (s.issues)
-      s.issues.push(pointer);
-    else
-      s.issues = [pointer];
-  } else {
-    return fail4(new Composite(ast, [pointer], s.input, s.options));
-  }
-};
-var FINITE_PATTERN = "[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?";
-function getIndexSignatureKeys(input, parameter, options = defaultParseOptions) {
-  let stringKeys;
-  let symbolKeys;
-  function go(parameter) {
-    switch (parameter._tag) {
-      case "String":
-      case "TemplateLiteral":
-        return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchPart(k, options) !== undefined);
-      case "Number":
-        return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchKey(k, options) !== undefined);
-      case "Symbol":
-        return (symbolKeys ??= Object.getOwnPropertySymbols(input)).filter((k) => parameter.matchKey(k, options) !== undefined);
-      case "Union":
-        return [...new Set(parameter.types.flatMap(go))];
-      default:
-        return [];
-    }
-  }
-  return go(parameterFromPropertyKey(toEncoded(parameter)));
-}
-var PropertySignature = class {
-  name;
-  type;
-  constructor(name, type) {
-    this.name = name;
-    this.type = type;
-  }
-};
-function isIndexSignatureParameterSide(ast) {
-  switch (ast._tag) {
-    case "String":
-    case "Number":
-    case "Symbol":
-    case "TemplateLiteral":
-      return true;
-    case "Union":
-      return ast.types.every(isIndexSignatureParameterSide);
-    default:
-      return false;
-  }
-}
-function isIndexSignatureParameterEncodedSide(ast) {
-  const encoded = getLastEncoding(ast);
-  switch (encoded._tag) {
-    case "String":
-    case "Number":
-    case "Symbol":
-    case "TemplateLiteral":
-      return true;
-    case "Union":
-      return encoded.types.every(isIndexSignatureParameterEncodedSide);
-    default:
-      return false;
-  }
-}
-function isIndexSignatureParameter(ast) {
-  return isIndexSignatureParameterSide(ast) && isIndexSignatureParameterEncodedSide(ast);
-}
-var IndexSignature = class {
-  parameter;
-  type;
-  constructor(parameter, type) {
-    if (!isIndexSignatureParameter(parameter)) {
-      throw new Error(`Invalid index signature parameter ${parameter._tag}`);
-    }
-    this.parameter = parameter;
-    this.type = type;
-    if (isOptional(type) && !containsUndefined(type)) {
-      throw new Error("Cannot use `Schema.optionalKey` with index signatures, use `Schema.optional` instead.");
-    }
-  }
-};
-var Objects = class extends ASTNodeImpl {
-  _tag = "Objects";
-  propertySignatures;
-  indexSignatures;
-  encodingChecks;
-  constructor(propertySignatures, indexSignatures, annotations, checks, encoding, context, encodingChecks) {
-    super(annotations, checks, encoding, context);
-    this.propertySignatures = propertySignatures;
-    this.indexSignatures = indexSignatures;
-    this.encodingChecks = encodingChecks;
-    const seen = new Set;
-    const duplicates = [];
-    for (const propertySignature of propertySignatures) {
-      const name = propertySignature.name;
-      if (seen.has(name)) {
-        duplicates.push(name);
-      } else {
-        seen.add(name);
-      }
-    }
-    if (duplicates.length > 0) {
-      throw new Error(`Duplicate identifiers: ${JSON.stringify(duplicates)}. ts(2300)`);
-    }
-  }
-  getParser(compile, compileConstructorDefault = compile) {
-    const ast = this;
-    const expectedKeys = [];
-    for (const ps of ast.propertySignatures) {
-      expectedKeys.push(typeof ps.name === "number" ? globalThis.String(ps.name) : ps.name);
-    }
-    const hasProperties = expectedKeys.length;
-    const indexCount = ast.indexSignatures.length;
-    let expectedKeysSet = hasProperties && indexCount ? new Set(expectedKeys) : undefined;
-    if (!hasProperties && !indexCount) {
-      return fromRefinement(ast, isNotNullish);
-    }
-    let properties;
-    let indexes;
-    const finishIndex = (s, key, k2, inputValue, exitValue) => {
-      if (exitValue._tag === "Failure") {
-        return wrapPropertyKeyIssue(s, ast, key, exitValue) ?? void_2;
-      }
-      const value = exitValue === sameExit ? inputValue : exitValue[args];
-      if (k2 !== missing && value !== missing) {
-        if (hasProperties && (expectedKeysSet.has(key) || expectedKeysSet.has(typeof k2 === "number" ? globalThis.String(k2) : k2)))
-          return void_2;
-        assignProperty(s.out, k2, value);
-      }
-      return void_2;
-    };
-    const parseIndex = (s, key, index, exitKey) => {
-      if (!exitKey) {
-        const eff = index.parserKey(key, s.options);
-        if (!effectIsExit(eff)) {
-          return flatMap3(exit2(eff), (exit) => parseIndex(s, key, index, exit));
-        }
-        exitKey = eff;
-      }
-      if (exitKey._tag === "Failure") {
-        return wrapPropertyKeyIssue(s, ast, key, exitKey) ?? void_2;
-      }
-      const k2 = exitKey === sameExit ? key : exitKey[args];
-      const inputValue = s.input[key];
-      const result = index.parserValue(inputValue, s.options);
-      return effectIsExit(result) ? finishIndex(s, key, k2, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, k2, inputValue, exit));
-    };
-    const parseStringIndex = (s, key, index) => {
-      const inputValue = s.input[key];
-      const result = index.parserValue(inputValue, s.options);
-      return effectIsExit(result) ? finishIndex(s, key, key, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, key, inputValue, exit));
-    };
-    const parseIndexes = indexCount ? iterateConcurrent()({
-      onItem: (s, [key, index]) => index.is.parameter === string2 ? parseStringIndex(s, key, index) : parseIndex(s, key, index),
-      step: (_s, _item, exit) => exit._tag === "Failure" ? exit : undefined
-    }) : undefined;
-    const compileMembers = () => {
-      if (!properties) {
-        properties = ast.propertySignatures.map((ps) => ({
-          parser: compileConstructorDefault(ps.type),
-          name: ps.name,
-          type: ps.type
-        }));
-        indexes = indexCount ? ast.indexSignatures.map((is) => ({
-          is,
-          parserKey: compile(parameterFromPropertyKey(is.parameter)),
-          parserValue: compileConstructorDefault(is.type)
-        })) : undefined;
-      }
-      return properties;
-    };
-    const fallback = fnUntracedEager2(function* (input, options) {
-      if (input === missing) {
-        return missing;
-      }
-      if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
-        return yield* fail6(new InvalidType(ast, input, options));
-      }
-      compileMembers();
-      const record = input;
-      const out = {};
-      const state = {
-        ast,
-        input: record,
-        out,
-        issues: undefined,
-        options
-      };
-      const errorsAllOption = options.errors === "all";
-      const onExcessPropertyError = options.onExcessProperty === "error";
-      const concurrency = options.concurrency === undefined ? 1 : resolveConcurrency(options.concurrency);
-      const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record, index.parameter, options)) : undefined;
-      if (onExcessPropertyError) {
-        expectedKeysSet ??= new Set(expectedKeys);
-        const coveredKeys = indexKeys ? new Set(expectedKeysSet) : expectedKeysSet;
-        if (indexKeys) {
-          for (const keys of indexKeys) {
-            for (const key of keys)
-              coveredKeys.add(key);
-          }
-        }
-        const inputKeys = Reflect.ownKeys(record);
-        for (let i = 0;i < inputKeys.length; i++) {
-          const key = inputKeys[i];
-          if (!coveredKeys.has(key)) {
-            const unexpected = new UnexpectedKey(ast, record[key], options);
-            const issue = new Pointer([key], unexpected);
-            if (errorsAllOption) {
-              if (state.issues) {
-                state.issues.push(issue);
-              } else {
-                state.issues = [issue];
-              }
-              continue;
-            } else {
-              return yield* fail6(new Composite(ast, [issue], input, options));
-            }
-          }
-        }
-      }
-      if (hasProperties) {
-        const eff = concurrency === 1 ? parseProperties(state, properties) : parsePropertiesConcurrent(state, properties, {
-          concurrency
-        });
-        if (eff)
-          yield* eff;
-      }
-      if (indexCount && concurrency === 1) {
-        for (let i = 0;i < indexCount; i++) {
-          const index = indexes[i];
-          const parse = index.is.parameter === string2 ? parseStringIndex : parseIndex;
-          const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
-          for (let j = 0;j < keys.length; j++) {
-            const eff = parse(state, keys[j], index);
-            if (!effectIsExit(eff))
-              yield* eff;
-            else if (eff._tag === "Failure")
-              return yield* eff;
-          }
-        }
-      } else if (parseIndexes) {
-        const keyPairs = empty2();
-        for (let i = 0;i < indexCount; i++) {
-          const index = indexes[i];
-          const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
-          for (let j = 0;j < keys.length; j++) {
-            keyPairs.push([keys[j], index]);
-          }
-        }
-        const eff = parseIndexes(state, keyPairs, {
-          concurrency
-        });
-        if (eff)
-          yield* eff;
-      }
-      if (state.issues) {
-        return yield* fail6(new Composite(ast, state.issues, input, options));
-      }
-      return out;
-    });
-    if (indexCount)
-      return fallback;
-    const resume = (state, index, pending) => {
-      const property = properties[index];
-      return flatMap3(exit2(pending), (exit) => {
-        const terminal = stepProperty(state, property, exit);
-        if (terminal)
-          return terminal;
-        const done = () => succeed9(state.out);
-        const eff = parseProperties(state, properties.slice(index + 1));
-        return eff ? flatMapEager2(eff, done) : done();
-      });
-    };
-    return (input, options) => {
-      if (input === missing)
-        return missingExit;
-      if (options.errors === "all" || options.onExcessProperty !== undefined || options.concurrency !== undefined && resolveConcurrency(options.concurrency) !== 1) {
-        return fallback(input, options);
-      }
-      if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
-        return fail6(new InvalidType(ast, input, options));
-      }
-      const props = compileMembers();
-      const record = input;
-      const out = {};
-      const state = {
-        ast,
-        input: record,
-        out,
-        issues: undefined,
-        options
-      };
-      try {
-        for (let index = 0;index < props.length; index++) {
-          const property = props[index];
-          const name = property.name;
-          const hasKey = hasPropertySignature(record, name);
-          const value = hasKey ? record[name] : missing;
-          const exit = property.parser(value, options);
-          if (!effectIsExit(exit)) {
-            return resume(state, index, exit);
-          }
-          if (exit === sameExit) {
-            if (hasKey)
-              assignProperty(out, name, value);
-            continue;
-          }
-          const terminal = stepProperty(state, property, exit);
-          if (terminal)
-            return terminal;
-        }
-      } catch (error) {
-        return die2(error);
-      }
-      return succeed9(out);
-    };
-  }
-  _rebuild(recur, recurParameter, checks, encodingChecks) {
-    const props = mapOrSame(this.propertySignatures, (ps) => {
-      const t = recur(ps.type);
-      return t === ps.type ? ps : new PropertySignature(ps.name, t);
-    });
-    const indexes = mapOrSame(this.indexSignatures, (is) => {
-      const p = recurParameter(is.parameter);
-      const t = recur(is.type);
-      return p === is.parameter && t === is.type ? is : new IndexSignature(p, t);
-    });
-    return props === this.propertySignatures && indexes === this.indexSignatures && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Objects(props, indexes, this.annotations, checks, undefined, this.context, encodingChecks);
-  }
-  flip(recur) {
-    return this._rebuild(recur, recur, this.encodingChecks, this.checks);
-  }
-  recur(recur, recurParameter = recur) {
-    return this._rebuild(recur, recurParameter, this.checks, this.encodingChecks);
-  }
-  getExpected() {
-    if (this.propertySignatures.length === 0 && this.indexSignatures.length === 0)
-      return "object | array";
-    return "object";
-  }
-};
-function stepProperty(s, p, exit) {
-  if (exit._tag === "Failure") {
-    return wrapPropertyKeyIssue(s, s.ast, p.name, exit);
-  }
-  if (exit === sameExit)
-    return;
-  const value = exit[args];
-  if (value !== missing) {
-    assignProperty(s.out, p.name, value);
-    return;
-  }
-  delete s.out[p.name];
-  if (!isOptional(p.type)) {
-    const issue = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
-    if (s.options.errors === "all") {
-      if (s.issues)
-        s.issues.push(issue);
-      else
-        s.issues = [issue];
-      return;
-    } else {
-      return fail4(new Composite(s.ast, [issue], s.input, s.options));
-    }
-  }
-}
-var parsePropertiesOptions = {
-  onItem(s, p) {
-    if (!hasPropertySignature(s.input, p.name)) {
-      return p.parser(missing, s.options);
-    }
-    const value = s.input[p.name];
-    assignProperty(s.out, p.name, value);
-    return p.parser(value, s.options);
-  },
-  step: stepProperty
-};
-var parseProperties = /* @__PURE__ */ iterateEager()(parsePropertiesOptions);
-var parsePropertiesConcurrent = /* @__PURE__ */ iterateConcurrent()(parsePropertiesOptions);
-function combineChecks(a, b) {
-  if (!a)
-    return b;
-  if (!b)
-    return a;
-  return [...a, ...b];
-}
-function struct(fields, checks, annotations) {
-  return new Objects(Reflect.ownKeys(fields).map((key) => {
-    return new PropertySignature(key, fields[key].ast);
-  }), [], annotations, checks);
-}
-function getAST(self) {
-  return self.ast;
-}
-function tuple(elements, checks = undefined) {
-  return new Arrays(false, elements.map((e) => e.ast), [], undefined, checks);
-}
-function union(members, options, checks) {
-  return new Union(members.map(getAST), options, undefined, checks);
-}
-var toCandidate = /* @__PURE__ */ memoizeIdempotent((ast) => {
-  while (true) {
-    if (isSuspend(ast))
-      return unknown;
-    const encoding = ast.encoding;
-    if (!encoding) {
-      return ast.recur?.(toCandidate, identity) ?? ast;
-    }
-    if (encoding.some((link) => link.transformation._tag === "Middleware" && link.transformation.decode !== identity))
-      return unknown;
-    ast = encoding[encoding.length - 1].to;
-  }
-});
-function getCandidateTypes(ast) {
-  switch (ast._tag) {
-    case "Null":
-      return ["null"];
-    case "Undefined":
-      return ["undefined"];
-    case "String":
-    case "TemplateLiteral":
-      return ["string"];
-    case "Number":
-      return ["number"];
-    case "Boolean":
-      return ["boolean"];
-    case "Symbol":
-    case "UniqueSymbol":
-      return ["symbol"];
-    case "BigInt":
-      return ["bigint"];
-    case "Arrays":
-      return ["array"];
-    case "ObjectKeyword":
-      return ["object", "array", "function"];
-    case "Objects":
-      return ast.propertySignatures.length || ast.indexSignatures.length ? ["object"] : ["string", "number", "boolean", "symbol", "bigint", "object", "array", "function"];
-    case "Enum":
-      return Array.from(new Set(ast.enums.map(([, v]) => typeof v)));
-    case "Literal":
-      return [typeof ast.literal];
-    case "Union":
-      return Array.from(new Set(ast.types.flatMap(getCandidateTypes)));
-    default:
-      return ["null", "undefined", "string", "number", "boolean", "symbol", "bigint", "object", "array", "function"];
-  }
-}
-function collectSentinels(ast) {
-  switch (ast._tag) {
-    default:
-      return [];
-    case "Declaration": {
-      const s = ast.annotations?.[SENTINELS_ANNOTATION_KEY];
-      return Array.isArray(s) ? s : [];
-    }
-    case "Objects":
-      return ast.propertySignatures.flatMap((ps) => {
-        const type = ps.type;
-        if (!isOptional(type)) {
-          if (isLiteral(type)) {
-            return [{
-              key: ps.name,
-              literal: type.literal
-            }];
-          }
-          if (isUniqueSymbol(type)) {
-            return [{
-              key: ps.name,
-              literal: type.symbol
-            }];
-          }
-        }
-        return [];
-      });
-    case "Arrays":
-      return ast.elements.flatMap((e, i) => {
-        if (!isOptional(e)) {
-          if (isLiteral(e)) {
-            return [{
-              key: i,
-              literal: e.literal
-            }];
-          }
-          if (isUniqueSymbol(e)) {
-            return [{
-              key: i,
-              literal: e.symbol
-            }];
-          }
-        }
-        return [];
-      });
-    case "Union": {
-      if (ast.types.length === 0)
-        return [];
-      const members = ast.types.map((type) => collectSentinels(toCandidate(type)));
-      return members[0].filter((s) => members.every((sentinels) => sentinels.some((o) => o.key === s.key && o.literal === s.literal)));
-    }
-    case "Suspend":
-      return collectSentinels(ast.thunk());
-  }
-}
-var candidateIndexCache = /* @__PURE__ */ new WeakMap;
-var emptyCandidates = /* @__PURE__ */ Object.freeze([]);
-var hasPropertySignature = (input, key) => key === "__proto__" ? Object.hasOwn(input, key) : (key in input);
-function getIndex(types) {
-  let index = candidateIndexCache.get(types);
-  if (index)
-    return index;
-  let bySentinel;
-  let sentinelCandidateCount = 0;
-  let otherwise;
-  let literalCandidates;
-  let onlyLiterals = true;
-  for (let i = 0;i < types.length; i++) {
-    const a = types[i];
-    const encoded = toCandidate(a);
-    if (isNever2(encoded))
-      continue;
-    if (onlyLiterals) {
-      if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
-        literalCandidates ??= new Map;
-        const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
-        let arr = literalCandidates.get(literal);
-        if (!arr)
-          literalCandidates.set(literal, arr = []);
-        arr.push(a);
-      } else {
-        onlyLiterals = false;
-      }
-    }
-    const sentinels = collectSentinels(encoded);
-    if (sentinels.length) {
-      bySentinel ??= new Map;
-      sentinelCandidateCount++;
-      for (const {
-        key,
-        literal
-      } of sentinels) {
-        let entry = bySentinel.get(key);
-        if (!entry)
-          bySentinel.set(key, entry = [new Map, new Set]);
-        entry[1].add(i);
-        let indexes = entry[0].get(literal);
-        if (!indexes)
-          entry[0].set(literal, indexes = new Set);
-        indexes.add(i);
-      }
-    } else {
-      otherwise ??= {};
-      const candidateTypes = getCandidateTypes(encoded);
-      for (const t of candidateTypes)
-        (otherwise[t] ??= []).push(i);
-    }
-  }
-  if (onlyLiterals && literalCandidates) {
-    literalCandidates.forEach(Object.freeze);
-    index = (input) => literalCandidates.get(input) ?? emptyCandidates;
-  } else if (bySentinel?.size === 1 && !otherwise) {
-    const [key, [byValue]] = bySentinel.entries().next().value;
-    const candidates = byValue;
-    for (const [literal, indexes] of byValue) {
-      candidates.set(literal, Object.freeze(Array.from(indexes, (index) => types[index])));
-    }
-    index = (input, isConstructor) => {
-      if (isObjectKeyword(input)) {
-        const value = hasPropertySignature(input, key) ? input[key] : undefined;
-        if (value !== undefined)
-          return candidates.get(value) ?? emptyCandidates;
-        if (isConstructor)
-          return types;
-      }
-      return emptyCandidates;
-    };
-  } else if (bySentinel) {
-    let commonSentinel;
-    for (const entry of bySentinel) {
-      if ((!commonSentinel || entry[1][0].size > commonSentinel[1][0].size) && entry[1][1].size === sentinelCandidateCount) {
-        commonSentinel = entry;
-      }
-    }
-    index = (input, isConstructor) => {
-      const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
-      const base = otherwise?.[runtimeType] ?? emptyCandidates;
-      if (!isObjectKeyword(input))
-        return base.map((i) => types[i]);
-      const selected = new Set(base);
-      let directKey;
-      if (commonSentinel) {
-        const [key, [byValue]] = commonSentinel;
-        const hasKey = hasPropertySignature(input, key);
-        const value = hasKey ? input[key] : undefined;
-        if (hasKey && (!isConstructor || value !== undefined)) {
-          const match = byValue.get(value);
-          if (!match)
-            return base.map((i) => types[i]);
-          for (const i of match)
-            selected.add(i);
-          directKey = key;
-        }
-      }
-      if (directKey === undefined) {
-        for (const [key, [byValue, all]] of bySentinel) {
-          const hasKey = hasPropertySignature(input, key);
-          const value = hasKey ? input[key] : undefined;
-          if (hasKey && (!isConstructor || value !== undefined)) {
-            const match = byValue.get(value);
-            if (match) {
-              for (const i of match)
-                selected.add(i);
-            }
-          } else if (isConstructor) {
-            for (const i of all)
-              selected.add(i);
-          }
-        }
-      }
-      for (const [key, [byValue, all]] of bySentinel) {
-        if (key === directKey)
-          continue;
-        const hasKey = hasPropertySignature(input, key);
-        const value = hasKey ? input[key] : undefined;
-        if (hasKey && (!isConstructor || value !== undefined)) {
-          const match = byValue.get(value);
-          for (const i of selected) {
-            if (all.has(i) && !match?.has(i))
-              selected.delete(i);
-          }
-        }
-      }
-      return Array.from(selected).sort((a, b) => a - b).map((i) => types[i]);
-    };
-  } else {
-    index = (input) => {
-      const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
-      return (otherwise?.[runtimeType] ?? emptyCandidates).map((i) => types[i]).filter(filterLiterals(input));
-    };
-  }
-  candidateIndexCache.set(types, index);
-  return index;
-}
-function filterLiterals(input) {
-  return (ast) => {
-    const encoded = toCandidate(ast);
-    return encoded._tag === "Literal" ? encoded.literal === input : encoded._tag === "UniqueSymbol" ? encoded.symbol === input : true;
-  };
-}
-function getCandidates(input, types, isConstructor = false) {
-  return getIndex(types)(input, isConstructor);
-}
-var Union = class extends ASTNodeImpl {
-  _tag = "Union";
-  types;
-  options;
-  encodingChecks;
-  constructor(types, options, annotations, checks, encoding, context, encodingChecks) {
-    super(annotations, checks, encoding, context);
-    this.types = types;
-    this.options = options;
-    this.encodingChecks = encodingChecks;
-  }
-  getParser(compile, compileConstructorDefault) {
-    const ast = this;
-    return (input, options) => {
-      if (input === missing) {
-        return missingExit;
-      }
-      const candidates = getCandidates(input, ast.types, compileConstructorDefault !== undefined);
-      if (candidates.length === 0) {
-        return fail6(new AnyOf(ast, [], input, options));
-      }
-      if (candidates.length === 1) {
-        const result = compile(candidates[0])(input, options);
-        if (result._tag === "Success")
-          return result;
-        return effectIsExit(result) ? failSingleUnionCandidate(ast, result.cause, input, options) : catchCause2(result, (cause) => failSingleUnionCandidate(ast, cause, input, options));
-      }
-      const state = {
-        ast,
-        compile,
-        input,
-        out: undefined,
-        successes: ast.options?.mode === "oneOf" ? [] : undefined,
-        issues: undefined,
-        options
-      };
-      const eff = parseUnion(state, candidates);
-      if (!eff) {
-        if (state.out)
-          return state.out;
-        return fail6(new AnyOf(ast, state.issues ?? [], input, options));
-      }
-      return flatMapEager2(eff, (_) => {
-        if (state.out === sameExit)
-          return succeed6(input);
-        if (state.out)
-          return state.out;
-        return fail6(new AnyOf(ast, state.issues ?? [], input, options));
-      });
-    };
-  }
-  _rebuild(recur, checks, encodingChecks) {
-    const types = mapOrSame(this.types, recur);
-    return types === this.types && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Union(types, this.options, this.annotations, checks, undefined, this.context, encodingChecks);
-  }
-  recur(recur) {
-    return this._rebuild(recur, this.checks, this.encodingChecks);
-  }
-  flip(recur) {
-    return this._rebuild(recur, this.encodingChecks, this.checks);
-  }
-  matchPart(s, options) {
-    for (const type of this.types) {
-      const out = type.matchPart(s, options);
-      if (out !== undefined)
-        return out;
-    }
-    return;
-  }
-  getExpected(getExpected) {
-    const expected = this.annotations?.expected;
-    if (typeof expected === "string")
-      return expected;
-    if (this.types.length === 0)
-      return "never";
-    const types = this.types.map((type) => {
-      const encoded = toEncoded(type);
-      switch (encoded._tag) {
-        case "Arrays": {
-          const literals = encoded.elements.filter(isLiteral);
-          if (literals.length > 0) {
-            return `${formatIsMutable(encoded.isMutable)}[ ${literals.map((e) => getExpected(e) + formatIsOptional(e.context?.isOptional)).join(", ")}, ... ]`;
-          }
-          break;
-        }
-        case "Objects": {
-          const literals = encoded.propertySignatures.filter((ps) => isLiteral(ps.type));
-          if (literals.length > 0) {
-            return `{ ${literals.map((ps) => `${formatIsMutable(ps.type.context?.isMutable)}${formatPropertyKey(ps.name)}${formatIsOptional(ps.type.context?.isOptional)}: ${getExpected(ps.type)}`).join(", ")}, ... }`;
-          }
-          break;
-        }
-      }
-      return getExpected(encoded);
-    });
-    return Array.from(new Set(types)).join(" | ");
-  }
-};
-function failSingleUnionCandidate(ast, cause, input, options) {
-  const issue = getSchemaIssue(cause);
-  if (!issue)
-    return failCause2(cause);
-  return fail4(new AnyOf(ast, [issue], input, options));
-}
-var parseUnion = /* @__PURE__ */ iterateEager()({
-  onItem(s, ast) {
-    const parser = s.compile(ast);
-    return parser(s.input, s.options);
-  },
-  step(s, candidate, exit) {
-    if (exit._tag === "Failure") {
-      const issue = getSchemaIssue(exit.cause);
-      if (issue === undefined) {
-        return exit;
-      }
-      if (s.issues)
-        s.issues.push(issue);
-      else
-        s.issues = [issue];
-    } else {
-      if (s.out && s.successes) {
-        s.successes.push(candidate);
-        return fail4(new OneOf(s.ast, s.successes, s.input, s.options));
-      }
-      s.out = exit;
-      if (s.successes) {
-        s.successes.push(candidate);
-      } else {
-        return void_2;
-      }
-    }
-  }
-});
-var nonFiniteLiterals = /* @__PURE__ */ new Union([/* @__PURE__ */ new Literal("Infinity"), /* @__PURE__ */ new Literal("-Infinity"), /* @__PURE__ */ new Literal("NaN")]);
-function formatIsMutable(isMutable) {
-  return isMutable ? "" : "readonly ";
-}
-function formatIsOptional(isOptional) {
-  return isOptional ? "?" : "";
-}
-var Filter2 = class extends Class {
-  _tag = "Filter";
-  run;
-  annotations;
-  aborted;
-  constructor(run, annotations = undefined, aborted = false) {
-    super();
-    this.run = run;
-    this.annotations = annotations;
-    this.aborted = aborted;
-  }
-  annotate(annotations) {
-    return new Filter2(this.run, {
-      ...this.annotations,
-      ...annotations
-    }, this.aborted);
-  }
-  abort() {
-    return new Filter2(this.run, this.annotations, true);
-  }
-  and(other, annotations) {
-    return new FilterGroup([this, other], annotations);
-  }
-};
-var FilterGroup = class extends Class {
-  _tag = "FilterGroup";
-  checks;
-  annotations;
-  constructor(checks, annotations = undefined) {
-    super();
-    this.checks = checks;
-    this.annotations = annotations;
-  }
-  annotate(annotations) {
-    return new FilterGroup(this.checks, {
-      ...this.annotations,
-      ...annotations
-    });
-  }
-  and(other, annotations) {
-    return new FilterGroup([this, other], annotations);
-  }
-};
-function makeFilter(filter, annotations, aborted = false) {
-  return new Filter2((input, ast, options) => normalizeFilterOutput(ast, filter(input, ast, options), input, options), annotations, aborted);
-}
-function isFinite2(annotations) {
-  return makeFilter((n) => globalThis.Number.isFinite(n), {
-    expected: "a finite number",
-    representation: {
-      id: "effect/schema/isFinite",
-      payload: null
-    },
-    toJsonSchema: () => ({
-      type: "number"
-    }),
-    toCode: () => ({
-      runtime: "Schema.isFinite()"
-    }),
-    arbitraryConstraint: {
-      number: "finite"
-    },
-    ...annotations
-  });
-}
-var finite = /* @__PURE__ */ appendChecks(number2, [/* @__PURE__ */ isFinite2()]);
-var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finite, nonFiniteLiterals]), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
-function isPattern(regExp, annotations) {
-  const source = regExp.source;
-  const pattern = new globalThis.RegExp(source, regExp.flags);
-  return makeFilter((s) => {
-    pattern.lastIndex = 0;
-    return pattern.test(s);
-  }, {
-    expected: `a string matching the RegExp ${source}`,
-    representation: {
-      id: "effect/schema/isPattern",
-      payload: {
-        source,
-        flags: regExp.flags
-      }
-    },
-    toJsonSchema: () => ({
-      pattern: source
-    }),
-    arbitraryConstraint: {
-      patterns: [{
-        source: regExp.source,
-        flags: regExp.flags
-      }]
-    },
-    ...annotations
-  });
-}
-function modifyOwnPropertyDescriptors(ast, f) {
-  const d = Object.getOwnPropertyDescriptors(ast);
-  f(d);
-  return Object.create(Object.getPrototypeOf(ast), d);
-}
-var contextOwners = /* @__PURE__ */ new WeakMap;
-function getContextOwner(ast) {
-  return contextOwners.get(ast) ?? ast;
-}
-function replaceEncoding(ast, encoding) {
-  if (ast.encoding === encoding) {
-    return ast;
-  }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.encoding.value = encoding;
-  });
-}
-function replaceContext(ast, context) {
-  if (ast.context === context) {
-    return ast;
-  }
-  const owner = getContextOwner(ast);
-  if (owner.context === context) {
-    return owner;
-  }
-  const out = modifyOwnPropertyDescriptors(ast, (d) => {
-    d.context.value = context;
-  });
-  contextOwners.set(out, owner);
-  return out;
-}
-function getLastEncoding(ast) {
-  return ast.encoding ? getLastEncoding(ast.encoding[ast.encoding.length - 1].to) : ast;
-}
-function annotate(ast, annotations) {
-  if (ast.checks) {
-    const last = ast.checks[ast.checks.length - 1];
-    return replaceChecks(ast, append(ast.checks.slice(0, -1), last.annotate(annotations)));
-  }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.annotations.value = {
-      ...d.annotations.value,
-      ...annotations
-    };
-  });
-}
-function replaceChecks(ast, checks) {
-  if (ast._tag === "Suspend" && checks) {
-    throw new Error("Cannot add checks to Suspend");
-  }
-  if (ast.checks === checks) {
-    return ast;
-  }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.checks.value = checks;
-  });
-}
-function appendChecks(ast, checks) {
-  return replaceChecks(ast, combineChecks(ast.checks, checks));
-}
-function mapLink(link, f) {
-  const to = f(link.to);
-  return to === link.to ? link : new Link(to, link.transformation);
-}
-function updateLastLink(encoding, f) {
-  const links = encoding;
-  const last = links[links.length - 1];
-  const out = mapLink(last, f);
-  return out === last ? encoding : append(encoding.slice(0, encoding.length - 1), out);
-}
-function applyToLastLink(f) {
-  return (ast) => ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, f)) : ast;
-}
-function applyToSelfOrLastLinkEncodingIdempotent(f, options) {
-  function out(ast) {
-    if (ast.encoding) {
-      const last = ast.encoding[ast.encoding.length - 1];
-      return options?.stopAt?.(last) ? ast : replaceEncoding(ast, updateLastLink(ast.encoding, out));
-    }
-    return f(ast);
-  }
-  return memoizeIdempotent(out);
-}
-function appendTransformation(from, transformation, to) {
-  const link = new Link(from, transformation);
-  return replaceEncoding(to, to.encoding ? [...to.encoding, link] : [link]);
-}
-function mapOrSame(as, f) {
-  let changed = false;
-  const out = new Array(as.length);
-  for (let i = 0;i < as.length; i++) {
-    const a = as[i];
-    const fa = f(a);
-    if (fa !== a) {
-      changed = true;
-    }
-    out[i] = fa;
-  }
-  return changed ? out : as;
-}
-function annotateKey(ast, annotations) {
-  const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, ast.context.constructorDefault, {
-    ...ast.context.annotations,
-    ...annotations
-  }) : new Context(false, false, undefined, annotations);
-  return replaceContext(ast, context);
-}
-var optionalKey = /* @__PURE__ */ memoizeIdempotent((ast) => {
-  const context = ast.context ? ast.context.isOptional === false ? new Context(true, ast.context.isMutable, ast.context.constructorDefault, ast.context.annotations) : ast.context : new Context(true, false);
-  return optionalKeyLastLink(replaceContext(ast, context));
-});
-var optionalKeyLastLink = /* @__PURE__ */ applyToLastLink(optionalKey);
-function withConstructorDefault(ast, defaultValue) {
-  const transformation = new Transformation(withDefault(defaultValue), passthrough());
-  const constructorDefault = new Link(unknown, transformation);
-  const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, constructorDefault, ast.context.annotations) : new Context(false, false, constructorDefault);
-  return replaceContext(ast, context);
-}
-function decodeTo(from, to, transformation) {
-  return appendTransformation(from, transformation, to);
-}
-function isOptional(ast) {
-  return ast.context?.isOptional ?? false;
-}
-function isStructuralCheck(check) {
-  return check.annotations?.[STRUCTURAL_ANNOTATION_KEY] === true || check._tag === "FilterGroup" && check.checks.every(isStructuralCheck);
-}
-function extractStructuralChecks(checks) {
-  function extract(check) {
-    if (isStructuralCheck(check))
-      return [check];
-    return check._tag === "FilterGroup" ? check.checks.flatMap(extract) : [];
-  }
-  const out = checks.flatMap(extract);
-  return isArrayNonEmpty2(out) ? out : undefined;
-}
-var toType = /* @__PURE__ */ memoizeIdempotent((ast) => {
-  if (ast.encoding) {
-    return toType(replaceEncoding(ast, undefined));
-  }
-  const out = ast;
-  const type = out.recur?.(toType) ?? out;
-  const encodingChecks = type.encodingChecks;
-  if (encodingChecks) {
-    const checks = type === ast ? encodingChecks : isArrays(type) || isObjects(type) || isDeclaration(type) && type.typeParameters.length > 0 ? extractStructuralChecks(encodingChecks) : undefined;
-    return modifyOwnPropertyDescriptors(type, (d) => {
-      d.encodingChecks.value = undefined;
-      d.checks.value = combineChecks(type.checks, checks);
-    });
-  }
-  return type;
-});
-var toEncoded = /* @__PURE__ */ memoizeIdempotent((ast) => {
-  return toType(flip2(ast));
-});
-function flipEncoding(ast, encoding) {
-  const links = encoding;
-  const len = links.length;
-  const last = links[len - 1];
-  const ls = [new Link(flip2(replaceEncoding(ast, undefined)), links[0].transformation.flip())];
-  for (let i = 1;i < len; i++) {
-    ls.unshift(new Link(flip2(links[i - 1].to), links[i].transformation.flip()));
-  }
-  const to = flip2(last.to);
-  if (to.encoding) {
-    return replaceEncoding(to, [...to.encoding, ...ls]);
-  } else {
-    return replaceEncoding(to, ls);
-  }
-}
-var flip2 = /* @__PURE__ */ memoize((ast) => {
-  if (ast.encoding) {
-    return flipEncoding(ast, ast.encoding);
-  }
-  const out = ast;
-  return out.flip?.(flip2) ?? out.recur?.(flip2) ?? out;
-});
-function containsUndefined(ast) {
-  switch (ast._tag) {
-    case "Undefined":
-      return true;
-    case "Union":
-      return ast.types.some(containsUndefined);
-    default:
-      return false;
-  }
-}
-function fromConst(ast, value) {
-  const succeed = value === 0 ? sameExit : succeed9(value);
-  return (input, options) => {
-    if (input === missing)
-      return missingExit;
-    if (input === value)
-      return succeed;
-    return fail6(new InvalidType(ast, input, options));
-  };
-}
-function fromRefinement(ast, refinement) {
-  return (input, options) => {
-    if (input === missing)
-      return missingExit;
-    if (refinement(input))
-      return sameExit;
-    return fail6(new InvalidType(ast, input, options));
-  };
-}
-var parameterFromPropertyKey = /* @__PURE__ */ applyToSelfOrLastLinkEncodingIdempotent((ast) => {
-  switch (ast._tag) {
-    default:
-      return ast;
-    case "Number":
-      return ast.toCodecStringTree();
-    case "Union":
-      return ast.recur(parameterFromPropertyKey);
-  }
-});
-var isStringFiniteRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${FINITE_PATTERN}$`);
-var isStringNumberRegExp = /* @__PURE__ */ new globalThis.RegExp(`^(?:${FINITE_PATTERN}|Infinity|-Infinity|NaN)$`);
-function isStringFinite(annotations) {
-  return isPattern(isStringFiniteRegExp, {
-    expected: "a string representing a finite number",
-    representation: {
-      id: "effect/schema/isStringFinite",
-      payload: null
-    },
-    toJsonSchema: () => ({
-      pattern: isStringFiniteRegExp.source
-    }),
-    ...annotations
-  });
-}
-var finiteString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringFinite()]);
-var finiteToString = /* @__PURE__ */ new Link(finiteString, numberFromString);
-var numberToString = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finiteString, nonFiniteLiterals]), numberFromString);
-var BIGINT_PATTERN = "-?\\d+";
-var isStringBigIntRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${BIGINT_PATTERN}$`);
-var REGEXP_PATTERN = "Symbol\\(([\\s\\S]*)\\)";
-var isStringSymbolRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${REGEXP_PATTERN}$`);
-function collectIssues(checks, value, issues, ast, options) {
-  for (let i = 0;i < checks.length; i++) {
-    const check = checks[i];
-    if (check._tag === "FilterGroup") {
-      issues = collectIssues(check.checks, value, issues, ast, options);
-      if (issues && (options.errors !== "all" || issues[issues.length - 1].filter.aborted)) {
-        return issues;
-      }
-    } else {
-      const issue = check.run(value, ast, options);
-      if (issue) {
-        const filter = new Filter(check, issue, value, options);
-        if (issues)
-          issues.push(filter);
-        else
-          issues = [filter];
-        if (options.errors !== "all" || check.aborted) {
-          return issues;
-        }
-      }
-    }
-  }
-  return issues;
-}
-function getConstructorDescriptor(ast) {
-  if (!isDeclaration(ast))
-    return;
-  const getDescriptor = ast.annotations?.[CONSTRUCTOR_ANNOTATION_KEY];
-  return isFunction(getDescriptor) ? getDescriptor(ast.typeParameters) : undefined;
-}
-function isJsonLeaf(u) {
-  return u === null || typeof u === "string" || typeof u === "boolean" || typeof u === "number" && globalThis.Number.isFinite(u);
-}
-function isStringTreeLeaf(u) {
-  return u === undefined || typeof u === "string";
-}
-function isTree(u, isLeaf) {
-  const cache = new WeakMap;
-  const stack = [];
-  outer:
-    while (true) {
-      if (typeof u !== "object" || u === null) {
-        if (!isLeaf(u)) {
-          return false;
-        }
-      } else {
-        const value = u;
-        const cached = cache.get(value);
-        if (cached === false) {
-          return false;
-        }
-        if (cached === undefined) {
-          const isArray = Array.isArray(value);
-          if (!isArray) {
-            const prototype = Object.getPrototypeOf(value);
-            if (prototype !== null && prototype !== Object.prototype && Object.getPrototypeOf(prototype) !== null) {
-              return false;
-            }
-          }
-          cache.set(value, false);
-          stack.push({
-            value,
-            keys: isArray ? value.length : Object.keys(value),
-            index: 0
-          });
-        }
-      }
-      while (stack.length > 0) {
-        const frame = stack[stack.length - 1];
-        const keys = frame.keys;
-        if (typeof keys === "number") {
-          if (frame.index < keys) {
-            u = frame.value[frame.index++];
-            continue outer;
-          }
-        } else if (frame.index < keys.length) {
-          u = frame.value[keys[frame.index++]];
-          continue outer;
-        }
-        cache.set(frame.value, true);
-        stack.pop();
-      }
-      return true;
-    }
-}
-function isJson(u) {
-  return isTree(u, isJsonLeaf);
-}
-var Json = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isJson(input) ? sameExit : fail6(new InvalidType(ast, input, options)), {
-  representation: {
-    id: "effect/schema/Json",
-    payload: null
-  },
-  expected: "JSON value",
-  toCodecJson: () => {
-    return;
-  },
-  toCodecStringTree: () => unknownToStringTree
-});
-function isStringTree(u) {
-  return isTree(u, isStringTreeLeaf);
-}
-var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isStringTree(input) ? sameExit : fail6(new InvalidType(ast, input, options)), {
-  expected: "StringTree",
-  toCodecStringTree: () => {
-    return;
-  }
-});
-var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough2());
-
-// node_modules/effect/dist/SchemaParser.js
-function makeEffect(schema) {
-  const ast = schema.ast;
-  let parser;
-  return (input, options) => {
-    return (parser ??= runWithCompiler(constructorCompiler, toType(ast)))(input, options?.disableChecks ? options?.parseOptions ? {
-      ...options.parseOptions,
-      disableChecks: true
-    } : {
-      disableChecks: true
-    } : options?.parseOptions);
-  };
-}
-function makeOption(schema) {
-  const parser = makeEffect(schema);
-  return (input, options) => {
-    const exit = runSyncExit2(parser(input, options));
-    if (isSuccess3(exit)) {
-      return some2(exit.value);
-    }
-    getSchemaIssueOrThrow(exit.cause, "Option adapter can only return none for schema issues");
-    return none2();
-  };
-}
-function make15(schema) {
-  const parser = makeEffect(schema);
-  return (input, options) => {
-    const exit = runSyncExit2(parser(input, options));
-    if (isSuccess3(exit)) {
-      return exit.value;
-    }
-    const issue = getSchemaIssueOrThrow(exit.cause, "Constructor adapter can only throw schema issues");
-    throw new Error("Schema validation failed", {
-      cause: issue
-    });
-  };
-}
-function is2(schema) {
-  return _is(schema.ast);
-}
-function _is(ast) {
-  const parser = asExit(run2(toType(ast)));
-  return (input) => {
-    const exit = parser(input, defaultParseOptions);
-    if (isSuccess3(exit)) {
-      return true;
-    }
-    getSchemaIssueOrThrow(exit.cause, "Type guard adapter can only return false for schema issues");
-    return false;
-  };
-}
-function decodeUnknownEffect(schema, options) {
-  const parser = run2(schema.ast);
-  return options === undefined ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
-}
-var mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
-  ...options,
-  ...overrideOptions
-} : options;
-var getValue = (value) => {
-  if (value === missing) {
-    return fail6(new InvalidValue);
-  }
-  return succeed6(value);
-};
-function run2(ast) {
-  return runWithCompiler(normalCompiler, ast);
-}
-function runWithCompiler(compiler, ast) {
-  let parser;
-  return (input, options) => {
-    const result = (parser ??= compiler(ast))(input, options ?? defaultParseOptions);
-    if (result === sameExit) {
-      return succeed6(input);
-    }
-    if (!effectIsExit(result)) {
-      return flatMapEager2(result, getValue);
-    }
-    return result[args] === missing ? getValue(missing) : result;
-  };
-}
-function asExit(parser) {
-  return (input, options) => runSyncExit2(parser(input, options));
-}
-var normalCompiler = /* @__PURE__ */ memoize((ast) => makeParser(ast, normalCompiler));
-var constructorCompiler = /* @__PURE__ */ memoize((ast) => makeParser(ast, constructorCompiler, compileConstructorDefault));
-var compileDefaulted = /* @__PURE__ */ memoize((ast) => makeParser(ast, constructorCompiler, compileConstructorDefault, ast.context?.constructorDefault));
-function compileConstructorDefault(ast) {
-  return ast.context?.constructorDefault ? compileDefaulted(ast) : constructorCompiler(ast);
-}
-function applyTransformation(result, current, transformation, options) {
-  let transformed;
-  if (effectIsExit(result) && result._tag === "Success") {
-    const optional = toOption(result === sameExit ? current : result[args]);
-    transformed = transformation._tag === "Transformation" ? transformation.decode.run(optional, options) : transformation.decode(succeed9(optional), options);
-  } else if (transformation._tag === "Transformation") {
-    transformed = flatMapEager2(result, (value) => transformation.decode.run(toOption(value), options));
-  } else {
-    transformed = transformation.decode(mapEager2(result, toOption), options);
-  }
-  return effectIsExit(transformed) && transformed._tag === "Success" ? fromOptionExit(transformed[args]) : flatMapEager2(transformed, fromOptionExit);
-}
-function makeConstructorParser(descriptor, compile) {
-  let sourceParser;
-  return (input, options) => {
-    if (input === missing)
-      return missingExit;
-    if (descriptor.isConstructed(input))
-      return sameExit;
-    const result = (sourceParser ??= compile(descriptor.link.to))(input, options);
-    return applyTransformation(result, input, descriptor.link.transformation, options);
-  };
-}
-function makeParser(ast, compile, compileConstructorDefault, constructorDefault) {
-  const descriptor = compileConstructorDefault ? getConstructorDescriptor(ast) : undefined;
-  const parser = descriptor ? makeConstructorParser(descriptor, compile) : ast.getParser(compile, compileConstructorDefault);
-  const checks = ast.checks;
-  const links = constructorDefault ? ast.encoding ? [...ast.encoding, constructorDefault] : [constructorDefault] : ast.encoding;
-  const encodingChecks = ast.encodingChecks;
-  if (!links && !checks && !encodingChecks) {
-    return parser;
-  }
-  let encodingParsers;
-  const parseLocal = (input, options) => {
-    let result = parser(input, options);
-    if (encodingChecks && !options.disableChecks) {
-      if (effectIsExit(result)) {
-        if (result._tag === "Success") {
-          const output = result === sameExit ? input : result[args];
-          if (input !== missing && output !== missing) {
-            const issues = collectIssues(encodingChecks, input, undefined, ast, options);
-            if (issues) {
-              result = fail6(new Composite(ast, issues, input, options));
-            }
-          }
-        }
-      } else {
-        result = flatMap3(result, (value) => {
-          if (input !== missing && value !== missing) {
-            const issues = collectIssues(encodingChecks, input, undefined, ast, options);
-            if (issues) {
-              return fail6(new Composite(ast, issues, input, options));
-            }
-          }
-          return succeed6(value);
-        });
-      }
-    }
-    if (checks && !options.disableChecks) {
-      if (effectIsExit(result)) {
-        if (result._tag === "Success") {
-          const value = result === sameExit ? input : result[args];
-          if (value === missing)
-            return result;
-          const issues = collectIssues(checks, value, undefined, ast, options);
-          if (issues) {
-            result = fail6(new Composite(ast, issues, value, options));
-          }
-        }
-      } else {
-        result = flatMap3(result, (value) => {
-          if (value !== missing) {
-            const issues = collectIssues(checks, value, undefined, ast, options);
-            if (issues) {
-              return fail6(new Composite(ast, issues, value, options));
-            }
-          }
-          return succeed6(value);
-        });
-      }
-    }
-    return result;
-  };
-  if (!links) {
-    return parseLocal;
-  }
-  return (input, options) => {
-    const parsers = encodingParsers ??= links.map((link) => compile(link.to));
-    let current = input;
-    let result = parsers[parsers.length - 1](input, options);
-    for (let i = links.length - 1;i >= 0; i--) {
-      result = applyTransformation(result, current, links[i].transformation, options);
-      if (i !== 0) {
-        const next = parsers[i - 1];
-        if (result._tag === "Success") {
-          current = result[args];
-          result = next(current, options);
-        } else {
-          result = flatMapEager2(result, (value) => {
-            const nextResult = next(value, options);
-            return nextResult === sameExit ? succeed9(value) : nextResult;
-          });
-        }
-      }
-    }
-    if (result._tag === "Success") {
-      const value = result[args];
-      const local = parseLocal(value, options);
-      return local === sameExit ? result : local;
-    }
-    result = catchCause2(result, (cause) => failCauseSync2(() => map5(cause, (issue) => new Encoding(ast, issue, input, options))));
-    return flatMapEager2(result, (value) => {
-      const local = parseLocal(value, options);
-      return local === sameExit ? succeed9(value) : local;
-    });
-  };
-}
-
-// node_modules/effect/dist/internal/schema/make.js
-var TypeId21 = "~effect/Schema/Schema";
-var SchemaProto = {
-  [TypeId21]: TypeId21,
-  pipe() {
-    return pipeArguments(this, arguments);
-  },
-  annotate(annotations) {
-    return this.rebuild(annotate(this.ast, annotations));
-  },
-  annotateKey(annotations) {
-    return this.rebuild(annotateKey(this.ast, annotations));
-  },
-  check(...checks) {
-    return this.rebuild(appendChecks(this.ast, checks));
-  }
-};
-function make16(ast, options) {
-  function Schema() {}
-  const self = Object.setPrototypeOf(Schema, SchemaProto);
-  if (options && (Object.hasOwn(options, "name") || Object.hasOwn(options, "length") || Object.hasOwn(options, "__proto__"))) {
-    Object.defineProperties(self, Object.getOwnPropertyDescriptors({
-      ...options
-    }));
-  } else {
-    Object.assign(self, options);
-  }
-  self.ast = ast;
-  self.rebuild = (ast) => make16(ast, options);
-  self.makeEffect = makeEffect(self);
-  self.make = make15(self);
-  self.makeOption = makeOption(self);
-  return self;
-}
-
-// node_modules/effect/dist/Struct.js
-var lambda = (f) => f;
-
-// node_modules/effect/dist/internal/schemaError.js
-var SchemaErrorTypeId = "~effect/Schema/SchemaError";
-function isSchemaError(u) {
-  return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
-}
-
-// node_modules/effect/dist/Schema.js
-var TypeId22 = TypeId21;
-function declareConstructor() {
-  return (typeParameters, run, annotations) => {
-    return make17(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make17(ast))), annotations));
-  };
-}
-function declare(is, annotations) {
-  return declareConstructor()([], () => (input, ast, options) => is(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options)), annotations);
-}
-class SchemaError extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
-  [SchemaErrorTypeId] = SchemaErrorTypeId;
-  constructor(issue) {
-    const stackTraceLimit = getStackTraceLimit();
-    setStackTraceLimit(0);
-    try {
-      super({
-        issue
-      });
-    } finally {
-      setStackTraceLimit(stackTraceLimit);
-    }
-  }
-  get message() {
-    return defaultFormatter(this.issue);
-  }
-  toString() {
-    return `SchemaError(${this.message})`;
-  }
-}
-function isSchemaError2(u) {
-  return isSchemaError(u);
-}
-function fromIssueEffect(self) {
-  if (effectIsExit(self)) {
-    return fromIssueExit(self);
-  }
-  return catchCause2(self, (cause) => failCauseSync2(() => map5(cause, (issue) => new SchemaError(issue))));
-}
-function fromIssueExit(exit) {
-  return isSuccess3(exit) ? exit : failCause2(map5(exit.cause, (issue) => new SchemaError(issue)));
-}
-function decodeUnknownEffect2(schema, options) {
-  const parser = decodeUnknownEffect(schema, options);
-  return (input, options) => {
-    return fromIssueEffect(parser(input, options));
-  };
-}
-var decodeEffect2 = decodeUnknownEffect2;
-var make17 = make16;
-function isSchema(u) {
-  return hasProperty(u, TypeId22) && u[TypeId22] === TypeId22;
-}
-var optionalKey2 = /* @__PURE__ */ lambda((schema) => make17(optionalKey(schema.ast), {
-  schema
-}));
-var toType2 = /* @__PURE__ */ lambda((schema) => make17(toType(schema.ast), {
-  schema
-}));
-function Literal2(literal) {
-  const out = make17(new Literal(literal), {
-    literal,
-    transform(to) {
-      return out.pipe(decodeTo2(Literal2(to), {
-        decode: transform(() => to),
-        encode: transform(() => literal)
-      }));
-    }
-  });
-  return out;
-}
-var Unknown2 = /* @__PURE__ */ make17(unknown);
-var String4 = /* @__PURE__ */ make17(string2);
-var Number5 = /* @__PURE__ */ make17(number2);
-var Boolean2 = /* @__PURE__ */ make17(boolean);
-function makeStruct(ast, fields) {
-  return make17(ast, {
-    fields,
-    mapFields(f, options) {
-      const fields = f(this.fields);
-      return makeStruct(struct(fields, options?.unsafePreserveChecks ? this.ast.checks : undefined), fields);
-    }
-  });
-}
-function Struct(fields) {
-  return makeStruct(struct(fields, undefined), fields);
-}
-function makeTuple(ast, elements) {
-  return make17(ast, {
-    elements,
-    mapElements(f, options) {
-      const elements = f(this.elements);
-      return makeTuple(tuple(elements, options?.unsafePreserveChecks ? this.ast.checks : undefined), elements);
-    }
-  });
-}
-function Tuple(elements) {
-  return makeTuple(tuple(elements), elements);
-}
-var ArraySchema = /* @__PURE__ */ lambda((schema) => make17(new Arrays(false, [], [schema.ast]), {
-  value: schema
-}));
-function makeUnion(ast, members) {
-  return make17(ast, {
-    members,
-    mapMembers(f, options) {
-      const members = f(this.members);
-      return makeUnion(union(members, this.ast.options, options?.unsafePreserveChecks ? this.ast.checks : undefined), members);
-    }
-  });
-}
-function Union2(members, options) {
-  return makeUnion(union(members, options, undefined), members);
-}
-function Literals(literals) {
-  const members = literals.map(Literal2);
-  return make17(union(members, undefined, undefined), {
-    literals,
-    members,
-    mapMembers(f) {
-      return Union2(f(this.members));
-    },
-    pick(literals) {
-      return Literals(literals);
-    },
-    transform(to) {
-      return Union2(members.map((member, index) => member.transform(to[index])));
-    }
-  });
-}
-function decodeTo2(to, transformation) {
-  return (from) => {
-    return make17(decodeTo(from.ast, to.ast, transformation ? make14(transformation) : passthrough2()), {
-      from,
-      to
-    });
-  };
-}
-function withConstructorDefault2(defaultValue) {
-  return (schema) => make17(withConstructorDefault(schema.ast, defaultValue), {
-    schema
-  });
-}
-function tag3(literal) {
-  return Literal2(literal).pipe(withConstructorDefault2(succeed6(literal)));
-}
-function TaggedStruct(value, fields) {
-  return Struct({
-    _tag: tag3(value),
-    ...fields
-  });
-}
-function toTaggedUnion(tag) {
-  return (self) => {
-    const cases = {};
-    const discriminants = [];
-    const discriminantKeys = new Set;
-    const guards = {};
-    const isAnyOf = (keys) => (value) => keys.includes(value[tag]);
-    walk(self);
-    return Object.assign(self, {
-      cases,
-      discriminants,
-      isAnyOf,
-      guards,
-      match,
-      matchOrElse
-    });
-    function walk(schema) {
-      const ast = schema.ast;
-      if (isUnion(ast) && "members" in schema && globalThis.Array.isArray(schema.members) && schema.members.every(isSchema)) {
-        return schema.members.forEach(walk);
-      }
-      const sentinels = collectSentinels(ast);
-      if (sentinels.length > 0) {
-        const literal = sentinels.find((s) => s.key === tag)?.literal;
-        if (isPropertyKey(literal)) {
-          const key = typeof literal === "number" ? globalThis.String(literal) : literal;
-          if (discriminantKeys.has(key)) {
-            throw new globalThis.Error(`Duplicate discriminant: ${globalThis.String(literal)}`);
-          }
-          discriminantKeys.add(key);
-          discriminants.push(literal);
-          assignProperty(cases, literal, schema);
-          assignProperty(guards, literal, is2(toType2(schema)));
-          return;
-        }
-      }
-      throw new globalThis.Error("No literal or unique symbol found");
-    }
-    function match() {
-      if (arguments.length === 1) {
-        const cases = arguments[0];
-        return function(value) {
-          const key = value[tag];
-          const handler = Object.hasOwn(cases, key) ? cases[key] : undefined;
-          return handler(value);
-        };
-      }
-      const value = arguments[0];
-      const cases = arguments[1];
-      const key = value[tag];
-      const handler = Object.hasOwn(cases, key) ? cases[key] : undefined;
-      return handler(value);
-    }
-    function matchOrElse() {
-      if (arguments.length === 2) {
-        const cases = arguments[0];
-        const orElse = arguments[1];
-        return function(value) {
-          const key = value[tag];
-          const handler = Object.hasOwn(cases, key) ? cases[key] ?? orElse : orElse;
-          return handler(value);
-        };
-      }
-      const value = arguments[0];
-      const cases = arguments[1];
-      const orElse = arguments[2];
-      const key = value[tag];
-      const handler = Object.hasOwn(cases, key) ? cases[key] ?? orElse : orElse;
-      return handler(value);
-    }
-  };
-}
-function TaggedUnion(casesByTag) {
-  const cases = {};
-  const members = [];
-  for (const key of Object.keys(casesByTag)) {
-    const member = TaggedStruct(key, casesByTag[key]);
-    assignProperty(cases, key, member);
-    members.push(member);
-  }
-  const union = Union2(members);
-  const {
-    guards,
-    isAnyOf,
-    match,
-    matchOrElse
-  } = toTaggedUnion("_tag")(union);
-  return make17(union.ast, {
-    cases,
-    isAnyOf,
-    guards,
-    match,
-    matchOrElse
-  });
-}
-function instanceOf2(constructor, annotations) {
-  return declare((u) => u instanceof constructor, annotations);
-}
-function link() {
-  return (encodeTo, transformation) => {
-    return new Link(encodeTo.ast, make14(transformation));
-  };
-}
-var makeFilter2 = makeFilter;
-function isPattern2(regExp, annotations) {
-  const source = regExp.source;
-  const flags = regExp.flags;
-  const runtimeRegExp = flags === "" ? `new RegExp(${format(source)})` : `new RegExp(${format(source)}, ${format(flags)})`;
-  return isPattern(regExp, {
-    toCode: () => ({
-      runtime: `Schema.isPattern(${runtimeRegExp})`
-    }),
-    ...annotations
-  });
-}
-function isBase64(annotations) {
-  const regExp = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
-  return isPattern2(regExp, {
-    expected: "a base64 encoded string",
-    representation: {
-      id: "effect/schema/isBase64",
-      payload: null
-    },
-    toJsonSchema: () => ({
-      pattern: regExp.source
-    }),
-    toCode: () => ({
-      runtime: "Schema.isBase64()"
-    }),
-    ...annotations
-  });
-}
-var Finite = /* @__PURE__ */ make17(finite);
-function isInt(annotations) {
-  return makeFilter2((n) => globalThis.Number.isSafeInteger(n), {
-    expected: "an integer",
-    representation: {
-      id: "effect/schema/isInt",
-      payload: null
-    },
-    toJsonSchema: () => ({
-      type: "integer"
-    }),
-    toCode: () => ({
-      runtime: "Schema.isInt()"
-    }),
-    arbitraryConstraint: {
-      number: "integer"
-    },
-    ...annotations
-  });
-}
-var Int = /* @__PURE__ */ Number5.check(/* @__PURE__ */ isInt());
-var getErrorOptionsKey = (options) => (options?.includeStack === true ? 1 : 0) | (options?.excludeCause === true ? 2 : 0);
-var getErrorOptions = (key) => {
-  switch (key) {
-    case 0:
-      return;
-    case 1:
-      return {
-        includeStack: true
-      };
-    case 2:
-      return {
-        excludeCause: true
-      };
-    case 3:
-      return {
-        includeStack: true,
-        excludeCause: true
-      };
-  }
-};
-var defectSchemaCache = [];
-function Defect(options) {
-  const key = getErrorOptionsKey(options);
-  const cached = defectSchemaCache[key];
-  if (cached !== undefined) {
-    return cached;
-  }
-  const schema = Json2.pipe(decodeTo2(Unknown2, defectFromJson(getErrorOptions(key))));
-  defectSchemaCache[key] = schema;
-  return schema;
-}
-var RegExp2 = /* @__PURE__ */ instanceOf2(globalThis.RegExp, {
-  representation: {
-    id: "effect/schema/RegExp",
-    payload: null
-  },
-  toCode: () => ({
-    runtime: `Schema.RegExp`,
-    Type: `globalThis.RegExp`
-  }),
-  expected: "RegExp",
-  toCodecJson: () => link()(Struct({
-    source: String4,
-    flags: String4
-  }), transformEffect2({
-    decode: (e, options) => try_2({
-      try: () => new globalThis.RegExp(e.source, e.flags),
-      catch: () => new InvalidValue({
-        expected: "valid RegExp source and flags"
-      }, e, options)
-    }),
-    encode: (regExp) => succeed6({
-      source: regExp.source,
-      flags: regExp.flags
-    })
-  }))
-});
-var URLString = /* @__PURE__ */ String4.annotate({
-  expected: "a string that will be decoded as a URL"
-});
-var URL2 = /* @__PURE__ */ instanceOf2(globalThis.URL, {
-  representation: {
-    id: "effect/schema/URL",
-    payload: null
-  },
-  toCode: () => ({
-    runtime: `Schema.URL`,
-    Type: `globalThis.URL`
-  }),
-  expected: "URL",
-  toCodecJson: () => link()(URLString, urlFromString)
-});
-var JsonString = /* @__PURE__ */ String4.annotate({
-  expected: "a string that will be decoded as JSON",
-  contentMediaType: "application/json"
-});
-function fromJsonString2(schema, options) {
-  return JsonString.pipe(decodeTo2(schema, fromJsonString(options)));
-}
-var File = /* @__PURE__ */ instanceOf2(globalThis.File, {
-  representation: {
-    id: "effect/schema/File",
-    payload: null
-  },
-  toCode: () => ({
-    runtime: `Schema.File`,
-    Type: `globalThis.File`
-  }),
-  expected: "File",
-  toCodecJson: () => link()(Struct({
-    data: String4.check(isBase64()),
-    type: String4,
-    name: String4,
-    lastModified: Int
-  }), transformEffect2({
-    decode: (e, options) => match3(decodeBase64(e.data), {
-      onFailure: () => fail6(new InvalidValue({
-        expected: "a valid Base64 string"
-      }, e.data, options)),
-      onSuccess: (bytes) => {
-        const buffer = new globalThis.Uint8Array(bytes);
-        return succeed6(new globalThis.File([buffer], e.name, {
-          type: e.type,
-          lastModified: e.lastModified
-        }));
-      }
-    }),
-    encode: (file, options) => tryPromise2({
-      try: async () => {
-        const bytes = new globalThis.Uint8Array(await file.arrayBuffer());
-        return {
-          data: encodeBase64(bytes),
-          type: file.type,
-          name: file.name,
-          lastModified: file.lastModified
-        };
-      },
-      catch: () => new InvalidValue({
-        expected: "a readable File"
-      }, file, options)
-    })
-  }))
-});
-var FormData2 = /* @__PURE__ */ instanceOf2(globalThis.FormData, {
-  representation: {
-    id: "effect/schema/FormData",
-    payload: null
-  },
-  toCode: () => ({
-    runtime: `Schema.FormData`,
-    Type: `globalThis.FormData`
-  }),
-  expected: "FormData",
-  toCodecJson: () => link()(ArraySchema(Tuple([String4, Union2([Struct({
-    _tag: tag3("String"),
-    value: String4
-  }), Struct({
-    _tag: tag3("File"),
-    value: File
-  })])])), transformEffect2({
-    decode: (e) => {
-      const out = new globalThis.FormData;
-      for (const [key, entry] of e) {
-        out.append(key, entry.value);
-      }
-      return succeed6(out);
-    },
-    encode: (formData) => {
-      return succeed6(globalThis.Array.from(formData.entries()).map(([key, value]) => {
-        if (typeof value === "string") {
-          return [key, {
-            _tag: "String",
-            value
-          }];
-        } else {
-          return [key, {
-            _tag: "File",
-            value
-          }];
-        }
-      }));
-    }
-  }))
-});
-var URLSearchParams2 = /* @__PURE__ */ instanceOf2(globalThis.URLSearchParams, {
-  representation: {
-    id: "effect/schema/URLSearchParams",
-    payload: null
-  },
-  toCode: () => ({
-    runtime: `Schema.URLSearchParams`,
-    Type: `globalThis.URLSearchParams`
-  }),
-  expected: "URLSearchParams",
-  toCodecJson: () => link()(String4.annotate({
-    expected: "a query string that will be decoded as URLSearchParams"
-  }), transform2({
-    decode: (e) => new globalThis.URLSearchParams(e),
-    encode: (params) => params.toString()
-  }))
-});
-var Base64String = /* @__PURE__ */ String4.annotate({
-  expected: "a base64 encoded string that will be decoded as Uint8Array",
-  format: "byte",
-  contentEncoding: "base64"
-});
-var Uint8Array2 = /* @__PURE__ */ instanceOf2(globalThis.Uint8Array, {
-  representation: {
-    id: "effect/schema/Uint8Array",
-    payload: null
-  },
-  toCode: () => ({
-    runtime: `Schema.Uint8Array`,
-    Type: `globalThis.Uint8Array`
-  }),
-  expected: "Uint8Array",
-  toCodecJson: () => link()(Base64String, uint8ArrayFromBase64String)
-});
-var arbitraryMinimumDateTimestamp = -8640000000000000;
-var arbitraryMaximumDateTimestamp = 8640000000000000;
-var arbitraryMinimumZonedDateTimeTimestamp = arbitraryMinimumDateTimestamp + 14 * 60 * 60 * 1000;
-var arbitraryMaximumZonedDateTimeTimestamp = arbitraryMaximumDateTimestamp - 14 * 60 * 60 * 1000;
-var arbitraryMinimumTimeZoneOffset = -12 * 60 * 60 * 1000;
-var arbitraryMaximumTimeZoneOffset = 14 * 60 * 60 * 1000;
-var immerable = /* @__PURE__ */ globalThis.Symbol.for("immer-draftable");
-var payloadToken = {};
-function makeClass(Inherited, identifier, struct2, annotations, proto) {
-  const getClassSchema = getClassSchemaFactory(struct2, identifier, annotations);
-  const ClassTypeId = getClassTypeId(identifier);
-  const out = class extends Inherited {
-    constructor(...[input, options]) {
-      const internalOptions = options;
-      const payload = internalOptions?.["~payload"];
-      const value = payload?.token === payloadToken ? payload.value : struct2.make(input ?? {}, options);
-      super(value, {
-        ...options,
-        disableChecks: true,
-        "~payload": {
-          token: payloadToken,
-          value
-        }
-      });
-    }
-    static [TypeId22] = TypeId22;
-    get [ClassTypeId]() {
-      return ClassTypeId;
-    }
-    static [immerable] = true;
-    static identifier = identifier;
-    static fields = struct2.fields;
-    static get ast() {
-      return getClassSchema(this).ast;
-    }
-    static pipe() {
-      return pipeArguments(this, arguments);
-    }
-    static rebuild(ast) {
-      return getClassSchema(this).rebuild(ast);
-    }
-    static make(input, options) {
-      return make15(getClassSchema(this))(input ?? {}, options);
-    }
-    static makeOption(input, options) {
-      return makeOption(getClassSchema(this))(input ?? {}, options);
-    }
-    static makeEffect(input, options) {
-      return getClassSchema(this).makeEffect(input ?? {}, options);
-    }
-    static annotate(annotations) {
-      return this.rebuild(annotate(this.ast, annotations));
-    }
-    static annotateKey(annotations) {
-      return this.rebuild(annotateKey(this.ast, annotations));
-    }
-    static check(...checks) {
-      return this.rebuild(appendChecks(this.ast, checks));
-    }
-    static extend(identifier2) {
-      return (schema, annotations) => {
-        const extension = isStruct(schema) ? schema : Struct(schema);
-        const fields = {
-          ...struct2.fields,
-          ...extension.fields
-        };
-        const ast = struct(fields, struct2.ast.checks, {
-          identifier: identifier2
-        });
-        return makeClass(this, identifier2, makeStruct(appendChecks(ast, extension.ast.checks), fields), annotations, proto);
-      };
-    }
-    static mapFields(f, options) {
-      return struct2.mapFields(f, options);
-    }
-  };
-  if (proto !== undefined) {
-    Object.assign(out.prototype, proto(identifier));
-  }
-  return out;
-}
-function getClassTransformation(self) {
-  return new Transformation(transform((input) => new self(input, {
-    "~payload": {
-      token: payloadToken,
-      value: input
-    }
-  })), passthrough());
-}
-function getClassTypeId(identifier) {
-  return `~effect/Schema/Class/${identifier}`;
-}
-function getClassSchemaFactory(from, identifier, annotations) {
-  let memo;
-  return (self) => {
-    if (memo !== undefined) {
-      return memo;
-    }
-    const ClassTypeId = getClassTypeId(identifier);
-    const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
-    const transformation = getClassTransformation(self);
-    const to = make17(new Declaration([from.ast], () => (input, ast, options) => {
-      return isClassValue(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options));
-    }, {
-      identifier,
-      [CONSTRUCTOR_ANNOTATION_KEY]: ([from]) => ({
-        isConstructed: isClassValue,
-        link: new Link(from, transformation)
-      }),
-      toCodec: ([from]) => new Link(from.ast, transformation),
-      toEquivalence: ([from]) => from,
-      toFormatter: ([from]) => (t) => `${self.identifier}(${from(t)})`,
-      [SENTINELS_ANNOTATION_KEY]: collectSentinels(from.ast),
-      ...annotations
-    }));
-    return memo = decodeTo2(to, transformation)(from);
-  };
-}
-function isStruct(schema) {
-  return isSchema(schema);
-}
-var Error4 = (identifier) => (schema, annotations) => {
-  const struct = isStruct(schema) ? schema : Struct(schema);
-  const self = makeClass(Error2, identifier, struct, annotations, (identifier) => ({
-    name: identifier
-  }));
-  return self;
-};
-var TaggedError3 = (identifier) => {
-  return (tagValue, schema, annotations) => {
-    const struct = isStruct(schema) ? schema.mapFields((fields) => ({
-      _tag: tag3(tagValue),
-      ...fields
-    }), {
-      unsafePreserveChecks: true
-    }) : TaggedStruct(tagValue, schema);
-    return Error4(identifier ?? tagValue)(struct, annotations);
-  };
-};
-var Json2 = /* @__PURE__ */ make17(/* @__PURE__ */ annotate(Json, {
-  toCode: () => ({
-    runtime: "Schema.Json",
-    Type: "Schema.Json"
-  })
-}));
-// node_modules/effect/dist/Brand.js
-function nominal() {
-  return Object.assign((input) => input, {
-    option: (input) => some2(input),
-    result: (input) => succeed2(input),
-    is: (_) => true
-  });
-}
-
-// node_modules/effect/dist/unstable/process/ChildProcessSpawner.js
-var ExitCode = /* @__PURE__ */ nominal();
-var ProcessId = /* @__PURE__ */ nominal();
-var HandleTypeId = "~effect/process/ChildProcessSpawner/ChildProcessHandle";
-var HandleProto = {
-  [HandleTypeId]: HandleTypeId,
-  ...BaseProto,
-  toJSON() {
-    return {
-      _id: "ChildProcessHandle",
-      pid: this.pid
-    };
-  }
-};
-var makeHandle = (params) => Object.setPrototypeOf({
-  ...params
-}, HandleProto);
-var make18 = (spawn) => {
-  const streamString = (command, options) => spawn(command).pipe(map6((handle) => decodeText(options?.includeStderr === true ? handle.all : handle.stdout)), unwrap3);
-  const streamLines = (command, options) => splitLines2(streamString(command, options));
-  return ChildProcessSpawner.of({
-    spawn,
-    exitCode: (command) => scoped2(flatMap3(spawn(command), (handle) => handle.exitCode)),
-    streamString,
-    streamLines,
-    lines: (command, options) => runCollect(streamLines(command, options)),
-    string: (command, options) => mkString(streamString(command, options))
-  });
-};
-
-class ChildProcessSpawner extends (/* @__PURE__ */ Service()("effect/process/ChildProcessSpawner")) {
-}
-
-// node_modules/effect/dist/unstable/process/ChildProcess.js
-var TypeId23 = "~effect/process/ChildProcess";
-var Proto2 = {
-  .../* @__PURE__ */ Prototype2({
-    label: "Command",
-    evaluate(fiber) {
-      return getUnsafe(fiber.context, ChildProcessSpawner).spawn(this);
-    }
-  }),
-  [TypeId23]: TypeId23
-};
-var makeStandardCommand = (command, args, options) => Object.assign(Object.create(Proto2), {
-  _tag: "StandardCommand",
-  command,
-  args,
-  options
-});
-var make19 = function make(...args) {
-  if (isTemplateString(args[0])) {
-    const [templates, ...expressions] = args;
-    const tokens = parseTemplates(templates, expressions);
-    return makeStandardCommand(tokens[0] ?? "", tokens.slice(1), {});
-  }
-  if (typeof args[0] === "object" && !Array.isArray(args[0]) && !isTemplateString(args[0])) {
-    const options = args[0];
-    return function(templates, ...expressions) {
-      const tokens = parseTemplates(templates, expressions);
-      return makeStandardCommand(tokens[0] ?? "", tokens.slice(1), options);
-    };
-  }
-  if (typeof args[0] === "string" && !Array.isArray(args[1])) {
-    const [command, options = {}] = args;
-    return makeStandardCommand(command, [], options);
-  }
-  const [command, cmdArgs = [], options = {}] = args;
-  return makeStandardCommand(command, cmdArgs, options);
-};
-var isTemplateString = (u) => Array.isArray(u) && ("raw" in u) && Array.isArray(u.raw);
-var parseFdName = (name) => {
-  const match = /^fd(\d+)$/.exec(name);
-  if (match === null)
-    return;
-  const fd = parseInt(match[1], 10);
-  return fd >= 3 ? fd : undefined;
-};
-var fdName = (fd) => `fd${fd}`;
-var parseTemplates = (templates, expressions) => {
-  let tokens = [];
-  for (const [index, template] of templates.entries()) {
-    tokens = parseTemplate(templates, expressions, tokens, template, index);
-  }
-  return tokens;
-};
-var parseTemplate = (templates, expressions, prevTokens, template, index) => {
-  const rawTemplate = templates.raw[index];
-  if (rawTemplate === undefined) {
-    throw new Error(`Invalid backslash sequence: ${templates.raw[index]}`);
-  }
-  const {
-    hasLeadingWhitespace,
-    hasTrailingWhitespace,
-    tokens
-  } = splitByWhitespaces(template, rawTemplate);
-  const nextTokens = concatTokens(prevTokens, tokens, hasLeadingWhitespace);
-  if (index === expressions.length) {
-    return nextTokens;
-  }
-  const expression = expressions[index];
-  const expressionTokens = Array.isArray(expression) ? expression.map((expression) => parseExpression(expression)) : [parseExpression(expression)];
-  return concatTokens(nextTokens, expressionTokens, hasTrailingWhitespace);
-};
-var parseExpression = (expression) => {
-  const type = typeof expression;
-  if (type === "string") {
-    return expression;
-  }
-  return String(expression);
-};
-var DELIMITERS = /* @__PURE__ */ new Set([" ", "\t", "\r", `
-`]);
-var ESCAPE_LENGTH = {
-  x: 3,
-  u: 5
-};
-var splitByWhitespaces = (template, rawTemplate) => {
-  if (rawTemplate.length === 0) {
-    return {
-      tokens: [],
-      hasLeadingWhitespace: false,
-      hasTrailingWhitespace: false
-    };
-  }
-  const hasLeadingWhitespace = DELIMITERS.has(rawTemplate[0]);
-  const tokens = [];
-  let templateCursor = 0;
-  for (let templateIndex = 0, rawIndex = 0;templateIndex < template.length; templateIndex += 1, rawIndex += 1) {
-    const rawCharacter = rawTemplate[rawIndex];
-    if (DELIMITERS.has(rawCharacter)) {
-      if (templateCursor !== templateIndex) {
-        tokens.push(template.slice(templateCursor, templateIndex));
-      }
-      templateCursor = templateIndex + 1;
-    } else if (rawCharacter === "\\") {
-      const nextRawCharacter = rawTemplate[rawIndex + 1];
-      if (nextRawCharacter === `
-`) {
-        templateIndex -= 1;
-        rawIndex += 1;
-      } else if (nextRawCharacter === "u" && rawTemplate[rawIndex + 2] === "{") {
-        const end = rawTemplate.indexOf("}", rawIndex + 3);
-        if (parseInt(rawTemplate.slice(rawIndex + 3, end), 16) > 65535) {
-          templateIndex += 1;
-        }
-        rawIndex = end;
-      } else {
-        rawIndex += ESCAPE_LENGTH[nextRawCharacter] ?? 1;
-      }
-    }
-  }
-  const hasTrailingWhitespace = templateCursor === template.length;
-  if (!hasTrailingWhitespace) {
-    tokens.push(template.slice(templateCursor));
-  }
-  return {
-    tokens,
-    hasLeadingWhitespace,
-    hasTrailingWhitespace
-  };
-};
-var concatTokens = (prevTokens, nextTokens, isSeparated) => isSeparated || prevTokens.length === 0 || nextTokens.length === 0 ? [...prevTokens, ...nextTokens] : [...prevTokens.slice(0, -1), `${prevTokens.at(-1)}${nextTokens.at(0)}`, ...nextTokens.slice(1)];
-// node_modules/@timmo001/effect-gh/src/errors.ts
-class GhCommandError extends TaggedError3()("GhCommandError", {
-  executable: String4,
-  exitCode: Int,
-  stderr: String4,
-  stderrTruncated: Boolean2
-}) {
-}
-
-class GhPlatformError extends TaggedError3()("GhPlatformError", { executable: String4, cause: Defect() }) {
-}
-
-class GhTimeoutError extends TaggedError3()("GhTimeoutError", { executable: String4, timeoutMs: Finite }) {
-}
-
-class GhDecodeError extends TaggedError3()("GhDecodeError", { cause: Defect() }) {
-}
-
-// node_modules/@timmo001/effect-gh/src/gh.ts
-var GhOutput = Struct({
-  stdout: String4,
-  stderr: String4,
-  exitCode: Int
-});
-var GhChunk = TaggedUnion({
-  Stdout: { text: String4 },
-  Stderr: { text: String4 }
-});
-
-class Gh extends Service()("@timmo001/effect-gh/Gh") {
-}
-var stderrLimit = 65536;
-var layer = (defaults = {}) => effect(Gh, gen2(function* () {
-  const spawner = yield* ChildProcessSpawner;
-  const open = fn2("Gh.stream")(function* (args, options) {
-    const executable = options.executable ?? "gh";
-    const handle = yield* spawner.spawn(make19(executable, args, {
-      cwd: options.cwd,
-      env: {
-        ...defaults.env,
-        ...options.env,
-        GH_PROMPT_DISABLED: "1",
-        GH_PAGER: "cat",
-        PAGER: "cat",
-        NO_COLOR: "1",
-        CLICOLOR: "0",
-        CLICOLOR_FORCE: "0",
-        GH_FORCE_TTY: undefined,
-        GH_SPINNER_DISABLED: "1"
-      },
-      extendEnv: true,
-      shell: false,
-      stdin: options.stdin === undefined ? "ignore" : "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-      forceKillAfter: "1 second"
-    })).pipe(mapError2((cause) => new GhPlatformError({ executable, cause })));
-    let stderr = "";
-    let stderrTruncated = false;
-    const output = merge3(handle.stdout.pipe(decodeText(), map8((text) => GhChunk.cases.Stdout.make({ text }))), handle.stderr.pipe(decodeText(), map8((text) => {
-      stderrTruncated ||= stderr.length + text.length > stderrLimit;
-      stderr = (stderr + text).slice(-stderrLimit);
-      return GhChunk.cases.Stderr.make({ text });
-    }))).pipe(mapError4((cause) => new GhPlatformError({ executable, cause })));
-    const completion = gen2(function* () {
-      const exitCode = yield* handle.exitCode.pipe(mapError2((cause) => new GhPlatformError({ executable, cause })));
-      if (exitCode !== 0) {
-        return yield* new GhCommandError({
-          executable,
-          exitCode,
-          stderr,
-          stderrTruncated
-        });
-      }
-    });
-    const completed = output.pipe(concat(fromEffect2(completion).pipe(drain3)));
-    if (options.stdin === undefined)
-      return completed;
-    const input = isString(options.stdin) ? new TextEncoder().encode(options.stdin) : options.stdin;
-    return completed.pipe(mergeEffect2(run(succeed8(input), handle.stdin).pipe(mapError2((cause) => new GhPlatformError({ executable, cause })))));
-  });
-  const stream = (args, overrides) => suspend4(() => {
-    const options = { ...defaults, ...overrides };
-    const output = unwrap3(open(args, options));
-    if (options.timeout == null)
-      return output;
-    if (!isFinite(fromInputUnsafe(options.timeout)))
-      return output;
-    const timeoutMs = toMillis(options.timeout);
-    return output.pipe(mergeEffect2(sleep2(options.timeout).pipe(andThen2(fail6(new GhTimeoutError({
-      executable: options.executable ?? "gh",
-      timeoutMs
-    }))))));
-  });
-  const execute = fn2("Gh.execute")(function* (args, options) {
-    return yield* stream(args, options).pipe(runFold2(() => ({ stdout: "", stderr: "", exitCode: 0 }), (output, chunk) => value2(chunk).pipe(tag2("Stdout", ({ text }) => ({
-      ...output,
-      stdout: output.stdout + text
-    })), tag2("Stderr", ({ text }) => ({
-      ...output,
-      stderr: output.stderr + text
-    })), exhaustive2)));
-  });
-  const json = fn2("Gh.json")(function* (args, schema, options) {
-    const output = yield* execute(args, options);
-    return yield* decodeEffect2(fromJsonString2(schema))(output.stdout).pipe(mapError2((cause) => new GhDecodeError({ cause })));
-  });
-  return Gh.of({ execute, json, stream });
-}));
-// src/action/ActionInputs.ts
-var inputEnvName = (name) => `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-var readRawInput = (name) => {
-  const value = process.env[inputEnvName(name)];
-  return value === undefined || value === "" ? undefined : value;
-};
-var readInputs = (names) => {
-  const inputs = {};
-  for (const name of names) {
-    const value = readRawInput(name);
-    if (value !== undefined)
-      inputs[name] = value;
-  }
-  return inputs;
-};
-var decodeInputs = (schema, names) => decodeUnknownEffect2(schema)(readInputs(names));
-// node_modules/effect/dist/Runtime.js
-var defaultTeardown = (exit, onExit) => {
-  if (isSuccess3(exit))
-    return onExit(0);
-  if (hasInterruptsOnly2(exit.cause))
-    return onExit(130);
-  return onExit(getErrorExitCode(squash(exit.cause)));
-};
-var makeRunMain = (f) => dual((args) => isEffect2(args[0]), (effect, options) => {
-  const fiber = options?.disableErrorReporting === true ? runFork2(effect) : runFork2(tapCause2(effect, (cause) => {
-    if (hasInterruptsOnly2(cause))
-      return void_3;
-    const isReported = getErrorReported(squash(cause));
-    return isReported ? logError(cause) : void_3;
-  }));
-  try {
-    const keepAlive = globalThis.setInterval(constVoid, 2147483647);
-    fiber.addObserver(() => {
-      clearInterval(keepAlive);
-    });
-  } catch {}
-  const teardown = options?.teardown ?? defaultTeardown;
-  return f({
-    fiber,
-    teardown
-  });
-});
-var errorExitCode = "~effect/Runtime/errorExitCode";
-var getErrorExitCode = (u) => {
-  if (typeof u === "object" && u !== null && errorExitCode in u) {
-    const code = u[errorExitCode];
-    if (typeof code === "number") {
-      return code;
-    }
-  }
-  return 1;
-};
-var errorReported = "~effect/Runtime/errorReported";
-var getErrorReported = (u) => {
-  if (typeof u === "object" && u !== null && errorReported in u) {
-    const isReported = u[errorReported];
-    if (typeof isReported === "boolean") {
-      return isReported;
-    }
-  }
-  return true;
-};
-
-// node_modules/@effect/platform-node-shared/dist/NodeRuntime.js
-var runMain = /* @__PURE__ */ makeRunMain(({
-  fiber,
-  teardown
-}) => {
-  let receivedSignal = false;
-  fiber.addObserver((exit) => {
-    process.removeListener("SIGINT", onSigint);
-    process.removeListener("SIGTERM", onSigint);
-    teardown(exit, (code) => {
-      if (receivedSignal || code !== 0) {
-        process.exit(code);
-      }
-    });
-  });
-  function onSigint() {
-    receivedSignal = true;
-    fiber.interruptUnsafe(fiber.id);
-  }
-  process.on("SIGINT", onSigint);
-  process.on("SIGTERM", onSigint);
-});
-
-// node_modules/@effect/platform-node/dist/NodeRuntime.js
-var runMain2 = runMain;
 // node_modules/effect/dist/Path.js
-var TypeId24 = "~effect/Path";
-var Path2 = /* @__PURE__ */ Service("effect/Path");
+var TypeId21 = "~effect/Path";
+var Path = /* @__PURE__ */ Service("effect/Path");
 function normalizeStringPosix(path, allowAboveRoot) {
   let res = "";
   let lastSegmentLength = 0;
@@ -9425,7 +9097,7 @@ function fromFileUrl(url) {
   }
   return succeed6(decodeURIComponent(pathname));
 }
-var resolve2 = function resolve() {
+var resolve3 = function resolve() {
   let resolvedPath = "";
   let resolvedAbsolute = false;
   let cwd = undefined;
@@ -9462,7 +9134,7 @@ var resolve2 = function resolve() {
 var CHAR_FORWARD_SLASH = 47;
 function toFileUrl(filepath) {
   const outURL = new URL("file://");
-  let resolved = resolve2(filepath);
+  let resolved = resolve3(filepath);
   const filePathLast = filepath.charCodeAt(filepath.length - 1);
   if (filePathLast === CHAR_FORWARD_SLASH && resolved[resolved.length - 1] !== "/") {
     resolved += "/";
@@ -9494,9 +9166,9 @@ function encodePathChars(filepath) {
   }
   return filepath;
 }
-var posixImpl = /* @__PURE__ */ Path2.of({
-  [TypeId24]: TypeId24,
-  resolve: resolve2,
+var posixImpl = /* @__PURE__ */ Path.of({
+  [TypeId21]: TypeId21,
+  resolve: resolve3,
   normalize(path) {
     if (path.length === 0)
       return ".";
@@ -9800,7 +9472,645 @@ var posixImpl = /* @__PURE__ */ Path2.of({
   toFileUrl,
   toNamespacedPath: identity
 });
+// node_modules/effect/dist/internal/ulid.js
+var maxTimestamp = 2 ** 48 - 1;
+var base32Chars = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+var ulidString = (timestampMillis, bytes) => {
+  if (bytes.length !== 10) {
+    throw new Error(`ULID randomness must be exactly 10 bytes, received ${bytes.length}`);
+  }
+  const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxTimestamp);
+  let out = "";
+  for (let shift = 45;shift >= 0; shift -= 5) {
+    out += base32Chars[Math.floor(timestamp / 2 ** shift) & 31];
+  }
+  let accumulator = 0;
+  let bits = 0;
+  for (const byte of bytes) {
+    accumulator = accumulator << 8 | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      out += base32Chars[accumulator >>> bits & 31];
+    }
+    accumulator &= (1 << bits) - 1;
+  }
+  return out;
+};
 
+// node_modules/effect/dist/internal/uuid.js
+var hex = (byte) => byte.toString(16).padStart(2, "0");
+var stringify = (bytes) => {
+  const segments = [bytes.subarray(0, 4), bytes.subarray(4, 6), bytes.subarray(6, 8), bytes.subarray(8, 10), bytes.subarray(10, 16)];
+  return segments.map((segment) => Array.from(segment, hex).join("")).join("-");
+};
+var randomBytes = () => globalThis.crypto.getRandomValues(new Uint8Array(16));
+function v4Bytes(bytes = randomBytes()) {
+  bytes[6] = bytes[6] & 15 | 64;
+  bytes[8] = bytes[8] & 63 | 128;
+  return bytes;
+}
+var v4String = (bytes) => stringify(bytes === undefined ? v4Bytes() : v4Bytes(bytes));
+var maxV7Timestamp = 2 ** 48 - 1;
+function v7Bytes(timestampMillis, bytes = randomBytes()) {
+  const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxV7Timestamp);
+  bytes[0] = Math.floor(timestamp / 2 ** 40);
+  bytes[1] = Math.floor(timestamp / 2 ** 32) & 255;
+  bytes[2] = Math.floor(timestamp / 2 ** 24) & 255;
+  bytes[3] = Math.floor(timestamp / 2 ** 16) & 255;
+  bytes[4] = Math.floor(timestamp / 2 ** 8) & 255;
+  bytes[5] = timestamp & 255;
+  bytes[6] = bytes[6] & 15 | 112;
+  bytes[8] = bytes[8] & 63 | 128;
+  return bytes;
+}
+var v7String = (timestampMillis, bytes) => stringify(bytes === undefined ? v7Bytes(timestampMillis) : v7Bytes(timestampMillis, bytes));
+
+// node_modules/effect/dist/Crypto.js
+var TypeId22 = "~effect/Crypto";
+var Crypto = /* @__PURE__ */ Service("effect/Crypto");
+var make16 = (impl) => {
+  const randomBytesUnsafe = impl.randomBytes;
+  const randomBytes = (size) => map5(validateSize("randomBytes", size), randomBytesUnsafe);
+  const readUint53 = (bytes) => (bytes[0] & 31) * 2 ** 48 + bytes[1] * 2 ** 40 + bytes[2] * 2 ** 32 + bytes[3] * 2 ** 24 + bytes[4] * 2 ** 16 + bytes[5] * 2 ** 8 + bytes[6];
+  const nextDoubleUnsafe = () => readUint53(randomBytesUnsafe(7)) / 2 ** 53;
+  const nextIntUnsafe = () => {
+    while (true) {
+      const bytes = randomBytesUnsafe(7);
+      const value = readUint53(bytes);
+      if ((bytes[0] & 32) === 0) {
+        return value + Number.MIN_SAFE_INTEGER;
+      }
+      if (value < Number.MAX_SAFE_INTEGER) {
+        return value + 1;
+      }
+    }
+  };
+  return Crypto.of({
+    [TypeId22]: TypeId22,
+    randomBytes,
+    nextDoubleUnsafe,
+    nextIntUnsafe,
+    digest: impl.digest,
+    random: sync3(() => nextDoubleUnsafe()),
+    randomBoolean: sync3(() => nextDoubleUnsafe() > 0.5),
+    randomInt: sync3(() => nextIntUnsafe()),
+    randomBetween: (min, max) => sync3(() => nextBetween(min, max, nextDoubleUnsafe())),
+    randomIntBetween(min, max, options) {
+      const extra = options?.halfOpen === true ? 0 : 1;
+      return sync3(() => {
+        const minInt = Math.ceil(min);
+        const maxInt = Math.floor(max);
+        return Math.floor(nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
+      });
+    },
+    randomShuffle: (elements) => sync3(() => {
+      const buffer = Array.from(elements);
+      for (let i = buffer.length - 1;i >= 1; i = i - 1) {
+        const index = Math.min(i, Math.floor(nextDoubleUnsafe() * (i + 1)));
+        const value = buffer[i];
+        buffer[i] = buffer[index];
+        buffer[index] = value;
+      }
+      return buffer;
+    }),
+    randomUUIDv4: sync3(() => v4String(randomBytesUnsafe(16))),
+    randomUUIDv7: clockWith2((clock) => succeed6(v7String(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16)))),
+    randomULID: clockWith2((clock) => succeed6(ulidString(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(10))))
+  });
+};
+var validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ? succeed6(size) : fail6(badArgument({
+  module: "Crypto",
+  method,
+  description: "size must be a non-negative safe integer"
+}));
+// node_modules/effect/dist/internal/matcher.js
+var TypeId23 = "~effect/Match/Matcher";
+var TypeMatcherProto = {
+  [TypeId23]: {
+    _input: identity,
+    _filters: identity,
+    _remaining: identity,
+    _result: identity,
+    _return: identity,
+    _args: identity
+  },
+  _tag: "TypeMatcher",
+  add(_case) {
+    return makeTypeMatcher(this.select, [...this.cases, _case]);
+  },
+  pipe() {
+    return pipeArguments(this, arguments);
+  }
+};
+function makeTypeMatcher(select, cases) {
+  const matcher = Object.create(TypeMatcherProto);
+  matcher.select = select;
+  matcher.cases = cases;
+  return matcher;
+}
+var ValueMatcherProto = {
+  [TypeId23]: {
+    _input: identity,
+    _filters: identity,
+    _result: identity,
+    _return: identity,
+    _flavor: identity
+  },
+  _tag: "ValueMatcher",
+  add(_case) {
+    if (isSuccess2(this.value)) {
+      return this;
+    }
+    if (_case._tag === "When" && _case.guard(this.provided) === true) {
+      return makeValueMatcher(this.provided, succeed2(_case.evaluate(this.provided)));
+    } else if (_case._tag === "Not" && _case.guard(this.provided) === false) {
+      return makeValueMatcher(this.provided, succeed2(_case.evaluate(this.provided)));
+    }
+    return this;
+  },
+  pipe() {
+    return pipeArguments(this, arguments);
+  }
+};
+function makeValueMatcher(provided, value) {
+  const matcher = Object.create(ValueMatcherProto);
+  matcher.provided = provided;
+  matcher.value = value;
+  return matcher;
+}
+var makeWhen = (guard, evaluate) => ({
+  _tag: "When",
+  guard,
+  evaluate
+});
+var value = (i) => makeValueMatcher(i, fail2(i));
+var discriminator = (field) => (...pattern) => {
+  const f = pattern[pattern.length - 1];
+  const values = pattern.slice(0, -1);
+  const pred = values.length === 1 ? (_) => _ != null && _[field] === values[0] : (_) => _ != null && values.includes(_[field]);
+  return (self) => self.add(makeWhen(pred, f));
+};
+var tag2 = /* @__PURE__ */ discriminator("_tag");
+var result2 = (self) => {
+  if (self._tag === "ValueMatcher") {
+    return self.value;
+  }
+  const len = self.cases.length;
+  if (len === 1) {
+    const _case = self.cases[0];
+    return (...args) => {
+      const input = self.select(...args);
+      if (_case._tag === "When" && _case.guard(input) === true) {
+        return succeed2(_case.evaluate(input, ...args));
+      } else if (_case._tag === "Not" && _case.guard(input) === false) {
+        return succeed2(_case.evaluate(input, ...args));
+      }
+      return fail2(input);
+    };
+  }
+  return (...args) => {
+    const input = self.select(...args);
+    for (let i = 0;i < len; i++) {
+      const _case = self.cases[i];
+      if (_case._tag === "When" && _case.guard(input) === true) {
+        return succeed2(_case.evaluate(input, ...args));
+      } else if (_case._tag === "Not" && _case.guard(input) === false) {
+        return succeed2(_case.evaluate(input, ...args));
+      }
+    }
+    return fail2(input);
+  };
+};
+var getExhaustiveAbsurdErrorMessage = "effect/match/Match/exhaustive: absurd";
+var exhaustive = (self) => {
+  const toResult = result2(self);
+  if (isResult2(toResult)) {
+    if (isSuccess2(toResult)) {
+      return toResult.success;
+    }
+    throw new Error(getExhaustiveAbsurdErrorMessage);
+  }
+  return (...args) => {
+    const result = toResult(...args);
+    if (isSuccess2(result)) {
+      return result.success;
+    }
+    throw new Error(getExhaustiveAbsurdErrorMessage);
+  };
+};
+
+// node_modules/effect/dist/Match.js
+var value2 = value;
+var tag3 = tag2;
+var exhaustive2 = exhaustive;
+// node_modules/effect/dist/Ref.js
+var TypeId24 = "~effect/Ref";
+var RefProto = {
+  [TypeId24]: {
+    _A: identity
+  },
+  ...PipeInspectableProto,
+  toJSON() {
+    return {
+      _id: "Ref",
+      ref: this.ref
+    };
+  }
+};
+var makeUnsafe6 = (value) => {
+  const self = Object.create(RefProto);
+  self.ref = make7(value);
+  return self;
+};
+var make17 = (value) => sync3(() => makeUnsafe6(value));
+var get4 = (self) => sync3(() => self.ref.current);
+var update = /* @__PURE__ */ dual(2, (self, f) => sync3(() => {
+  self.ref.current = f(self.ref.current);
+}));
+// node_modules/effect/dist/Runtime.js
+var defaultTeardown = (exit, onExit) => {
+  if (isSuccess3(exit))
+    return onExit(0);
+  if (hasInterruptsOnly2(exit.cause))
+    return onExit(130);
+  return onExit(getErrorExitCode(squash(exit.cause)));
+};
+var makeRunMain = (f) => dual((args) => isEffect2(args[0]), (effect, options) => {
+  const fiber = options?.disableErrorReporting === true ? runFork2(effect) : runFork2(tapCause2(effect, (cause) => {
+    if (hasInterruptsOnly2(cause))
+      return void_3;
+    const isReported = getErrorReported(squash(cause));
+    return isReported ? logError(cause) : void_3;
+  }));
+  try {
+    const keepAlive = globalThis.setInterval(constVoid, 2147483647);
+    fiber.addObserver(() => {
+      clearInterval(keepAlive);
+    });
+  } catch {}
+  const teardown = options?.teardown ?? defaultTeardown;
+  return f({
+    fiber,
+    teardown
+  });
+});
+var errorExitCode = "~effect/Runtime/errorExitCode";
+var getErrorExitCode = (u) => {
+  if (typeof u === "object" && u !== null && errorExitCode in u) {
+    const code = u[errorExitCode];
+    if (typeof code === "number") {
+      return code;
+    }
+  }
+  return 1;
+};
+var errorReported = "~effect/Runtime/errorReported";
+var getErrorReported = (u) => {
+  if (typeof u === "object" && u !== null && errorReported in u) {
+    const isReported = u[errorReported];
+    if (typeof isReported === "boolean") {
+      return isReported;
+    }
+  }
+  return true;
+};
+// node_modules/effect/dist/Stdio.js
+var TypeId25 = "~effect/Stdio";
+var Stdio = /* @__PURE__ */ Service(TypeId25);
+var make18 = (options) => ({
+  [TypeId25]: TypeId25,
+  stdinIsTerminal: succeed6(false),
+  stdoutIsTerminal: succeed6(false),
+  ...options
+});
+// node_modules/effect/dist/Terminal.js
+var TypeId26 = "~effect/Terminal";
+var QuitErrorTypeId = "~effect/Terminal/QuitError";
+
+class QuitError extends (/* @__PURE__ */ Error4("QuitError")({
+  _tag: /* @__PURE__ */ tag("QuitError")
+})) {
+  [QuitErrorTypeId] = QuitErrorTypeId;
+}
+var Terminal = /* @__PURE__ */ Service("effect/Terminal");
+var make19 = (impl) => Terminal.of({
+  ...impl,
+  [TypeId26]: TypeId26
+});
+// node_modules/effect/dist/unstable/process/ChildProcessSpawner.js
+var ExitCode = /* @__PURE__ */ nominal();
+var ProcessId = /* @__PURE__ */ nominal();
+var HandleTypeId = "~effect/process/ChildProcessSpawner/ChildProcessHandle";
+var HandleProto = {
+  [HandleTypeId]: HandleTypeId,
+  ...BaseProto,
+  toJSON() {
+    return {
+      _id: "ChildProcessHandle",
+      pid: this.pid
+    };
+  }
+};
+var makeHandle = (params) => Object.setPrototypeOf({
+  ...params
+}, HandleProto);
+var make20 = (spawn) => {
+  const streamString = (command, options) => spawn(command).pipe(map5((handle) => decodeText(options?.includeStderr === true ? handle.all : handle.stdout)), unwrap3);
+  const streamLines = (command, options) => splitLines2(streamString(command, options));
+  return ChildProcessSpawner.of({
+    spawn,
+    exitCode: (command) => scoped2(flatMap3(spawn(command), (handle) => handle.exitCode)),
+    streamString,
+    streamLines,
+    lines: (command, options) => runCollect(streamLines(command, options)),
+    string: (command, options) => mkString(streamString(command, options))
+  });
+};
+
+class ChildProcessSpawner extends (/* @__PURE__ */ Service()("effect/process/ChildProcessSpawner")) {
+}
+
+// node_modules/effect/dist/unstable/process/ChildProcess.js
+var TypeId27 = "~effect/process/ChildProcess";
+var Proto2 = {
+  .../* @__PURE__ */ Prototype2({
+    label: "Command",
+    evaluate(fiber) {
+      return getUnsafe(fiber.context, ChildProcessSpawner).spawn(this);
+    }
+  }),
+  [TypeId27]: TypeId27
+};
+var makeStandardCommand = (command, args, options) => Object.assign(Object.create(Proto2), {
+  _tag: "StandardCommand",
+  command,
+  args,
+  options
+});
+var make21 = function make(...args) {
+  if (isTemplateString(args[0])) {
+    const [templates, ...expressions] = args;
+    const tokens = parseTemplates(templates, expressions);
+    return makeStandardCommand(tokens[0] ?? "", tokens.slice(1), {});
+  }
+  if (typeof args[0] === "object" && !Array.isArray(args[0]) && !isTemplateString(args[0])) {
+    const options = args[0];
+    return function(templates, ...expressions) {
+      const tokens = parseTemplates(templates, expressions);
+      return makeStandardCommand(tokens[0] ?? "", tokens.slice(1), options);
+    };
+  }
+  if (typeof args[0] === "string" && !Array.isArray(args[1])) {
+    const [command, options = {}] = args;
+    return makeStandardCommand(command, [], options);
+  }
+  const [command, cmdArgs = [], options = {}] = args;
+  return makeStandardCommand(command, cmdArgs, options);
+};
+var isTemplateString = (u) => Array.isArray(u) && ("raw" in u) && Array.isArray(u.raw);
+var parseFdName = (name) => {
+  const match = /^fd(\d+)$/.exec(name);
+  if (match === null)
+    return;
+  const fd = parseInt(match[1], 10);
+  return fd >= 3 ? fd : undefined;
+};
+var fdName = (fd) => `fd${fd}`;
+var parseTemplates = (templates, expressions) => {
+  let tokens = [];
+  for (const [index, template] of templates.entries()) {
+    tokens = parseTemplate(templates, expressions, tokens, template, index);
+  }
+  return tokens;
+};
+var parseTemplate = (templates, expressions, prevTokens, template, index) => {
+  const rawTemplate = templates.raw[index];
+  if (rawTemplate === undefined) {
+    throw new Error(`Invalid backslash sequence: ${templates.raw[index]}`);
+  }
+  const {
+    hasLeadingWhitespace,
+    hasTrailingWhitespace,
+    tokens
+  } = splitByWhitespaces(template, rawTemplate);
+  const nextTokens = concatTokens(prevTokens, tokens, hasLeadingWhitespace);
+  if (index === expressions.length) {
+    return nextTokens;
+  }
+  const expression = expressions[index];
+  const expressionTokens = Array.isArray(expression) ? expression.map((expression) => parseExpression(expression)) : [parseExpression(expression)];
+  return concatTokens(nextTokens, expressionTokens, hasTrailingWhitespace);
+};
+var parseExpression = (expression) => {
+  const type = typeof expression;
+  if (type === "string") {
+    return expression;
+  }
+  return String(expression);
+};
+var DELIMITERS = /* @__PURE__ */ new Set([" ", "\t", "\r", `
+`]);
+var ESCAPE_LENGTH = {
+  x: 3,
+  u: 5
+};
+var splitByWhitespaces = (template, rawTemplate) => {
+  if (rawTemplate.length === 0) {
+    return {
+      tokens: [],
+      hasLeadingWhitespace: false,
+      hasTrailingWhitespace: false
+    };
+  }
+  const hasLeadingWhitespace = DELIMITERS.has(rawTemplate[0]);
+  const tokens = [];
+  let templateCursor = 0;
+  for (let templateIndex = 0, rawIndex = 0;templateIndex < template.length; templateIndex += 1, rawIndex += 1) {
+    const rawCharacter = rawTemplate[rawIndex];
+    if (DELIMITERS.has(rawCharacter)) {
+      if (templateCursor !== templateIndex) {
+        tokens.push(template.slice(templateCursor, templateIndex));
+      }
+      templateCursor = templateIndex + 1;
+    } else if (rawCharacter === "\\") {
+      const nextRawCharacter = rawTemplate[rawIndex + 1];
+      if (nextRawCharacter === `
+`) {
+        templateIndex -= 1;
+        rawIndex += 1;
+      } else if (nextRawCharacter === "u" && rawTemplate[rawIndex + 2] === "{") {
+        const end = rawTemplate.indexOf("}", rawIndex + 3);
+        if (parseInt(rawTemplate.slice(rawIndex + 3, end), 16) > 65535) {
+          templateIndex += 1;
+        }
+        rawIndex = end;
+      } else {
+        rawIndex += ESCAPE_LENGTH[nextRawCharacter] ?? 1;
+      }
+    }
+  }
+  const hasTrailingWhitespace = templateCursor === template.length;
+  if (!hasTrailingWhitespace) {
+    tokens.push(template.slice(templateCursor));
+  }
+  return {
+    tokens,
+    hasLeadingWhitespace,
+    hasTrailingWhitespace
+  };
+};
+var concatTokens = (prevTokens, nextTokens, isSeparated) => isSeparated || prevTokens.length === 0 || nextTokens.length === 0 ? [...prevTokens, ...nextTokens] : [...prevTokens.slice(0, -1), `${prevTokens.at(-1)}${nextTokens.at(0)}`, ...nextTokens.slice(1)];
+// node_modules/@timmo001/effect-gh/src/errors.ts
+class GhCommandError extends TaggedError3()("GhCommandError", {
+  executable: String4,
+  exitCode: Int,
+  stderr: String4,
+  stderrTruncated: Boolean2
+}) {
+}
+
+class GhPlatformError extends TaggedError3()("GhPlatformError", { executable: String4, cause: Defect() }) {
+}
+
+class GhTimeoutError extends TaggedError3()("GhTimeoutError", { executable: String4, timeoutMs: Finite }) {
+}
+
+class GhDecodeError extends TaggedError3()("GhDecodeError", { cause: Defect() }) {
+}
+
+// node_modules/@timmo001/effect-gh/src/gh.ts
+var GhOutput = Struct({
+  stdout: String4,
+  stderr: String4,
+  exitCode: Int
+});
+var GhChunk = TaggedUnion({
+  Stdout: { text: String4 },
+  Stderr: { text: String4 }
+});
+
+class Gh extends Service()("@timmo001/effect-gh/Gh") {
+}
+var stderrLimit = 65536;
+var layer = (defaults = {}) => effect(Gh, gen2(function* () {
+  const spawner = yield* ChildProcessSpawner;
+  const open = fn2("Gh.stream")(function* (args, options) {
+    const executable = options.executable ?? "gh";
+    const handle = yield* spawner.spawn(make21(executable, args, {
+      cwd: options.cwd,
+      env: {
+        ...defaults.env,
+        ...options.env,
+        GH_PROMPT_DISABLED: "1",
+        GH_PAGER: "cat",
+        PAGER: "cat",
+        NO_COLOR: "1",
+        CLICOLOR: "0",
+        CLICOLOR_FORCE: "0",
+        GH_FORCE_TTY: undefined,
+        GH_SPINNER_DISABLED: "1"
+      },
+      extendEnv: true,
+      shell: false,
+      stdin: options.stdin === undefined ? "ignore" : "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+      forceKillAfter: "1 second"
+    })).pipe(mapError2((cause) => new GhPlatformError({ executable, cause })));
+    let stderr = "";
+    let stderrTruncated = false;
+    const output = merge3(handle.stdout.pipe(decodeText(), map7((text) => GhChunk.cases.Stdout.make({ text }))), handle.stderr.pipe(decodeText(), map7((text) => {
+      stderrTruncated ||= stderr.length + text.length > stderrLimit;
+      stderr = (stderr + text).slice(-stderrLimit);
+      return GhChunk.cases.Stderr.make({ text });
+    }))).pipe(mapError5((cause) => new GhPlatformError({ executable, cause })));
+    const completion = gen2(function* () {
+      const exitCode = yield* handle.exitCode.pipe(mapError2((cause) => new GhPlatformError({ executable, cause })));
+      if (exitCode !== 0) {
+        return yield* new GhCommandError({
+          executable,
+          exitCode,
+          stderr,
+          stderrTruncated
+        });
+      }
+    });
+    const completed = output.pipe(concat(fromEffect2(completion).pipe(drain3)));
+    if (options.stdin === undefined)
+      return completed;
+    const input = isString(options.stdin) ? new TextEncoder().encode(options.stdin) : options.stdin;
+    return completed.pipe(mergeEffect2(run2(succeed9(input), handle.stdin).pipe(mapError2((cause) => new GhPlatformError({ executable, cause })))));
+  });
+  const stream = (args, overrides) => suspend4(() => {
+    const options = { ...defaults, ...overrides };
+    const output = unwrap3(open(args, options));
+    if (options.timeout == null)
+      return output;
+    if (!isFinite(fromInputUnsafe(options.timeout)))
+      return output;
+    const timeoutMs = toMillis(options.timeout);
+    return output.pipe(mergeEffect2(sleep2(options.timeout).pipe(andThen2(fail6(new GhTimeoutError({
+      executable: options.executable ?? "gh",
+      timeoutMs
+    }))))));
+  });
+  const execute = fn2("Gh.execute")(function* (args, options) {
+    return yield* stream(args, options).pipe(runFold2(() => ({ stdout: "", stderr: "", exitCode: 0 }), (output, chunk) => value2(chunk).pipe(tag3("Stdout", ({ text }) => ({
+      ...output,
+      stdout: output.stdout + text
+    })), tag3("Stderr", ({ text }) => ({
+      ...output,
+      stderr: output.stderr + text
+    })), exhaustive2)));
+  });
+  const json = fn2("Gh.json")(function* (args, schema, options) {
+    const output = yield* execute(args, options);
+    return yield* decodeEffect2(fromJsonString2(schema))(output.stdout).pipe(mapError2((cause) => new GhDecodeError({ cause })));
+  });
+  return Gh.of({ execute, json, stream });
+}));
+// src/action/ActionInputs.ts
+var inputEnvName = (name) => `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
+var readRawInput = (name) => {
+  const value = process.env[inputEnvName(name)];
+  return value === undefined || value === "" ? undefined : value;
+};
+var readInputs = (names) => {
+  const inputs = {};
+  for (const name of names) {
+    const value = readRawInput(name);
+    if (value !== undefined)
+      inputs[name] = value;
+  }
+  return inputs;
+};
+var decodeInputs = (schema, names) => decodeUnknownEffect2(schema)(readInputs(names));
+// node_modules/@effect/platform-node-shared/dist/NodeRuntime.js
+var runMain = /* @__PURE__ */ makeRunMain(({
+  fiber,
+  teardown
+}) => {
+  let receivedSignal = false;
+  fiber.addObserver((exit) => {
+    process.removeListener("SIGINT", onSigint);
+    process.removeListener("SIGTERM", onSigint);
+    teardown(exit, (code) => {
+      if (receivedSignal || code !== 0) {
+        process.exit(code);
+      }
+    });
+  });
+  function onSigint() {
+    receivedSignal = true;
+    fiber.interruptUnsafe(fiber.id);
+  }
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigint);
+});
+
+// node_modules/@effect/platform-node/dist/NodeRuntime.js
+var runMain2 = runMain;
 // node_modules/@effect/platform-node-shared/dist/NodeChildProcessSpawner.js
 import * as NodeChildProcess from "node:child_process";
 import { PassThrough } from "node:stream";
@@ -9893,10 +10203,10 @@ var pullIntoWritable = (options) => options.pull.pipe(flatMap3((chunk) => {
   disableYield: true
 }), options.endOnDone !== false ? catchDone((_) => {
   if ("closed" in options.writable && options.writable.closed) {
-    return done3(_);
+    return done2(_);
   }
   return callback2((resume) => {
-    const onFinish = () => resume(done3(_));
+    const onFinish = () => resume(done2(_));
     options.writable.once("finish", onFinish);
     options.writable.end();
     return sync3(() => {
@@ -9929,11 +10239,11 @@ var readableToPullUnsafe = (options) => {
     latch.openUnsafe();
   }
   function onError(error) {
-    exit.current = fail4(options.onError(error));
+    exit.current = fail5(options.onError(error));
     latch.openUnsafe();
   }
   function onEnd() {
-    exit.current = fail4(Done2());
+    exit.current = fail5(Done2());
     latch.openUnsafe();
   }
   readable.on("readable", onReadable);
@@ -10002,9 +10312,9 @@ var isProcessAlive = (childProcess, exitSignal) => {
 var taskkill = (childProcess, onExit = () => {}) => NodeChildProcess.execFile("taskkill", ["/pid", String(childProcess.pid), "/T", "/F"], {
   windowsHide: true
 }, onExit);
-var make20 = /* @__PURE__ */ gen2(function* () {
+var make22 = /* @__PURE__ */ gen2(function* () {
   const fs = yield* FileSystem;
-  const path = yield* Path2;
+  const path = yield* Path;
   const resolveWorkingDirectory = fnUntraced2(function* (options) {
     if (isUndefined(options.cwd))
       return;
@@ -10125,7 +10435,7 @@ var make20 = /* @__PURE__ */ gen2(function* () {
             });
           }
           if (config.stream) {
-            yield* forkScoped2(run(config.stream, sink));
+            yield* forkScoped2(run2(config.stream, sink));
           }
           inputSinks.set(fd, sink);
           break;
@@ -10165,7 +10475,7 @@ var make20 = /* @__PURE__ */ gen2(function* () {
       });
     }
     if (isStream(config.stream)) {
-      return as2(forkScoped2(run(config.stream, sink)), sink);
+      return as2(forkScoped2(run2(config.stream, sink)), sink);
     }
     return succeed6(sink);
   });
@@ -10321,7 +10631,7 @@ var make20 = /* @__PURE__ */ gen2(function* () {
           env,
           stdio
         }, process.platform)), fnUntraced2(function* ([childProcess, exitSignal]) {
-          const exited = yield* isDone2(exitSignal);
+          const exited = yield* isDone3(exitSignal);
           if (exited) {
             const [code] = yield* _await(exitSignal);
             if (code !== 0 && isNotNull(code)) {
@@ -10363,7 +10673,7 @@ var make20 = /* @__PURE__ */ gen2(function* () {
           getInputFd,
           getOutputFd
         } = yield* setupAdditionalFds(cmd, childProcess, resolvedAdditionalFds);
-        const isRunning = map6(isDone2(exitSignal), (done) => !done);
+        const isRunning = map5(isDone3(exitSignal), (done) => !done);
         const exitCode = flatMap3(_await(exitSignal), ([code, signal]) => {
           if (isNotNull(code)) {
             return succeed6(ExitCode(code));
@@ -10400,7 +10710,7 @@ var make20 = /* @__PURE__ */ gen2(function* () {
           const sourceStream = unwrap3(succeed6(getSourceStream(handles[handles.length - 1], options.from)));
           const toOption = options.to ?? "stdin";
           if (toOption === "stdin") {
-            handles.push(yield* spawnCommand(make19(command.command, command.args, {
+            handles.push(yield* spawnCommand(make21(command.command, command.args, {
               ...command.options,
               stdin: {
                 ...stdinConfig,
@@ -10412,7 +10722,7 @@ var make20 = /* @__PURE__ */ gen2(function* () {
             if (isNotUndefined(fd)) {
               const fdName2 = fdName(fd);
               const existingFds = command.options.additionalFds ?? {};
-              handles.push(yield* spawnCommand(make19(command.command, command.args, {
+              handles.push(yield* spawnCommand(make21(command.command, command.args, {
                 ...command.options,
                 additionalFds: {
                   ...existingFds,
@@ -10423,7 +10733,7 @@ var make20 = /* @__PURE__ */ gen2(function* () {
                 }
               })));
             } else {
-              handles.push(yield* spawnCommand(make19(command.command, command.args, {
+              handles.push(yield* spawnCommand(make21(command.command, command.args, {
                 ...command.options,
                 stdin: {
                   ...stdinConfig,
@@ -10462,9 +10772,9 @@ var make20 = /* @__PURE__ */ gen2(function* () {
       }
     }
   });
-  return make18(spawnCommand);
+  return make20(spawnCommand);
 });
-var layer2 = /* @__PURE__ */ effect(ChildProcessSpawner, make20);
+var layer2 = /* @__PURE__ */ effect(ChildProcessSpawner, make22);
 var flattenCommand = (command) => {
   const commands = [];
   const pipeOptions = [];
@@ -10494,92 +10804,6 @@ var flattenCommand = (command) => {
   };
 };
 
-// node_modules/effect/dist/internal/uuid.js
-var hex = (byte) => byte.toString(16).padStart(2, "0");
-var stringify = (bytes) => {
-  const segments = [bytes.subarray(0, 4), bytes.subarray(4, 6), bytes.subarray(6, 8), bytes.subarray(8, 10), bytes.subarray(10, 16)];
-  return segments.map((segment) => Array.from(segment, hex).join("")).join("-");
-};
-var randomBytes = () => globalThis.crypto.getRandomValues(new Uint8Array(16));
-function v4Bytes(bytes = randomBytes()) {
-  bytes[6] = bytes[6] & 15 | 64;
-  bytes[8] = bytes[8] & 63 | 128;
-  return bytes;
-}
-var v4String = (bytes) => stringify(bytes === undefined ? v4Bytes() : v4Bytes(bytes));
-var maxV7Timestamp = 2 ** 48 - 1;
-function v7Bytes(timestampMillis, bytes = randomBytes()) {
-  const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxV7Timestamp);
-  bytes[0] = Math.floor(timestamp / 2 ** 40);
-  bytes[1] = Math.floor(timestamp / 2 ** 32) & 255;
-  bytes[2] = Math.floor(timestamp / 2 ** 24) & 255;
-  bytes[3] = Math.floor(timestamp / 2 ** 16) & 255;
-  bytes[4] = Math.floor(timestamp / 2 ** 8) & 255;
-  bytes[5] = timestamp & 255;
-  bytes[6] = bytes[6] & 15 | 112;
-  bytes[8] = bytes[8] & 63 | 128;
-  return bytes;
-}
-var v7String = (timestampMillis, bytes) => stringify(bytes === undefined ? v7Bytes(timestampMillis) : v7Bytes(timestampMillis, bytes));
-
-// node_modules/effect/dist/Crypto.js
-var TypeId25 = "~effect/Crypto";
-var Crypto2 = /* @__PURE__ */ Service("effect/Crypto");
-var make21 = (impl) => {
-  const randomBytesUnsafe = impl.randomBytes;
-  const randomBytes = (size) => map6(validateSize("randomBytes", size), randomBytesUnsafe);
-  const readUint53 = (bytes) => (bytes[0] & 31) * 2 ** 48 + bytes[1] * 2 ** 40 + bytes[2] * 2 ** 32 + bytes[3] * 2 ** 24 + bytes[4] * 2 ** 16 + bytes[5] * 2 ** 8 + bytes[6];
-  const nextDoubleUnsafe = () => readUint53(randomBytesUnsafe(7)) / 2 ** 53;
-  const nextIntUnsafe = () => {
-    while (true) {
-      const bytes = randomBytesUnsafe(7);
-      const value = readUint53(bytes);
-      if ((bytes[0] & 32) === 0) {
-        return value + Number.MIN_SAFE_INTEGER;
-      }
-      if (value < Number.MAX_SAFE_INTEGER) {
-        return value + 1;
-      }
-    }
-  };
-  return Crypto2.of({
-    [TypeId25]: TypeId25,
-    randomBytes,
-    nextDoubleUnsafe,
-    nextIntUnsafe,
-    digest: impl.digest,
-    random: sync3(() => nextDoubleUnsafe()),
-    randomBoolean: sync3(() => nextDoubleUnsafe() > 0.5),
-    randomInt: sync3(() => nextIntUnsafe()),
-    randomBetween: (min, max) => sync3(() => nextBetween(min, max, nextDoubleUnsafe())),
-    randomIntBetween(min, max, options) {
-      const extra = options?.halfOpen === true ? 0 : 1;
-      return sync3(() => {
-        const minInt = Math.ceil(min);
-        const maxInt = Math.floor(max);
-        return Math.floor(nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
-      });
-    },
-    randomShuffle: (elements) => sync3(() => {
-      const buffer = Array.from(elements);
-      for (let i = buffer.length - 1;i >= 1; i = i - 1) {
-        const index = Math.min(i, Math.floor(nextDoubleUnsafe() * (i + 1)));
-        const value = buffer[i];
-        buffer[i] = buffer[index];
-        buffer[index] = value;
-      }
-      return buffer;
-    }),
-    randomUUIDv4: sync3(() => v4String(randomBytesUnsafe(16))),
-    randomUUIDv7: clockWith2((clock) => succeed6(v7String(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16))))
-  });
-};
-var validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ? succeed6(size) : fail6(badArgument({
-  module: "Crypto",
-  method,
-  description: "size must be a non-negative safe integer"
-}));
-
 // node_modules/@effect/platform-node-shared/dist/NodeCrypto.js
 import * as NodeCrypto from "node:crypto";
 var toHashAlgorithm = (algorithm) => {
@@ -10604,20 +10828,20 @@ var digest = (algorithm, data) => try_2({
     cause
   })
 });
-var make22 = /* @__PURE__ */ make21({
+var make23 = /* @__PURE__ */ make16({
   randomBytes: NodeCrypto.randomBytes,
   digest
 });
-var layer3 = /* @__PURE__ */ succeed5(Crypto2, make22);
+var layer3 = /* @__PURE__ */ succeed5(Crypto, make23);
 
 // node_modules/@effect/platform-node/dist/NodeCrypto.js
 var layer4 = layer3;
 
 // node_modules/@effect/platform-node-shared/dist/NodeFileSystem.js
-import * as Crypto3 from "node:crypto";
+import * as Crypto2 from "node:crypto";
 import * as NFS from "node:fs";
 import * as OS from "node:os";
-import * as Path3 from "node:path";
+import * as Path2 from "node:path";
 var handleBadArgument = (method) => (err) => badArgument({
   module: "FileSystem",
   method,
@@ -10690,8 +10914,8 @@ var makeTempDirectoryFactory = (method) => {
   const nodeMkdtemp = effectify(NFS.mkdtemp, handleErrnoException("FileSystem", method), handleBadArgument(method));
   return (options) => suspend2(() => {
     const prefix = options?.prefix ?? "";
-    const directory = typeof options?.directory === "string" ? Path3.join(options.directory, ".") : OS.tmpdir();
-    return nodeMkdtemp(prefix ? Path3.join(directory, prefix) : directory + "/");
+    const directory = typeof options?.directory === "string" ? Path2.join(options.directory, ".") : OS.tmpdir();
+    return nodeMkdtemp(prefix ? Path2.join(directory, prefix) : directory + "/");
   });
 };
 var makeTempDirectory = /* @__PURE__ */ makeTempDirectoryFactory("makeTempDirectory");
@@ -10713,7 +10937,7 @@ var makeTempDirectoryScoped = /* @__PURE__ */ (() => {
 var openFactory = (method) => {
   const nodeOpen = effectify(NFS.open, handleErrnoException("FileSystem", method), handleBadArgument(method));
   const nodeClose = effectify(NFS.close, handleErrnoException("FileSystem", method), handleBadArgument(method));
-  return (path, options) => pipe(acquireRelease2(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map6((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
+  return (path, options) => pipe(acquireRelease2(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map5((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
 };
 var open2 = /* @__PURE__ */ openFactory("open");
 var makeFile = /* @__PURE__ */ (() => {
@@ -10762,7 +10986,7 @@ var makeFile = /* @__PURE__ */ (() => {
     read(buffer) {
       return suspend2(() => {
         const position = this.position;
-        return map6(nodeRead(this.fd, {
+        return map5(nodeRead(this.fd, {
           buffer,
           position
         }), (bytesRead) => {
@@ -10779,7 +11003,7 @@ var makeFile = /* @__PURE__ */ (() => {
           }
           const buffer = Buffer.allocUnsafeSlow(size);
           const position = this.position;
-          return map6(nodeReadAlloc(this.fd, {
+          return map5(nodeReadAlloc(this.fd, {
             buffer,
             position
           }), (bytesRead) => {
@@ -10800,7 +11024,7 @@ var makeFile = /* @__PURE__ */ (() => {
       });
     }
     truncate(length) {
-      return map6(nodeTruncate(this.fd, length || undefined), () => {
+      return map5(nodeTruncate(this.fd, length || undefined), () => {
         if (!this.append) {
           const len = BigInt(length ?? 0);
           if (this.position > len) {
@@ -10812,7 +11036,7 @@ var makeFile = /* @__PURE__ */ (() => {
     write(buffer) {
       return suspend2(() => {
         const position = this.position;
-        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "write"), (nodePosition) => map6(nodeWrite(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
+        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "write"), (nodePosition) => map5(nodeWrite(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
           if (!this.append) {
             this.position = position + BigInt(bytesWritten);
           }
@@ -10850,8 +11074,8 @@ var makeTempFileFactory = (method) => {
   const makeDirectory = makeTempDirectoryFactory(method);
   return fnUntraced2(function* (options) {
     const directory = yield* makeDirectory(options);
-    const random = Crypto3.randomBytes(6).toString("hex");
-    const name = Path3.join(directory, options?.suffix ? `${random}${options.suffix}` : random);
+    const random = Crypto2.randomBytes(6).toString("hex");
+    const name = Path2.join(directory, options?.suffix ? `${random}${options.suffix}` : random);
     yield* writeFile2(name, new Uint8Array(0));
     return name;
   });
@@ -10860,7 +11084,7 @@ var makeTempFile = /* @__PURE__ */ makeTempFileFactory("makeTempFile");
 var makeTempFileScoped = /* @__PURE__ */ (() => {
   const makeFile = /* @__PURE__ */ makeTempFileFactory("makeTempFileScoped");
   const removeDirectory = /* @__PURE__ */ removeFactory("makeTempFileScoped");
-  return (options) => acquireRelease2(makeFile(options), (file) => orDie2(removeDirectory(Path3.dirname(file), {
+  return (options) => acquireRelease2(makeFile(options), (file) => orDie2(removeDirectory(Path2.dirname(file), {
     recursive: true
   })));
 })();
@@ -10933,7 +11157,7 @@ var utimes2 = /* @__PURE__ */ (() => {
   return (path, atime, mtime) => nodeUtimes(path, atime, mtime);
 })();
 var watchNode = (path, info, options) => callback3((queue) => acquireRelease2(sync3(() => {
-  const directory = info.type === "Directory" ? path : Path3.dirname(path);
+  const directory = info.type === "Directory" ? path : Path2.dirname(path);
   const watcher = NFS.watch(path, {
     recursive: options?.recursive ?? false
   }, (event, path) => {
@@ -10941,7 +11165,7 @@ var watchNode = (path, info, options) => callback3((queue) => acquireRelease2(sy
       return;
     switch (event) {
       case "rename": {
-        runFork2(matchEffect3(stat2(Path3.resolve(directory, path)), {
+        runFork2(matchEffect3(stat2(Path2.resolve(directory, path)), {
           onSuccess: (_) => offer(queue, {
             _tag: "Create",
             path
@@ -10963,7 +11187,7 @@ var watchNode = (path, info, options) => callback3((queue) => acquireRelease2(sy
     }
   });
   watcher.on("error", (error) => {
-    failCauseUnsafe(queue, fail5(systemError({
+    failCauseUnsafe(queue, fail4(systemError({
       module: "FileSystem",
       _tag: "Unknown",
       method: "watch",
@@ -10976,7 +11200,7 @@ var watchNode = (path, info, options) => callback3((queue) => acquireRelease2(sy
   });
   return watcher;
 }), (watcher) => sync3(() => watcher.close())));
-var watch2 = (backend, path, options) => stat2(path).pipe(map6((stat) => backend.pipe(flatMap((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap3);
+var watch2 = (backend, path, options) => stat2(path).pipe(map5((stat) => backend.pipe(flatMap((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap3);
 var writeFile2 = (path, data, options) => callback2((resume, signal) => {
   try {
     NFS.writeFile(path, data, {
@@ -10994,7 +11218,7 @@ var writeFile2 = (path, data, options) => callback2((resume, signal) => {
     resume(fail6(handleBadArgument("writeFile")(err)));
   }
 });
-var makeFileSystem = /* @__PURE__ */ map6(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make12({
+var makeFileSystem = /* @__PURE__ */ map5(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make15({
   access: access2,
   chmod: chmod2,
   chown: chown2,
@@ -11053,18 +11277,18 @@ var fileUrlOps = (windows) => ({
     })
   })
 });
-var layerPosix = /* @__PURE__ */ succeed5(Path2)({
-  [TypeId24]: TypeId24,
+var layerPosix = /* @__PURE__ */ succeed5(Path)({
+  [TypeId21]: TypeId21,
   ...NodePath.posix,
   .../* @__PURE__ */ fileUrlOps(false)
 });
-var layerWin32 = /* @__PURE__ */ succeed5(Path2)({
-  [TypeId24]: TypeId24,
+var layerWin32 = /* @__PURE__ */ succeed5(Path)({
+  [TypeId21]: TypeId21,
   ...NodePath.win32,
   .../* @__PURE__ */ fileUrlOps(true)
 });
-var layer7 = /* @__PURE__ */ succeed5(Path2)({
-  [TypeId24]: TypeId24,
+var layer7 = /* @__PURE__ */ succeed5(Path)({
+  [TypeId21]: TypeId21,
   ...NodePath,
   .../* @__PURE__ */ fileUrlOps(undefined)
 });
@@ -11072,18 +11296,8 @@ var layer7 = /* @__PURE__ */ succeed5(Path2)({
 // node_modules/@effect/platform-node/dist/NodePath.js
 var layer8 = layer7;
 
-// node_modules/effect/dist/Stdio.js
-var TypeId26 = "~effect/Stdio";
-var Stdio2 = /* @__PURE__ */ Service(TypeId26);
-var make23 = (options) => ({
-  [TypeId26]: TypeId26,
-  stdinIsTerminal: succeed6(false),
-  stdoutIsTerminal: succeed6(false),
-  ...options
-});
-
 // node_modules/@effect/platform-node-shared/dist/NodeStdio.js
-var layer9 = /* @__PURE__ */ succeed5(Stdio2, /* @__PURE__ */ make23({
+var layer9 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make18({
   args: /* @__PURE__ */ sync3(() => process.argv.slice(2)),
   stdinIsTerminal: /* @__PURE__ */ sync3(() => process.stdin.isTTY === true),
   stdoutIsTerminal: /* @__PURE__ */ sync3(() => process.stdout.isTTY === true),
@@ -11122,24 +11336,9 @@ var layer9 = /* @__PURE__ */ succeed5(Stdio2, /* @__PURE__ */ make23({
 // node_modules/@effect/platform-node/dist/NodeStdio.js
 var layer10 = layer9;
 
-// node_modules/effect/dist/Terminal.js
-var TypeId27 = "~effect/Terminal";
-var QuitErrorTypeId = "~effect/Terminal/QuitError";
-
-class QuitError extends (/* @__PURE__ */ Error4("QuitError")({
-  _tag: /* @__PURE__ */ tag3("QuitError")
-})) {
-  [QuitErrorTypeId] = QuitErrorTypeId;
-}
-var Terminal2 = /* @__PURE__ */ Service("effect/Terminal");
-var make24 = (impl) => Terminal2.of({
-  ...impl,
-  [TypeId27]: TypeId27
-});
-
 // node_modules/@effect/platform-node-shared/dist/NodeTerminal.js
 import * as readline from "node:readline";
-var make25 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
+var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
   const stdin = process.stdin;
   const stdout = process.stdout;
   const lines = yield* make9();
@@ -11153,7 +11352,7 @@ var make25 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
   };
   stdin.once("end", onStdinEnd);
   yield* addFinalizer3(() => sync3(() => stdin.off("end", onStdinEnd)));
-  const rlRef = yield* make11({
+  const rlRef = yield* make14({
     acquire: acquireRelease2(sync3(() => {
       const rl = readline.createInterface({
         input: stdin,
@@ -11244,7 +11443,7 @@ var make25 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
       cause: err
     }))));
   }));
-  return make24({
+  return make19({
     columns,
     rows,
     readInput,
@@ -11252,7 +11451,7 @@ var make25 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
     display
   });
 });
-var layer11 = /* @__PURE__ */ effect(Terminal2, /* @__PURE__ */ make25(defaultShouldQuit));
+var layer11 = /* @__PURE__ */ effect(Terminal, /* @__PURE__ */ make24(defaultShouldQuit));
 function defaultShouldQuit(input) {
   return input.key.ctrl && (input.key.name === "c" || input.key.name === "d");
 }
@@ -11307,7 +11506,7 @@ var layer14 = sync2(Service2, () => {
 class TestService extends Service()("@timmo001/workflows/Annotations/Test") {
 }
 var testLayer = effectContext(gen2(function* () {
-  const recorded = yield* make13([]);
+  const recorded = yield* make17([]);
   const write = (line) => update(recorded, (lines) => [...lines, line]);
   const service = TestService.of({
     error: fn2("Annotations.Test.error")(function* (message, properties) {
@@ -11329,7 +11528,7 @@ var testLayer = effectContext(gen2(function* () {
       return yield* get4(recorded);
     })
   });
-  return empty().pipe(add(Service2, service), add(TestService, service));
+  return empty2().pipe(add(Service2, service), add(TestService, service));
 }));
 
 class ActionFailure extends TaggedError3()("ActionFailure", {
@@ -11353,7 +11552,7 @@ class Service3 extends Service()("@timmo001/workflows/CommandExecutor") {
 }
 var layer15 = effect(Service3, gen2(function* () {
   const spawner = yield* ChildProcessSpawner;
-  const make = (command, args, options) => make19(command, args, {
+  const make = (command, args, options) => make21(command, args, {
     cwd: options?.cwd,
     env: options?.env,
     extendEnv: true
@@ -11392,7 +11591,7 @@ var layer15 = effect(Service3, gen2(function* () {
   const stream = fn2("CommandExecutor.stream")(function* (command, args, options) {
     const label = options?.label ?? `${command} ${args.join(" ")}`.trim();
     return yield* scoped2(gen2(function* () {
-      const handle = yield* spawner.spawn(make19(command, args, {
+      const handle = yield* spawner.spawn(make21(command, args, {
         cwd: options?.cwd,
         env: options?.env,
         extendEnv: true,
@@ -11446,7 +11645,7 @@ var runAction = (program, layer) => {
 };
 
 // src/action/GitHubCommand.ts
-var make26 = fn2("GitHubCommand.make")(function* (label) {
+var make25 = fn2("GitHubCommand.make")(function* (label) {
   const gh = yield* Gh;
   let stderrTail = "";
   const writeStderr = (text) => sync3(() => {
@@ -11455,7 +11654,7 @@ var make26 = fn2("GitHubCommand.make")(function* (label) {
   });
   const mapError = mapError2((error) => new ActionFailure({
     title: "Command failed",
-    message: value2(error).pipe(tag2("GhCommandError", (error) => stderrTail.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag2("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag2("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
+    message: value2(error).pipe(tag3("GhCommandError", (error) => stderrTail.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
   }));
   const stream = fn2("GitHubCommand.stream")(function* (args, options = {}) {
     yield* gh.stream(args, options).pipe(runForEach2((chunk) => isTagged(chunk, "Stderr") ? writeStderr(chunk.text) : sync3(() => {
@@ -11689,7 +11888,7 @@ var dispatch = fn2("BuildArchPackage.dispatch")(function* (inputs) {
   const artifactName = yield* requireInput(inputs.artifactName, "artifact-name");
   const sourceRunId = yield* requireInput(inputs.sourceRunId, "source-run-id");
   const payload = JSON.stringify(dispatchPayload(artifactName, inputs.sourceRepository, sourceRunId, inputs.sourceSha));
-  const github = yield* make26('bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -');
+  const github = yield* make25('bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -');
   yield* github.stream([
     "api",
     "--method",
