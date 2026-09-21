@@ -30,6 +30,12 @@
   ],
   "packageRules": [
     {
+      "description": "Update the Effect runtime and integrations together.",
+      "matchPackageNames": ["effect", "@effect/platform-*", "@effect/vitest"],
+      "groupName": "Effect",
+      "groupSlug": "effect"
+    },
+    {
       "description": "Group GitHub Actions.",
       "groupName": "github actions",
       "matchManagers": ["github-actions"]
