@@ -45,11 +45,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🏗️ Install dependencies
+        env:
+          # renovate: datasource=github-releases depName=goreleaser/nfpm
+          NFPM_VERSION: "2.47.0"
         run: |
           sudo apt update
           sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev libopengl0
-          # renovate: datasource=github-releases depName=goreleaser/nfpm
-          wget https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_amd64.deb
+          wget "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_amd64.deb"
           sudo apt install ./nfpm_amd64.deb
       - name: ⤵️ Check out code from GitHub
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
