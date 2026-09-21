@@ -26,7 +26,7 @@ on:
         description: "Bun version used to install and compile"
         required: false
         type: string
-        default: "1.3.14"
+        default: "1.4.2"
       smoke-test-arguments:
         description: >-
           Trusted newline-separated executable argument lists; each line is one invocation
