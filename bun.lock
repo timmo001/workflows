@@ -6,7 +6,7 @@
       "name": "@timmo001/workflows-actions",
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.115",
-        "@timmo001/effect-gh": "github:timmo001/effect-gh#a9f0bbda5dcc4e64de50655738b3aace4a36e0a8",
+        "@timmo001/effect-gh": "github:timmo001/effect-gh#693ad314d91127b5c2f9e1a69860a3a81f4eaa07",
         "effect": "4.0.0-rc.115",
       },
       "devDependencies": {
@@ -135,7 +135,7 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@timmo001/effect-gh": ["@timmo001/effect-gh@github:timmo001/effect-gh#a9f0bbd", { "peerDependencies": { "effect": "4.0.0-rc.116" } }, "timmo001-effect-gh-a9f0bbd", "sha512-aNgqBmutm1xeJMZxF7GaL5C59zU7c3NU5r5A1D1N+hfYbj9KCFjs3e2cuuqSUKNpoLWmjpTohYjoB0U6SB66iQ=="],
+    "@timmo001/effect-gh": ["@timmo001/effect-gh@github:timmo001/effect-gh#693ad31", { "peerDependencies": { "effect": "4.0.0-rc.116" } }, "timmo001-effect-gh-693ad31", "sha512-tmRR0jzj5OtXBh3qLtQ7TFSxEyikUfWQhbByteLeL4GYporx6vaWzynMN2Mjv53GzG3MDbxILrCXt+tlZ7qc4Q=="],
 
     "@timmo001/oxlint-rules": ["@timmo001/oxlint-rules@0.3.4", "", { "peerDependencies": { "@oxlint/plugins": "1.83.0", "oxlint": "1.83.0" }, "bin": { "oxlint-rules": "dist/cli.js" } }, "sha512-m+zHYrtsJB+THRxYv0CR3EfOsFpa1g5CJraNDhHqBY0VXYkXoqQSkwbNG+iiW6GL9QOaVAKUvHrsTwud/TSOXg=="],
 
