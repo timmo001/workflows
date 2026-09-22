@@ -78,7 +78,7 @@ const readVersion = Effect.fn("ValidateJsPackage.readVersion")(function* (
     .pipe(
       Effect.mapError((error) =>
         failure(
-          `Unable to read ${filename}: ${error}`,
+          `Unable to read ${filename}: ${String(error)}`,
           "File operation failed",
         ),
       ),
@@ -88,7 +88,7 @@ const readVersion = Effect.fn("ValidateJsPackage.readVersion")(function* (
     text,
   ).pipe(
     Effect.mapError((error) =>
-      failure(`Invalid ${filename}: ${error}`, `Invalid ${filename}`),
+      failure(`Invalid ${filename}: ${String(error)}`, `Invalid ${filename}`),
     ),
   );
 

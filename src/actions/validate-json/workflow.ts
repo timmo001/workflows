@@ -72,7 +72,7 @@ export const discoverJsonFiles = Effect.fn("ValidateJson.discoverJsonFiles")(
       error: PlatformError.PlatformError,
     ) =>
       new Annotations.ActionFailure({
-        message: `Unable to ${operation} ${path}: ${error}`,
+        message: `Unable to ${operation} ${path}: ${String(error)}`,
         title: "File operation failed",
       });
 
@@ -128,7 +128,7 @@ const validateFile = Effect.fn("ValidateJson.validateFile")(function* (
       Effect.succeed(
         ValidationResult.Invalid({
           file,
-          message: `Unable to read JSON file: ${error}`,
+          message: `Unable to read JSON file: ${String(error)}`,
         }),
       ),
     ),

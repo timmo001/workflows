@@ -10888,8 +10888,8 @@ var compareJsrVersions = (packageVersion, jsrVersion) => {
 };
 var readVersion = fn2("ValidateJsPackage.readVersion")(function* (packagePath, filename) {
   const fs = yield* FileSystem;
-  const text = yield* fs.readFileString(join2(packagePath, filename)).pipe(mapError2((error) => failure(`Unable to read ${filename}: ${error}`, "File operation failed")));
-  const manifest = yield* decodeUnknownEffect2(VersionManifestFromJson)(text).pipe(mapError2((error) => failure(`Invalid ${filename}: ${error}`, `Invalid ${filename}`)));
+  const text = yield* fs.readFileString(join2(packagePath, filename)).pipe(mapError2((error) => failure(`Unable to read ${filename}: ${String(error)}`, "File operation failed")));
+  const manifest = yield* decodeUnknownEffect2(VersionManifestFromJson)(text).pipe(mapError2((error) => failure(`Invalid ${filename}: ${String(error)}`, `Invalid ${filename}`)));
   return manifest.version;
 });
 var runTrusted = fn2("ValidateJsPackage.runTrusted")(function* (command, label, cwd) {

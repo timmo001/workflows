@@ -23,14 +23,14 @@ import {
 } from "../src/actions/build-python-pypi-release/workflow.js";
 import { CommandExecutor } from "../src/services/CommandExecutor.js";
 
-const publishedRelease: Inputs = {
+const publishedRelease = {
   stage: "validate-event",
   eventName: "release",
   eventAction: "published",
   releaseDraft: "false",
   releasePrerelease: "false",
   releaseTag: "1.0.0",
-};
+} satisfies Inputs;
 
 const commandLayer = CommandExecutor.layer.pipe(
   Layer.provide(NodeServices.layer),

@@ -10860,7 +10860,7 @@ var discoverJsonFiles = fn2("ValidateJson.discoverJsonFiles")(function* (root) {
   const fs = yield* FileSystem;
   const files = [];
   const fileFailure = (operation, path, error) => new ActionFailure({
-    message: `Unable to ${operation} ${path}: ${error}`,
+    message: `Unable to ${operation} ${path}: ${String(error)}`,
     title: "File operation failed"
   });
   const visit = fn2("ValidateJson.discoverJsonFiles.visit")(function* (directory) {
@@ -10885,7 +10885,7 @@ var validateFile = fn2("ValidateJson.validateFile")(function* (file) {
   const fs = yield* FileSystem;
   return yield* fs.readFileString(file).pipe(map5((source) => validateJsonSource(file, source)), catch_2((error) => succeed6(ValidationResult.Invalid({
     file,
-    message: `Unable to read JSON file: ${error}`
+    message: `Unable to read JSON file: ${String(error)}`
   }))));
 });
 var writeStdout = (message) => sync3(() => process.stdout.write(`${message}

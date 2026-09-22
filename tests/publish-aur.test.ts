@@ -20,11 +20,11 @@ import { CommandExecutor } from "../src/services/CommandExecutor.js";
 
 const actionPath = join(process.cwd(), ".github/actions/publish-aur");
 
-const validInputs: Inputs = {
+const validInputs = {
   stage: "verify",
   packageName: "example-git",
   actionPath,
-};
+} satisfies Inputs;
 
 const git = (args: string[]) =>
   execFileSync("git", args, { encoding: "utf8" }).trim();

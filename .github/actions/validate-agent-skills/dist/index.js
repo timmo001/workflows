@@ -1263,6 +1263,7 @@ var succeed = (success) => new SuccessImpl(success);
 function make(compare) {
   return (self, that) => self === that ? 0 : compare(self, that);
 }
+var String2 = /* @__PURE__ */ make((self, that) => self < that ? -1 : 1);
 var Number2 = /* @__PURE__ */ make((self, that) => {
   if (globalThis.Number.isNaN(self) && globalThis.Number.isNaN(that))
     return 0;
@@ -4830,7 +4831,7 @@ function transformEffect(f) {
     transform: f
   });
 }
-function String2() {
+function String3() {
   return transform(globalThis.String);
 }
 function Number3() {
@@ -5005,7 +5006,7 @@ var passthrough_2 = /* @__PURE__ */ new Transformation(/* @__PURE__ */ passthrou
 function passthrough2() {
   return passthrough_2;
 }
-var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ String2());
+var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ String3());
 var urlFromString = /* @__PURE__ */ transformEffect2({
   decode: (s, options) => URL.canParse(s) ? succeed6(new URL(s)) : fail6(new InvalidValue({
     expected: "a valid URL string"
@@ -5142,7 +5143,7 @@ function literalToString(ast) {
   const literalAsString = globalThis.String(ast.literal);
   return replaceEncoding(ast, [new Link(new Literal(literalAsString), new Transformation(transform(() => ast.literal), transform(() => literalAsString)))]);
 }
-var String3 = class extends ASTNodeImpl {
+var String4 = class extends ASTNodeImpl {
   _tag = "String";
   getParser() {
     return fromRefinement(this, isString);
@@ -5155,7 +5156,7 @@ var String3 = class extends ASTNodeImpl {
     return "string";
   }
 };
-var string2 = /* @__PURE__ */ new String3;
+var string2 = /* @__PURE__ */ new String4;
 var Number4 = class extends ASTNodeImpl {
   _tag = "Number";
   getParser() {
@@ -7656,7 +7657,7 @@ function Literal2(literal) {
   });
   return out;
 }
-var String4 = /* @__PURE__ */ make11(string2);
+var String5 = /* @__PURE__ */ make11(string2);
 var Number5 = /* @__PURE__ */ make11(number2);
 function makeStruct(ast, fields) {
   return make11(ast, {
@@ -7787,8 +7788,8 @@ var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
   }),
   expected: "RegExp",
   toCodecJson: () => link()(Struct({
-    source: String4,
-    flags: String4
+    source: String5,
+    flags: String5
   }), transformEffect2({
     decode: (e, options) => try_2({
       try: () => new globalThis.RegExp(e.source, e.flags),
@@ -7802,7 +7803,7 @@ var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
     })
   }))
 });
-var URLString = /* @__PURE__ */ String4.annotate({
+var URLString = /* @__PURE__ */ String5.annotate({
   expected: "a string that will be decoded as a URL"
 });
 var URL2 = /* @__PURE__ */ instanceOf(globalThis.URL, {
@@ -7828,9 +7829,9 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
   }),
   expected: "File",
   toCodecJson: () => link()(Struct({
-    data: String4.check(isBase64()),
-    type: String4,
-    name: String4,
+    data: String5.check(isBase64()),
+    type: String5,
+    name: String5,
     lastModified: Int
   }), transformEffect2({
     decode: (e, options) => match2(decodeBase64(e.data), {
@@ -7871,9 +7872,9 @@ var FormData2 = /* @__PURE__ */ instanceOf(globalThis.FormData, {
     Type: `globalThis.FormData`
   }),
   expected: "FormData",
-  toCodecJson: () => link()(ArraySchema(Tuple([String4, Union2([Struct({
+  toCodecJson: () => link()(ArraySchema(Tuple([String5, Union2([Struct({
     _tag: tag("String"),
-    value: String4
+    value: String5
   }), Struct({
     _tag: tag("File"),
     value: File
@@ -7912,14 +7913,14 @@ var URLSearchParams2 = /* @__PURE__ */ instanceOf(globalThis.URLSearchParams, {
     Type: `globalThis.URLSearchParams`
   }),
   expected: "URLSearchParams",
-  toCodecJson: () => link()(String4.annotate({
+  toCodecJson: () => link()(String5.annotate({
     expected: "a query string that will be decoded as URLSearchParams"
   }), transform2({
     decode: (e) => new globalThis.URLSearchParams(e),
     encode: (params) => params.toString()
   }))
 });
-var Base64String = /* @__PURE__ */ String4.annotate({
+var Base64String = /* @__PURE__ */ String5.annotate({
   expected: "a base64 encoded string that will be decoded as Uint8Array",
   format: "byte",
   contentEncoding: "base64"
@@ -10719,15 +10720,15 @@ var testLayer = effectContext(gen2(function* () {
 }));
 
 class ActionFailure extends TaggedError3()("ActionFailure", {
-  message: String4,
-  title: optionalKey2(String4)
+  message: String5,
+  title: optionalKey2(String5)
 }) {
 }
 // src/services/CommandExecutor.ts
 class CommandError extends TaggedError3()("CommandError", {
-  command: String4,
+  command: String5,
   exitCode: Int,
-  stderr: String4
+  stderr: String5
 }) {
 }
 var error = (command, cause) => new CommandError({ command, exitCode: -1, stderr: String(cause) });
@@ -10833,7 +10834,7 @@ var runAction = (program, layer) => {
 // src/actions/validate-agent-skills/workflow.ts
 import { join as join2 } from "node:path";
 var Inputs = Struct({
-  skillRoots: String4
+  skillRoots: String5
 });
 var ValidationResult = taggedEnum();
 var parseSkillRoots = (value) => value.trim() === "" ? [] : value.trim().split(/\s+/);
@@ -10852,7 +10853,7 @@ var discoverSkillDirectories = fn2("ValidateAgentSkills.discoverSkillDirectories
     if (!(yield* isDirectory(root)))
       continue;
     const entries = yield* fs.readDirectory(root).pipe(catch_2(() => succeed6([])));
-    for (const entry of entries.toSorted()) {
+    for (const entry of entries.toSorted(String2)) {
       if (entry.startsWith("."))
         continue;
       const path = join2(root, entry);

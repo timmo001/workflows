@@ -23,13 +23,13 @@ import {
 } from "../src/actions/build-arch-package/workflow.js";
 import { CommandExecutor } from "../src/services/CommandExecutor.js";
 
-const validInputs: Inputs = {
+const validInputs = {
   stage: "build",
   packageName: "example-git",
   pkgbuildPath: ".scripts/linux/PKGBUILD",
   sourceRepository: "timmo001/example",
   sourceSha: "0123456789abcdef0123456789abcdef01234567",
-};
+} satisfies Inputs;
 
 describe("build-arch-package contract", () => {
   it("accepts the existing repository, package, SHA, and path contract", () => {

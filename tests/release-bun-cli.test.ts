@@ -358,8 +358,8 @@ describe("release-bun-cli archives and checksums", () => {
         .split("\n");
 
       expect(sums).toHaveLength(expectedReleaseAssetCount);
-      expect(sums.map((line) => line.split("  ")[1]).sort()).toEqual(
-        [...assets].sort(),
+      expect(sums.map((line) => line.split("  ")[1])).toEqual(
+        expect.arrayContaining(assets),
       );
     } finally {
       rmSync(root, { recursive: true, force: true });

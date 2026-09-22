@@ -1,4 +1,4 @@
-import { Data, Effect, FileSystem, Predicate, Schema } from "effect";
+import { Data, Effect, FileSystem, Order, Predicate, Schema } from "effect";
 import { join } from "node:path";
 import { Annotations } from "../../action/Annotations.js";
 import { CommandExecutor } from "../../services/CommandExecutor.js";
@@ -54,7 +54,7 @@ export const discoverSkillDirectories = Effect.fn(
       .readDirectory(root)
       .pipe(Effect.catch(() => Effect.succeed([])));
 
-    for (const entry of entries.toSorted()) {
+    for (const entry of entries.toSorted(Order.String)) {
       if (entry.startsWith(".")) continue;
       const path = join(root, entry);
 
