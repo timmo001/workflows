@@ -17,7 +17,7 @@ on:
         required: false
         type: string
         # renovate: datasource=node-version depName=node versioning=node
-        default: "26.9.0"
+        default: "26.10.0"
       file-types:
         required: false
         type: string
@@ -77,7 +77,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         env:
           # renovate: datasource=node-version depName=node versioning=node
-          NODE_VERSION: "26.9.0"
+          NODE_VERSION: "26.10.0"
         with:
           check-latest: true
           node-version: ${{ inputs.node-version || env.NODE_VERSION }}
