@@ -22,7 +22,7 @@ on:
         required: false
         type: string
         # renovate: datasource=npm depName=npm
-        default: "12.0.2"
+        default: "12.1.0"
       package-path:
         description: "Directory containing the package"
         required: false
