@@ -81,3 +81,36 @@ public `timmo001/arch-repo` allowlist revision embedded in the workflow. Its
 uses a separate `SOURCE_ARTIFACT_TOKEN`, selected only for source repositories
 and granted Actions read permission. Build jobs never receive either token or
 the publisher's signing and R2 credentials.
+
+`.github/actions/attest-release-assets` is a step-level action rather than a
+reusable workflow. Run it in the job that already holds the final files, before
+they are published:
+
+<!-- markdownlint-disable MD013 -->
+
+```yaml
+permissions:
+  contents: write # only if the job also uploads release assets
+  id-token: write
+  attestations: write
+steps:
+  - id: attest
+    uses: timmo001/workflows/.github/actions/attest-release-assets@<sha> # master
+    with:
+      subject-patterns: |
+        dist/*.deb
+        dist/*-setup.exe
+      bundle-path: dist/my-app.sigstore.json
+```
+
+<!-- markdownlint-enable MD013 -->
+
+Each pattern must match exactly one regular file inside the workspace, and file
+names must be unique, so a missing or extra file fails the job. All files are
+covered by one SLSA build provenance attestation from `actions/attest`, stored
+against the calling repository. The `subjects` output lists the attested paths
+so the caller can upload that same set. The action does not create, edit or
+upload releases. It runs in the caller's job, so the signer identity is the
+calling workflow, and it makes no SLSA Build Level 3 claim. Verify with
+`gh attestation verify <file> --repo <owner>/<repo>`, adding
+`--bundle <path>` to check against a downloaded bundle.

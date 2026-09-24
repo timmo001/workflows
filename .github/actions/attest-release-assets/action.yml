@@ -1,0 +1,103 @@
+name: Attest release assets
+description: >-
+  Generate one SLSA build provenance attestation for an exact set of files
+inputs:
+  subject-patterns:
+    description: >-
+      Newline-separated workspace-relative glob patterns. Each pattern must
+      match exactly one regular file, and file names must be unique.
+    required: true
+  bundle-path:
+    description: >-
+      Optional workspace-relative path to copy the Sigstore bundle to, for
+      example to attach it to a release
+    required: false
+    default: ""
+outputs:
+  subjects:
+    description: Newline-separated workspace-relative paths of the attested files
+    value: ${{ steps.subjects.outputs.paths }}
+  attestation-url:
+    description: URL of the attestation summary
+    value: ${{ steps.attest.outputs.attestation-url }}
+  bundle-path:
+    description: Path of the Sigstore bundle, or of its copy when bundle-path is set
+    value: ${{ steps.bundle.outputs.path || steps.attest.outputs.bundle-path }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve attestation subjects
+      id: subjects
+      shell: bash
+      env:
+        SUBJECT_PATTERNS: ${{ inputs.subject-patterns }}
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        IFS=
+        cd "$GITHUB_WORKSPACE"
+        fail() { echo "::error::$1" >&2; exit 1; }
+
+        paths=()
+        declare -A names=()
+        while read -r pattern; do
+          pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+          pattern="${pattern%"${pattern##*[![:space:]]}"}"
+          [[ -n "$pattern" ]] || continue
+          [[ "$pattern" != /* && "$pattern" != .. && "$pattern" != ../* \
+            && "$pattern" != */../* && "$pattern" != */.. ]] \
+            || fail "Subject pattern must stay inside the workspace: $pattern"
+          # shellcheck disable=SC2206
+          matches=($pattern)
+          (( ${#matches[@]} == 1 )) \
+            || fail "Subject pattern must match exactly one file, found ${#matches[@]}: $pattern"
+          path="${matches[0]}"
+          [[ -f "$path" && ! -L "$path" ]] || fail "Subject must be a regular file: $path"
+          [[ "$path" != *$'\n'* && "$path" != *\\* ]] || fail "Unsupported subject path: $path"
+          name="${path##*/}"
+          [[ -z "${names[$name]:-}" ]] || fail "Subject file names must be unique: $name"
+          names[$name]=1
+          paths+=("$path")
+        done <<< "$SUBJECT_PATTERNS"
+        (( ${#paths[@]} > 0 )) || fail "No subject patterns were provided."
+
+        checksums="$(mktemp "$RUNNER_TEMP/attest-release-assets.XXXXXX")"
+        for path in "${paths[@]}"; do
+          digest="$(sha256sum -- "$path")"
+          printf '%s  %s\n' "${digest%% *}" "${path##*/}" >> "$checksums"
+        done
+
+        delimiter="subjects_$(cat /proc/sys/kernel/random/uuid)"
+        {
+          echo "checksums=$checksums"
+          echo "paths<<$delimiter"
+          printf '%s\n' "${paths[@]}"
+          echo "$delimiter"
+        } >> "$GITHUB_OUTPUT"
+        echo "Attesting:"
+        cat "$checksums"
+
+    - name: Generate build provenance
+      id: attest
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-checksums: ${{ steps.subjects.outputs.checksums }}
+
+    - name: Copy Sigstore bundle
+      id: bundle
+      if: inputs.bundle-path != ''
+      shell: bash
+      env:
+        SOURCE: ${{ steps.attest.outputs.bundle-path }}
+        DESTINATION: ${{ inputs.bundle-path }}
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_WORKSPACE"
+        fail() { echo "::error::$1" >&2; exit 1; }
+        [[ "$DESTINATION" != /* && "$DESTINATION" != .. && "$DESTINATION" != ../* \
+          && "$DESTINATION" != */../* && "$DESTINATION" != */.. ]] \
+          || fail "Bundle path must stay inside the workspace: $DESTINATION"
+        [[ ! -e "$DESTINATION" ]] || fail "Bundle path already exists: $DESTINATION"
+        mkdir -p -- "$(dirname -- "$DESTINATION")"
+        cp -- "$SOURCE" "$DESTINATION"
+        echo "path=$DESTINATION" >> "$GITHUB_OUTPUT"
