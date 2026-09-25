@@ -26,7 +26,7 @@
     "@timmo001/oxlint-rules": "0.3.6",
     "@types/bun": "1.4.2",
     "oxlint": "1.85.0",
-    "oxlint-tsgolint": "7.0.2002",
+    "oxlint-tsgolint": "7.0.2003",
     "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vitest": "5.0.1"
