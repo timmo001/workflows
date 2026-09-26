@@ -20,7 +20,7 @@
     "effect": "4.0.0-rc.117"
   },
   "devDependencies": {
-    "@effect/tsgo": "0.46.0",
+    "@effect/tsgo": "0.46.1",
     "@effect/vitest": "4.0.0-rc.117",
     "@oxlint/plugins": "1.85.0",
     "@timmo001/oxlint-rules": "0.3.6",
