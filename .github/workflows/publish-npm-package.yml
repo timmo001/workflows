@@ -38,6 +38,11 @@ on:
         required: false
         type: string
         default: "bun run build"
+      dist-tag:
+        description: "npm dist-tag, required by npm for prerelease-style versions"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -79,5 +84,7 @@ jobs:
           buildCommand: ${{ inputs.build-command }}
           releaseTag: ${{ github.event.release.tag_name || github.ref_name }}
       - name: Publish package
-        run: npm publish --access public
+        run: npm publish --access public ${DIST_TAG:+--tag "$DIST_TAG"}
         working-directory: ${{ inputs.package-path }}
+        env:
+          DIST_TAG: ${{ inputs.dist-tag }}
