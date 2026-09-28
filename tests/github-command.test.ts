@@ -2,7 +2,7 @@ import { it } from "@effect/vitest";
 import { layer } from "@timmo001/effect-gh";
 import { Deferred, Effect, Fiber, Layer, Sink, Stream } from "effect";
 import { TestClock } from "effect/testing";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { afterEach, expect, vi } from "vitest";
 import { GitHubCommand } from "../src/action/GitHubCommand.js";
 
