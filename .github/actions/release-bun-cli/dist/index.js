@@ -110,7 +110,9 @@ function memoizeIdempotent(f) {
       return cached;
     const result = f(a);
     cache.set(a, result);
-    cache.set(result, result);
+    if (result !== a) {
+      cache.set(result, result);
+    }
     return result;
   };
 }
@@ -138,6 +140,13 @@ var getAllObjectKeys = (obj) => {
   return keys;
 };
 var byReferenceInstances = /* @__PURE__ */ new WeakSet;
+var viewBytes = (view) => new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+
+// node_modules/effect/dist/internal/hash.js
+var backEdges = 0;
+var addBackEdge = () => {
+  backEdges++;
+};
 
 // node_modules/effect/dist/Predicate.js
 function isString(input) {
@@ -201,12 +210,10 @@ var hash = (self) => {
       return string(self.toString(10));
     case "string":
       return string(self);
-    case "undefined":
-      return string("undefined");
     case "function":
     case "object": {
       if (self === null) {
-        return string("null");
+        break;
       } else if (self instanceof Date) {
         if (Number.isNaN(self.getTime())) {
           return string("Invalid Date");
@@ -218,54 +225,68 @@ var hash = (self) => {
         if (byReferenceInstances.has(self)) {
           return random(self);
         }
-        if (hashCache.has(self)) {
-          return hashCache.get(self);
+        const cached = hashCache.get(self);
+        if (cached !== undefined) {
+          return cached;
         }
-        const h = withVisitedTracking(self, () => {
-          if (isHash(self)) {
-            return self[symbol]();
+        if (visitedObjects.has(self)) {
+          addBackEdge();
+          return string("[Circular]");
+        }
+        visitedObjects.add(self);
+        const seen = backEdges;
+        let h;
+        try {
+          if (symbol in self) {
+            h = self[symbol]();
           } else if (typeof self === "function") {
-            return random(self);
+            h = random(self);
           } else if (self instanceof DataView) {
-            return array(new Uint8Array(self.buffer, self.byteOffset, self.byteLength));
+            h = array(viewBytes(self));
           } else if (Array.isArray(self) || ArrayBuffer.isView(self)) {
-            return array(self);
+            h = array(self);
           } else if (self instanceof Map) {
-            return hashMap(self);
+            h = hashMap(self);
           } else if (self instanceof Set) {
-            return hashSet(self);
+            h = hashSet(self);
+          } else {
+            h = structure(self);
           }
-          return structure(self);
-        });
-        hashCache.set(self, h);
+        } finally {
+          visitedObjects.delete(self);
+        }
+        if (seen === backEdges) {
+          hashCache.set(self, h);
+        }
         return h;
       }
     }
-    default:
-      return string(String(self));
   }
+  return optimize(mix(string(String(self))));
 };
 var random = (self) => {
   if (!randomHashCache.has(self)) {
-    randomHashCache.set(self, number(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)));
+    randomHashCache.set(self, optimize(Math.random() * 4294967296 | 0));
   }
   return randomHashCache.get(self);
 };
-var combine = /* @__PURE__ */ dual(2, (self, b) => self * 53 ^ b);
+var mix = (h) => {
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  return h ^ h >>> 16;
+};
+var combine = /* @__PURE__ */ dual(2, (self, b) => mix(Math.imul(self, 2654435761) + Math.imul(b, 2246822507)));
 var optimize = (n) => n & 3221225471 | n >>> 1 & 1073741824;
-var isHash = (u) => hasProperty(u, symbol);
+var float64 = /* @__PURE__ */ new DataView(/* @__PURE__ */ new ArrayBuffer(8));
 var number = (n) => {
-  if (n !== n || n === Infinity || n === -Infinity) {
-    return string(String(n));
+  const h = n | 0;
+  if (h === n) {
+    return optimize(h);
   }
-  let h = n | 0;
-  if (h !== n) {
-    h ^= n * 4294967295;
-  }
-  while (n > 4294967295) {
-    h ^= n /= 4294967295;
-  }
-  return optimize(h);
+  float64.setFloat64(0, n !== n ? NaN : n);
+  return optimize(combine(float64.getInt32(0), float64.getInt32(4)));
 };
 var string = (str) => {
   let h = 5381, i = str.length;
@@ -282,28 +303,26 @@ var structureKeys = (o, keys) => {
   return optimize(h);
 };
 var structure = (o) => structureKeys(o, getAllObjectKeys(o));
-var iterableWith = (seed, f) => (iter) => {
+var unordered = (seed, f) => (iter) => {
   let h = seed;
   for (const element of iter) {
     h ^= f(element);
   }
   return optimize(h);
 };
-var array = /* @__PURE__ */ iterableWith(6151, hash);
-var hashMap = /* @__PURE__ */ iterableWith(/* @__PURE__ */ string("Map"), ([k, v]) => combine(hash(k), hash(v)));
-var hashSet = /* @__PURE__ */ iterableWith(/* @__PURE__ */ string("Set"), hash);
+var array = (arr) => {
+  let h = 6151;
+  for (const element of arr) {
+    h = combine(h, hash(element));
+  }
+  return optimize(h);
+};
+var hashMap = /* @__PURE__ */ unordered(/* @__PURE__ */ string("Map"), ([k, v]) => combine(hash(k), hash(v)));
+var setSeed = /* @__PURE__ */ string("Set");
+var hashSet = /* @__PURE__ */ unordered(setSeed, (element) => combine(setSeed, hash(element)));
 var randomHashCache = /* @__PURE__ */ new WeakMap;
 var hashCache = /* @__PURE__ */ new WeakMap;
 var visitedObjects = /* @__PURE__ */ new WeakSet;
-function withVisitedTracking(obj, fn) {
-  if (visitedObjects.has(obj)) {
-    return string("[Circular]");
-  }
-  visitedObjects.add(obj);
-  const result = fn();
-  visitedObjects.delete(obj);
-  return result;
-}
 
 // node_modules/effect/dist/Equal.js
 var symbol2 = "~effect/Equal";
@@ -331,27 +350,38 @@ function compareBoth(self, that) {
   if (byReferenceInstances.has(self) || byReferenceInstances.has(that)) {
     return false;
   }
-  return withCache(self, that, compareObjects);
+  return compareObjects(self, that);
 }
-function withVisitedTracking2(self, that, fn) {
-  const hasLeft = visitedLeft.has(self);
-  const hasRight = visitedRight.has(that);
-  if (hasLeft && hasRight) {
-    return true;
+function compareObjects(self, that) {
+  const depth = pathLeft.length;
+  for (let i = depth;i-- > 0; ) {
+    if (pathLeft[i] === self && pathRight[i] === that)
+      return true;
   }
-  if (hasLeft || hasRight) {
-    return false;
-  }
-  visitedLeft.add(self);
-  visitedRight.add(that);
-  const result = fn();
-  visitedLeft.delete(self);
-  visitedRight.delete(that);
+  if (depth)
+    return compareOnPath(self, that);
+  let known = results.get(self);
+  if (!known)
+    results.set(self, known = new WeakMap);
+  let result = known.get(that);
+  if (result === undefined)
+    known.set(that, result = compareOnPath(self, that));
   return result;
 }
-var visitedLeft = /* @__PURE__ */ new WeakSet;
-var visitedRight = /* @__PURE__ */ new WeakSet;
-function compareObjects(self, that) {
+function compareOnPath(self, that) {
+  pathLeft.push(self);
+  pathRight.push(that);
+  try {
+    return compareStructure(self, that);
+  } finally {
+    pathLeft.pop();
+    pathRight.pop();
+  }
+}
+var pathLeft = [];
+var pathRight = [];
+var results = /* @__PURE__ */ new WeakMap;
+function compareStructure(self, that) {
   if (hash(self) !== hash(that)) {
     return false;
   } else if (self instanceof Date) {
@@ -361,69 +391,40 @@ function compareObjects(self, that) {
     const thatTime = that.getTime();
     return selfTime === thatTime || Number.isNaN(selfTime) && Number.isNaN(thatTime);
   } else if (self instanceof RegExp) {
-    if (!(that instanceof RegExp))
+    return that instanceof RegExp && self.toString() === that.toString();
+  }
+  const bothEquals = isEqual(self);
+  if (bothEquals !== isEqual(that) || typeof self === "function" && !bothEquals) {
+    return false;
+  } else if (bothEquals) {
+    return self[symbol2](that);
+  } else if (Array.isArray(self)) {
+    if (!Array.isArray(that) || self.length !== that.length) {
       return false;
-    return self.toString() === that.toString();
-  }
-  const selfIsEqual = isEqual(self);
-  const thatIsEqual = isEqual(that);
-  if (selfIsEqual !== thatIsEqual)
-    return false;
-  const bothEquals = selfIsEqual && thatIsEqual;
-  if (typeof self === "function" && !bothEquals) {
-    return false;
-  }
-  return withVisitedTracking2(self, that, () => {
-    if (bothEquals) {
-      return self[symbol2](that);
-    } else if (Array.isArray(self)) {
-      if (!Array.isArray(that) || self.length !== that.length) {
-        return false;
-      }
-      return compareArrays(self, that);
-    } else if (ArrayBuffer.isView(self)) {
-      const selfIsDataView = self instanceof DataView;
-      if (!ArrayBuffer.isView(that) || self.byteLength !== that.byteLength || selfIsDataView !== that instanceof DataView) {
-        return false;
-      }
-      if (selfIsDataView) {
-        const thatDataView = that;
-        return compareTypedArrays(new Uint8Array(self.buffer, self.byteOffset, self.byteLength), new Uint8Array(thatDataView.buffer, thatDataView.byteOffset, thatDataView.byteLength));
-      }
-      return compareTypedArrays(self, that);
-    } else if (self instanceof Map) {
-      if (!(that instanceof Map) || self.size !== that.size) {
-        return false;
-      }
-      return compareMaps(self, that);
-    } else if (self instanceof Set) {
-      if (!(that instanceof Set) || self.size !== that.size) {
-        return false;
-      }
-      return compareSets(self, that);
     }
-    return compareRecords(self, that);
-  });
-}
-function withCache(self, that, f) {
-  let selfMap = equalityCache.get(self);
-  if (!selfMap) {
-    selfMap = new WeakMap;
-    equalityCache.set(self, selfMap);
-  } else if (selfMap.has(that)) {
-    return selfMap.get(that);
+    return compareArrays(self, that);
+  } else if (ArrayBuffer.isView(self)) {
+    const selfIsDataView = self instanceof DataView;
+    if (!ArrayBuffer.isView(that) || self.byteLength !== that.byteLength || selfIsDataView !== that instanceof DataView) {
+      return false;
+    }
+    if (selfIsDataView) {
+      return compareTypedArrays(viewBytes(self), viewBytes(that));
+    }
+    return compareTypedArrays(self, that);
+  } else if (self instanceof Map) {
+    if (!(that instanceof Map) || self.size !== that.size) {
+      return false;
+    }
+    return compareHashed(self, that, entryHash, equalEntries);
+  } else if (self instanceof Set) {
+    if (!(that instanceof Set) || self.size !== that.size) {
+      return false;
+    }
+    return compareHashed(self, that, hash, compareBoth);
   }
-  const result = f(self, that);
-  selfMap.set(that, result);
-  let thatMap = equalityCache.get(that);
-  if (!thatMap) {
-    thatMap = new WeakMap;
-    equalityCache.set(that, thatMap);
-  }
-  thatMap.set(self, result);
-  return result;
+  return compareRecords(self, that);
 }
-var equalityCache = /* @__PURE__ */ new WeakMap;
 function compareArrays(self, that) {
   for (let i = 0;i < self.length; i++) {
     if (!compareBoth(self[i], that[i])) {
@@ -456,78 +457,35 @@ function compareRecords(self, that) {
   }
   return true;
 }
-function makeCompareMap(keyEquivalence, valueEquivalence) {
-  return function compareMaps(self, that) {
-    const thatEntries = Array.from(that);
-    for (const [selfKey, selfValue] of self) {
-      let found = false;
-      for (let i = 0;i < thatEntries.length; i++) {
-        const [thatKey, thatValue] = thatEntries[i];
-        if (keyEquivalence(selfKey, thatKey) && valueEquivalence(selfValue, thatValue)) {
-          thatEntries[i] = thatEntries[thatEntries.length - 1];
-          thatEntries.pop();
-          found = true;
-          break;
+function compareHashed(self, that, hashOf, equivalent) {
+  const groups = new Map;
+  for (const item of that) {
+    const h = hashOf(item);
+    const group = groups.get(h);
+    if (group)
+      group.push(item);
+    else
+      groups.set(h, [item]);
+  }
+  outer:
+    for (const item of self) {
+      const group = groups.get(hashOf(item));
+      if (group) {
+        for (let i = 0;i < group.length; i++) {
+          if (equivalent(item, group[i])) {
+            group[i] = group[group.length - 1];
+            group.pop();
+            continue outer;
+          }
         }
       }
-      if (!found) {
-        return false;
-      }
+      return false;
     }
-    return true;
-  };
+  return true;
 }
-var compareMaps = /* @__PURE__ */ makeCompareMap(compareBoth, compareBoth);
-function makeCompareSet(equivalence) {
-  return function compareSets(self, that) {
-    const thatValues = Array.from(that);
-    for (const selfValue of self) {
-      let found = false;
-      for (let i = 0;i < thatValues.length; i++) {
-        const thatValue = thatValues[i];
-        if (equivalence(selfValue, thatValue)) {
-          thatValues[i] = thatValues[thatValues.length - 1];
-          thatValues.pop();
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        return false;
-      }
-    }
-    return true;
-  };
-}
-var compareSets = /* @__PURE__ */ makeCompareSet(compareBoth);
+var entryHash = (entry) => hash(entry[0]);
+var equalEntries = (self, that) => compareBoth(self[0], that[0]) && compareBoth(self[1], that[1]);
 var isEqual = (u) => hasProperty(u, symbol2);
-
-// node_modules/effect/dist/internal/array.js
-var isArrayNonEmpty = (self) => self.length > 0;
-
-// node_modules/effect/dist/internal/count.js
-var normalize = (n) => n > 0 ? Math.floor(n) : 0;
-
-// node_modules/effect/dist/internal/record.js
-function assignProperty(self, key, value) {
-  if (key === "__proto__") {
-    Object.defineProperty(self, key, {
-      value,
-      writable: true,
-      enumerable: true,
-      configurable: true
-    });
-  } else {
-    self[key] = value;
-  }
-}
-function assignProperties(self, source) {
-  for (const key of Reflect.ownKeys(source)) {
-    if (Object.prototype.propertyIsEnumerable.call(source, key)) {
-      assignProperty(self, key, source[key]);
-    }
-  }
-}
 
 // node_modules/effect/dist/Redactable.js
 var symbolRedactable = /* @__PURE__ */ Symbol.for("~effect/Redactable");
@@ -664,6 +622,11 @@ function formatJson(input, options) {
     if (typeof redacted !== "object" || redacted === null) {
       return redacted;
     }
+    const current = redacted instanceof Error && !hasProperty(redacted, "toJSON") ? {
+      ...redacted,
+      name: redacted.name,
+      message: redacted.message
+    } : redacted;
     while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
       ancestors.pop();
     }
@@ -671,7 +634,10 @@ function formatJson(input, options) {
       return;
     }
     ancestors.push(redacted);
-    return redacted;
+    if (current !== redacted) {
+      ancestors.push(current);
+    }
+    return current;
   }, options?.space) ?? "null";
 }
 
@@ -734,22 +700,20 @@ var setStackTraceLimit = (value) => {
 
 // node_modules/effect/dist/Utils.js
 class SingleShotGen {
-  called = false;
-  self;
   constructor(self) {
-    this.self = self;
+    this.value = self;
+    this.done = false;
   }
   next(a) {
-    return this.called ? {
-      value: a,
-      done: true
-    } : (this.called = true, {
-      value: this.self,
+    if (this.done) {
+      this.value = a;
+      return this;
+    }
+    this.done = true;
+    return {
+      value: this.value,
       done: false
-    });
-  }
-  [Symbol.iterator]() {
-    return new SingleShotGen(this.self);
+    };
   }
 }
 var pickInternalCall = () => {
@@ -770,6 +734,27 @@ var pickInternalCall = () => {
   return isNotOptimizedAway ? standard[InternalTypeId] : forced[InternalTypeId];
 };
 var internalCall = /* @__PURE__ */ pickInternalCall();
+
+// node_modules/effect/dist/internal/record.js
+function assignProperty(self, key, value) {
+  if (key === "__proto__") {
+    Object.defineProperty(self, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  } else {
+    self[key] = value;
+  }
+}
+function assignProperties(self, source) {
+  for (const key of Reflect.ownKeys(source)) {
+    if (Object.prototype.propertyIsEnumerable.call(source, key)) {
+      assignProperty(self, key, source[key]);
+    }
+  }
+}
 
 // node_modules/effect/dist/internal/core.js
 var EffectTypeId = `~effect/Effect`;
@@ -1139,6 +1124,12 @@ var done = (value) => {
   return exitFail(Done(value));
 };
 
+// node_modules/effect/dist/Effectable.js
+var Prototype2 = (options) => makePrimitiveProto({
+  op: options.label,
+  [evaluate]: options.evaluate
+});
+
 // node_modules/effect/dist/internal/option.js
 var TypeId = "~effect/Option";
 var CommonProto = {
@@ -1302,63 +1293,6 @@ var fromUndefinedOr = (a) => a === undefined ? none2() : some2(a);
 var getOrUndefined = /* @__PURE__ */ getOrElse(constUndefined);
 var flatMap = /* @__PURE__ */ dual(2, (self, f) => isNone2(self) ? none2() : f(self.value));
 
-// node_modules/effect/dist/Result.js
-var succeed2 = succeed;
-var fail2 = fail;
-var isResult2 = isResult;
-var isFailure2 = isFailure;
-var isSuccess2 = isSuccess;
-var match2 = /* @__PURE__ */ dual(2, (self, {
-  onFailure,
-  onSuccess
-}) => isFailure2(self) ? onFailure(self.failure) : onSuccess(self.success));
-
-// node_modules/effect/dist/Iterable.js
-var headUnsafe = (self) => {
-  const iterator = self[Symbol.iterator]();
-  const result = iterator.next();
-  if (result.done)
-    throw new Error("headUnsafe: empty iterable");
-  return result.value;
-};
-var constEmpty = {
-  [Symbol.iterator]() {
-    return constEmptyIterator;
-  }
-};
-var constEmptyIterator = {
-  next() {
-    return {
-      done: true,
-      value: undefined
-    };
-  }
-};
-
-// node_modules/effect/dist/Array.js
-var Array2 = globalThis.Array;
-var fromIterable = (collection) => Array2.isArray(collection) ? collection : Array2.from(collection);
-var append = /* @__PURE__ */ dual(2, (self, last) => [...self, last]);
-var isArray = Array2.isArray;
-var isArrayNonEmpty2 = isArrayNonEmpty;
-var isReadonlyArrayNonEmpty = isArrayNonEmpty;
-var empty = () => [];
-var of = (a) => [a];
-var map = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
-// node_modules/effect/dist/BigInt.js
-var BigInt2 = globalThis.BigInt;
-var toNumber = (b) => {
-  if (b > BigInt2(Number.MAX_SAFE_INTEGER) || b < BigInt2(Number.MIN_SAFE_INTEGER)) {
-    return none2();
-  }
-  return some2(Number(b));
-};
-// node_modules/effect/dist/Effectable.js
-var Prototype2 = (options) => makePrimitiveProto({
-  op: options.label,
-  [evaluate]: options.evaluate
-});
-
 // node_modules/effect/dist/Context.js
 var ServiceTypeId = "~effect/Context/Service";
 var Service = function() {
@@ -1453,7 +1387,7 @@ var lookup = (self, key) => {
   const value = impl.base.get(key);
   if (value === undefined && !impl.base.has(key))
     return notFound;
-  if (impl.overlay && ++impl.baseHits >= FlattenAfterBaseHits) {
+  if (impl.overlay && ++impl.baseHits >= impl.base.size && impl.baseHits >= FlattenAfterBaseHits) {
     impl.base = flatten(impl);
     impl.overlay = undefined;
     impl.depth = 0;
@@ -1498,7 +1432,7 @@ var Proto = {
 var hasSameCache = (self, that) => self.cacheRoot === that.cacheRoot;
 var isContext = (u) => hasProperty(u, TypeId3);
 var isReference = (u) => !!u[ReferenceTypeId];
-var empty2 = () => emptyContext2;
+var empty = () => emptyContext2;
 var emptyContext2 = /* @__PURE__ */ makeUnsafe(/* @__PURE__ */ new Map);
 var make2 = (key, service) => makeUnsafe(new Map([[key.key, service]]));
 var add = /* @__PURE__ */ dual(3, (self, key, service) => addUnsafe(self, key.key, service));
@@ -1572,6 +1506,56 @@ var mergeAll = (...ctxs) => {
   return makeUnsafe(map);
 };
 var Reference = Service;
+
+// node_modules/effect/dist/internal/array.js
+var isArrayNonEmpty = (self) => self.length > 0;
+
+// node_modules/effect/dist/internal/count.js
+var normalize = (n) => n > 0 ? Math.floor(n) : 0;
+
+// node_modules/effect/dist/Result.js
+var succeed2 = succeed;
+var fail2 = fail;
+var isResult2 = isResult;
+var isFailure2 = isFailure;
+var isSuccess2 = isSuccess;
+var match2 = /* @__PURE__ */ dual(2, (self, {
+  onFailure,
+  onSuccess
+}) => isFailure2(self) ? onFailure(self.failure) : onSuccess(self.success));
+
+// node_modules/effect/dist/Iterable.js
+var headUnsafe = (self) => {
+  const iterator = self[Symbol.iterator]();
+  const result = iterator.next();
+  if (result.done)
+    throw new Error("headUnsafe: empty iterable");
+  return result.value;
+};
+var constEmpty = {
+  [Symbol.iterator]() {
+    return constEmptyIterator;
+  }
+};
+var constEmptyIterator = {
+  next() {
+    return {
+      done: true,
+      value: undefined
+    };
+  }
+};
+
+// node_modules/effect/dist/Array.js
+var Array2 = globalThis.Array;
+var fromIterable = (collection) => Array2.isArray(collection) ? collection : Array2.from(collection);
+var append = /* @__PURE__ */ dual(2, (self, last) => [...self, last]);
+var isArray = Array2.isArray;
+var isArrayNonEmpty2 = isArrayNonEmpty;
+var isReadonlyArrayNonEmpty = isArrayNonEmpty;
+var empty2 = () => [];
+var of = (a) => [a];
+var map = /* @__PURE__ */ dual(2, (self, f) => self.map(f));
 
 // node_modules/effect/dist/Duration.js
 var TypeId4 = "~effect/Duration";
@@ -1963,62 +1947,24 @@ var PreventSchedulerYield = /* @__PURE__ */ Reference("effect/Scheduler/PreventS
 var Error3 = Error2;
 var TaggedError2 = TaggedError;
 
-// node_modules/effect/dist/Encoding.js
-var EncodingErrorTypeId = "~effect/Encoding/EncodingError";
+// node_modules/effect/dist/encoding/EncodingError.js
+var EncodingErrorTypeId = "~effect/encoding/EncodingError";
 
 class EncodingError extends (/* @__PURE__ */ TaggedError2("EncodingError")) {
   [EncodingErrorTypeId] = EncodingErrorTypeId;
 }
-var encodeBase64 = (input) => typeof input === "string" ? base64EncodeUint8Array(encoder.encode(input)) : base64EncodeUint8Array(input);
-var decodeBase64 = (str) => {
-  const stripped = stripCrlf(str);
-  const length = stripped.length;
-  if (length % 4 !== 0) {
-    return fail2(new EncodingError({
-      kind: "Decode",
-      module: "Base64",
-      input: stripped,
-      message: `Length must be a multiple of 4, but is ${length}`
-    }));
-  }
-  const index = stripped.indexOf("=");
-  if (index !== -1 && (index < length - 2 || index === length - 2 && stripped[length - 1] !== "=")) {
-    return fail2(new EncodingError({
-      kind: "Decode",
-      module: "Base64",
-      input: stripped,
-      message: `Found a '=' character, but it is not at the end`
-    }));
-  }
-  try {
-    const missingOctets = stripped.endsWith("==") ? 2 : stripped.endsWith("=") ? 1 : 0;
-    const result = new Uint8Array(3 * (length / 4) - missingOctets);
-    for (let i = 0, j = 0;i < length; i += 4, j += 3) {
-      const buffer = getBase64Code(stripped.charCodeAt(i)) << 18 | getBase64Code(stripped.charCodeAt(i + 1)) << 12 | getBase64Code(stripped.charCodeAt(i + 2)) << 6 | getBase64Code(stripped.charCodeAt(i + 3));
-      result[j] = buffer >> 16;
-      result[j + 1] = buffer >> 8 & 255;
-      result[j + 2] = buffer & 255;
-    }
-    return succeed2(result);
-  } catch (e) {
-    return fail2(new EncodingError({
-      kind: "Decode",
-      module: "Base64",
-      input: stripped,
-      message: e instanceof Error ? e.message : "Invalid input"
-    }));
-  }
-};
-var randomHex = (length) => {
+
+// node_modules/effect/dist/encoding/Hex.js
+var random2 = (length) => {
   switch (length) {
     case 16:
-      return randomHex16();
+      return random16();
     case 32:
-      return randomHex32();
+      return random32();
     default: {
       let result = "";
       for (let i = length >>> 3;i > 0; i--) {
-        result += randomHex8();
+        result += random8();
       }
       return result;
     }
@@ -2026,59 +1972,22 @@ var randomHex = (length) => {
 };
 var hexCharCodes = /* @__PURE__ */ Uint8Array.from("0123456789abcdef", (c) => c.charCodeAt(0));
 var randomWord = () => Math.random() * 4294967296 >>> 0;
-var randomHex8 = () => {
+var random8 = () => {
   const a = randomWord();
   return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15]);
 };
-var randomHex16 = () => {
+var random16 = () => {
   const a = randomWord();
   const b = randomWord();
   return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15], hexCharCodes[b >>> 28], hexCharCodes[b >>> 24 & 15], hexCharCodes[b >>> 20 & 15], hexCharCodes[b >>> 16 & 15], hexCharCodes[b >>> 12 & 15], hexCharCodes[b >>> 8 & 15], hexCharCodes[b >>> 4 & 15], hexCharCodes[b & 15]);
 };
-var randomHex32 = () => {
+var random32 = () => {
   const a = randomWord();
   const b = randomWord();
   const c = randomWord();
   const d = randomWord();
   return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15], hexCharCodes[b >>> 28], hexCharCodes[b >>> 24 & 15], hexCharCodes[b >>> 20 & 15], hexCharCodes[b >>> 16 & 15], hexCharCodes[b >>> 12 & 15], hexCharCodes[b >>> 8 & 15], hexCharCodes[b >>> 4 & 15], hexCharCodes[b & 15], hexCharCodes[c >>> 28], hexCharCodes[c >>> 24 & 15], hexCharCodes[c >>> 20 & 15], hexCharCodes[c >>> 16 & 15], hexCharCodes[c >>> 12 & 15], hexCharCodes[c >>> 8 & 15], hexCharCodes[c >>> 4 & 15], hexCharCodes[c & 15], hexCharCodes[d >>> 28], hexCharCodes[d >>> 24 & 15], hexCharCodes[d >>> 20 & 15], hexCharCodes[d >>> 16 & 15], hexCharCodes[d >>> 12 & 15], hexCharCodes[d >>> 8 & 15], hexCharCodes[d >>> 4 & 15], hexCharCodes[d & 15]);
 };
-var encoder = /* @__PURE__ */ new TextEncoder;
-var stripCrlf = (str) => str.replace(/[\n\r]/g, "");
-var base64EncodeUint8Array = (bytes) => {
-  const length = bytes.length;
-  let result = "";
-  let i;
-  for (i = 2;i < length; i += 3) {
-    result += base64abc[bytes[i - 2] >> 2];
-    result += base64abc[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
-    result += base64abc[(bytes[i - 1] & 15) << 2 | bytes[i] >> 6];
-    result += base64abc[bytes[i] & 63];
-  }
-  if (i === length + 1) {
-    result += base64abc[bytes[i - 2] >> 2];
-    result += base64abc[(bytes[i - 2] & 3) << 4];
-    result += "==";
-  }
-  if (i === length) {
-    result += base64abc[bytes[i - 2] >> 2];
-    result += base64abc[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
-    result += base64abc[(bytes[i - 1] & 15) << 2];
-    result += "=";
-  }
-  return result;
-};
-function getBase64Code(charCode) {
-  if (charCode >= base64codes.length) {
-    throw new TypeError(`Invalid character ${String.fromCharCode(charCode)}`);
-  }
-  const code = base64codes[charCode];
-  if (code === 255) {
-    throw new TypeError(`Invalid character ${String.fromCharCode(charCode)}`);
-  }
-  return code;
-}
-var base64abc = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"];
-var base64codes = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 0, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255, 255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51];
 
 // node_modules/effect/dist/Tracer.js
 var ParentSpanKey = "effect/Tracer/ParentSpan";
@@ -2098,10 +2007,6 @@ var MinimumTraceLevel = /* @__PURE__ */ Reference("effect/Tracer/MinimumTraceLev
   defaultValue: () => "All"
 });
 var TracerKey = "effect/Tracer";
-var Tracer = /* @__PURE__ */ Reference(TracerKey, {
-  fiberCached: true,
-  defaultValue: () => nativeTracer
-});
 var nativeTracer = /* @__PURE__ */ make4({
   span: (options) => new NativeSpan(options)
 });
@@ -2134,10 +2039,10 @@ class NativeSpan {
     };
   }
   get traceId() {
-    return this._traceId ??= getOrUndefined(this.parent)?.traceId ?? randomHex(32);
+    return this._traceId ??= getOrUndefined(this.parent)?.traceId ?? random2(32);
   }
   get spanId() {
-    return this._spanId ??= randomHex(16);
+    return this._spanId ??= random2(16);
   }
   get attributes() {
     return this._attributes ??= new Map;
@@ -2293,26 +2198,18 @@ var causeMap = /* @__PURE__ */ dual(2, (self, f) => {
   });
   return hasFail ? causeFromReasons(failures) : self;
 });
-var causePartition = (self) => {
-  const obj = {
-    Fail: [],
-    Die: [],
-    Interrupt: []
-  };
-  for (let i = 0;i < self.reasons.length; i++) {
-    obj[self.reasons[i]._tag].push(self.reasons[i]);
-  }
-  return obj;
-};
 var causeSquash = (self) => {
-  const partitioned = causePartition(self);
-  if (partitioned.Fail.length > 0) {
-    return partitioned.Fail[0].error;
-  } else if (partitioned.Die.length > 0) {
-    return partitioned.Die[0].defect;
-  } else if (partitioned.Interrupt.length > 0) {
-    return new globalThis.Error("All fibers interrupted without error");
+  let die;
+  for (const reason of self.reasons) {
+    if (reason._tag === "Fail")
+      return reason.error;
+    if (reason._tag === "Die")
+      die ??= reason;
   }
+  if (die !== undefined)
+    return die.defect;
+  if (self.reasons.length > 0)
+    return new globalThis.Error("All fibers interrupted without error");
   return new globalThis.Error("Empty cause");
 };
 var causePrettyErrors = (self, options) => {
@@ -2323,26 +2220,29 @@ var causePrettyErrors = (self, options) => {
   const prevStackLimit = getStackTraceLimit();
   if (prevStackLimit !== 0)
     setStackTraceLimit(1);
-  for (const failure of self.reasons) {
-    if (failure._tag === "Interrupt") {
-      interrupts.push(failure);
-      continue;
+  try {
+    for (const failure of self.reasons) {
+      if (failure._tag === "Interrupt") {
+        interrupts.push(failure);
+        continue;
+      }
+      errors.push(causePrettyError(failure._tag === "Die" ? failure.defect : failure.error, failure.annotations, options));
     }
-    errors.push(causePrettyError(failure._tag === "Die" ? failure.defect : failure.error, failure.annotations, options));
+    if (errors.length === 0) {
+      const cause = new Error("The fiber was interrupted by:");
+      cause.name = "InterruptCause";
+      cause.stack = interruptCauseStack(cause, interrupts);
+      const error = new globalThis.Error("All fibers interrupted without error", {
+        cause
+      });
+      error.name = "InterruptError";
+      error.stack = `${error.name}: ${error.message}`;
+      errors.push(causePrettyError(error, interrupts[0].annotations, options));
+    }
+  } finally {
+    if (prevStackLimit !== 0)
+      setStackTraceLimit(prevStackLimit);
   }
-  if (errors.length === 0) {
-    const cause = new Error("The fiber was interrupted by:");
-    cause.name = "InterruptCause";
-    cause.stack = interruptCauseStack(cause, interrupts);
-    const error = new globalThis.Error("All fibers interrupted without error", {
-      cause
-    });
-    error.name = "InterruptError";
-    error.stack = `${error.name}: ${error.message}`;
-    errors.push(causePrettyError(error, interrupts[0].annotations, options));
-  }
-  if (prevStackLimit !== 0)
-    setStackTraceLimit(prevStackLimit);
   return errors;
 };
 var causePrettyError = (original, annotations, options) => {
@@ -2391,7 +2291,7 @@ var cleanErrorStack = (stack, error, annotations) => {
 `);
   const out = [message];
   for (let i = 1;i < lines.length; i++) {
-    if (/(?:Generator\.next|~effect\/Effect)/.test(lines[i])) {
+    if (/Generator\.next|~effect\/(?:Effect|Utils)/.test(lines[i])) {
       break;
     }
     out.push(lines[i]);
@@ -2477,7 +2377,6 @@ var getCurrentFiber = () => globalThis[currentFiberTypeId];
 
 class FiberImpl {
   constructor(context, interruptible = true) {
-    this[FiberTypeId] = fiberVariance;
     this.setContext(context);
     this.id = ++fiberIdStore.id;
     this.currentOpCount = 0;
@@ -2493,22 +2392,9 @@ class FiberImpl {
     this._parent = undefined;
     this.cache.runtimeMetrics?.recordFiberStart(this.context);
   }
-  [FiberTypeId];
-  id;
-  interruptible;
-  currentOpCount;
-  _stack;
-  _observers;
-  _exit;
-  _children;
-  _interruptedCause;
-  _yielded;
-  _running;
-  _deferredInterrupt;
-  _parent;
-  context;
-  cache;
-  _dispatcher = undefined;
+  get [FiberTypeId]() {
+    return fiberVariance;
+  }
   get currentDispatcher() {
     return this._dispatcher ??= this.cache.scheduler.makeDispatcher();
   }
@@ -2525,14 +2411,15 @@ class FiberImpl {
     } else {
       this._observers.push(cb);
     }
-    return () => {
-      if (this._exit || this._observers === undefined)
-        return;
-      const index = this._observers.indexOf(cb);
-      if (index >= 0) {
-        this._observers.splice(index, 1);
-      }
-    };
+    return () => this.removeObserver(cb);
+  }
+  removeObserver(cb) {
+    if (this._exit || this._observers === undefined)
+      return;
+    const index = this._observers.indexOf(cb);
+    if (index >= 0) {
+      this._observers.splice(index, 1);
+    }
   }
   interruptUnsafe(fiberId, annotations) {
     if (this._exit) {
@@ -2588,7 +2475,7 @@ class FiberImpl {
     }
     this._stack.length = 0;
     this._children = undefined;
-    this.context = empty2();
+    this.context = empty();
   }
   runLoop(effect) {
     const prevFiber = globalThis[currentFiberTypeId];
@@ -2657,6 +2544,13 @@ class FiberImpl {
         return op;
     }
   }
+  succeedWith(value) {
+    if ((++this.currentOpCount & maxInlineSteps - 1) === 0) {
+      return exitSucceed(value);
+    }
+    const cont = this.getCont(contA);
+    return cont ? cont[contA](value, this) : this.yieldWith(exitSucceed(value));
+  }
   yieldWith(value) {
     this._yielded = value;
     return Yield;
@@ -2674,7 +2568,7 @@ class FiberImpl {
       return;
     const root = context.cacheRoot;
     const cache = root._fiberCache ??= makeFiberContextCache(context);
-    if (this.cache !== undefined && this.cache.scheduler !== cache.scheduler) {
+    if (this.cache?.scheduler !== cache.scheduler) {
       this._dispatcher = undefined;
     }
     this.cache = cache;
@@ -2708,6 +2602,7 @@ var deferredInterruptCont = {
     return failCause(fiber._interruptedCause);
   }
 };
+var maxInlineSteps = 32;
 var fiberMiddleware = {
   interruptChildren: undefined
 };
@@ -2776,7 +2671,7 @@ var fiberInterruptAs = /* @__PURE__ */ dual((args) => hasProperty(args[0], Fiber
 }));
 var fiberInterruptAll = (fibers) => withFiber((parent) => {
   const annotations = fiberStackAnnotations(parent);
-  let fiberArr = empty();
+  let fiberArr = empty2();
   for (const fiber of fibers) {
     fiber.interruptUnsafe(parent.id, annotations);
     fiberArr.push(fiber);
@@ -2820,18 +2715,18 @@ var yieldNowWith = /* @__PURE__ */ makePrimitive({
 });
 var yieldNow = /* @__PURE__ */ yieldNowWith(0);
 var succeedNone = /* @__PURE__ */ succeed3(/* @__PURE__ */ none2());
-var failCauseSync = (evaluate) => suspend(() => failCause(internalCall(evaluate)));
+var failCauseSync = (evaluate) => suspend(() => failCause(evaluate()));
 var die = (defect) => exitDie(defect);
-var failSync = (error) => suspend(() => fail3(internalCall(error)));
+var failSync = (error) => suspend(() => fail3(error()));
 var void_ = /* @__PURE__ */ succeed3(undefined);
 var try_ = (options) => {
   const evaluate = typeof options === "function" ? options : options.try;
   const catcher = typeof options === "function" ? (cause) => new UnknownError(cause, "An error occurred in Effect.try") : options.catch;
   return suspend(() => {
     try {
-      return succeed3(internalCall(evaluate));
+      return succeed3(evaluate());
     } catch (err) {
-      return fail3(internalCall(() => catcher(err)));
+      return fail3(catcher(err));
     }
   });
 };
@@ -2847,7 +2742,7 @@ var tryPromise = (options) => {
       }
     };
     try {
-      internalCall(() => f(signal)).then((a) => resume(succeed3(a)), failWithCatch);
+      f(signal).then((a) => resume(succeed3(a)), failWithCatch);
     } catch (err) {
       failWithCatch(err);
     }
@@ -2858,11 +2753,10 @@ var callbackOptions = /* @__PURE__ */ function() {
   const Proto = /* @__PURE__ */ makePrimitiveProto({
     op: "Async",
     [evaluate](fiber) {
-      const register = internalCall(() => this.register.bind(fiber.cache.scheduler));
       let resumed = false;
       let yielded = false;
       const controller = this.withSignal ? new AbortController : undefined;
-      const onCancel = register((effect) => {
+      const onCancel = this.register.call(fiber.cache.scheduler, (effect) => {
         if (resumed)
           return;
         resumed = true;
@@ -2955,6 +2849,8 @@ var fn = function() {
 };
 var makeFn = (name, bodyOrOptions, defError, pipeables, addSpan, spanOptions) => {
   const body = typeof bodyOrOptions === "function" ? bodyOrOptions : pipeables.shift().bind(bodyOrOptions.self);
+  const definitionName = `${name} (definition)`;
+  const definitionStack = defError ? fnStackCleaner(() => defError.stack) : constUndefined;
   return defineFunctionLength(body.length, function(...args) {
     let result = suspend(() => {
       const iter = body.apply(this, arguments);
@@ -2977,8 +2873,8 @@ var makeFn = (name, bodyOrOptions, defError, pipeables, addSpan, spanOptions) =>
       name,
       stack: callError ? fnStackCleaner(() => callError.stack) : constUndefined,
       parent: {
-        name: `${name} (definition)`,
-        stack: defError ? fnStackCleaner(() => defError.stack) : constUndefined,
+        name: definitionName,
+        stack: definitionStack,
         parent: prev
       }
     }));
@@ -3064,11 +2960,6 @@ var OnSuccessProto = /* @__PURE__ */ makePrimitiveProto({
   op: "OnSuccess",
   [evaluate]: evaluateCont
 });
-var OnSuccessImpl = function(self, f) {
-  this[args] = self;
-  this[contA] = f;
-};
-OnSuccessImpl.prototype = OnSuccessProto;
 var ContImpl = function(self, cont, payload) {
   this[args] = self;
   this[contA] = cont;
@@ -3078,22 +2969,34 @@ ContImpl.prototype = OnSuccessProto;
 var returnPayload = function() {
   return this.payload;
 };
-var mapCont = function(value) {
+var succeedPayload = function(_value, fiber) {
+  return fiber.succeedWith(this.payload);
+};
+var continuationMarksStack = /* @__PURE__ */ (() => {
+  const marker = "~effect/Effect/stackProbe";
+  const probe = {
+    [marker]: function stackProbe() {
+      return new Error().stack;
+    }
+  };
+  return probe[marker]()?.includes("[as " + marker + "]") === true;
+})();
+var mapCont = function(value, fiber) {
   const f = this.payload;
-  return succeed3(internalCall(() => f(value)));
+  return fiber.succeedWith(continuationMarksStack ? f(value) : internalCall(() => f(value)));
 };
 var andThenCont = function(value) {
   const f = this.payload;
-  return internalCall(() => f(value));
+  return f(value);
 };
 var tapCont = function(value) {
   const f = this.payload;
-  return new ContImpl(internalCall(() => f(value)), returnPayload, exitSucceed(value));
+  return new ContImpl(f(value), succeedPayload, value);
 };
 var tapEffectCont = function(value) {
-  return new ContImpl(this.payload, returnPayload, exitSucceed(value));
+  return new ContImpl(this.payload, succeedPayload, value);
 };
-var asSome = (self) => map3(self, some2);
+var asSome = (self) => map2(self, some2);
 var andThen = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? returnPayload : andThenCont, f));
 var tap = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? tapEffectCont : tapCont, f));
 var asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
@@ -3127,7 +3030,7 @@ var raceAllFirst = (all, options) => withFiber((parent) => callback((resume) => 
   return fiberInterruptAll(fibers);
 }));
 var raceFirst = /* @__PURE__ */ dual((args) => isEffect(args[1]), (self, that, options) => raceAllFirst([self, that], options));
-var flatMap2 = /* @__PURE__ */ dual(2, (self, f) => new OnSuccessImpl(self, f.length !== 1 ? (a) => f(a) : f));
+var flatMap2 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, andThenCont, f));
 var effectIsExit = (effect) => effect[ExitTypeId] !== undefined;
 var flatMapEager = /* @__PURE__ */ dual(2, (self, f) => {
   if (effectIsExit(self)) {
@@ -3135,8 +3038,8 @@ var flatMapEager = /* @__PURE__ */ dual(2, (self, f) => {
   }
   return flatMap2(self, f);
 });
-var map3 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
-var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map3(self, f));
+var map2 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, mapCont, f));
+var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map2(self, f));
 var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError(self, f));
 var exitInterrupt = (fiberId) => exitFailCause(causeInterrupt(fiberId));
 var exitIsSuccess = (self) => self._tag === "Success";
@@ -3169,10 +3072,11 @@ var updateContext = /* @__PURE__ */ dual(2, (self, f) => withFiber((fiber) => {
   if (prevContext === nextContext)
     return self;
   fiber.setContext(nextContext);
-  return onExitPrimitive(self, () => {
+  onExitUnsafe(fiber, () => {
     fiber.setContext(prevContext);
     return;
   });
+  return self;
 }));
 var updateService = /* @__PURE__ */ dual(3, (self, service, f) => updateContext(self, (s) => {
   const prev = getUnsafe(s, service);
@@ -3211,18 +3115,18 @@ var OnFailureImpl = function(self, f) {
 OnFailureImpl.prototype = OnFailureProto;
 var catchCauseFilter = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause(self, (cause) => {
   const eb = filter(cause);
-  return isFailure2(eb) ? failCause(eb.failure) : internalCall(() => f(eb.success, cause));
+  return isFailure2(eb) ? failCause(eb.failure) : f(eb.success, cause);
 }));
 var catch_ = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
-var tapCause = /* @__PURE__ */ dual(2, (self, f) => catchCause(self, (cause) => andThen(internalCall(() => f(cause)), failCause(cause))));
+var tapCause = /* @__PURE__ */ dual(2, (self, f) => catchCause(self, (cause) => andThen(f(cause), failCause(cause))));
 var catchIf = /* @__PURE__ */ dual((args) => isEffect(args[0]), (self, predicate, f, orElse) => catchCause(self, (cause) => {
   const error = findError(cause);
   if (isFailure2(error))
     return failCause(error.failure);
   if (!predicate(error.success)) {
-    return orElse ? internalCall(() => orElse(error.success)) : failCause(cause);
+    return orElse ? orElse(error.success) : failCause(cause);
   }
-  return internalCall(() => f(error.success));
+  return f(error.success);
 }));
 var catchTag = /* @__PURE__ */ dual((args) => isEffect(args[0]), (self, k, f, orElse) => {
   const pred = Array.isArray(k) ? (e) => hasProperty(e, "_tag") && k.includes(e._tag) : isTagged(k);
@@ -3261,17 +3165,39 @@ var OnSuccessAndFailureImpl = function(self, onSuccess, onFailure) {
   this[contE] = onFailure;
 };
 OnSuccessAndFailureImpl.prototype = OnSuccessAndFailureProto;
+var matchSuccess = function(value, fiber) {
+  const handlers = this.payload;
+  return fiber.succeedWith(continuationMarksStack ? handlers.onSuccess(value) : internalCall(() => handlers.onSuccess(value)));
+};
+var makeMatch = (op, onFailure) => {
+  const Proto = makePrimitiveProto({
+    op,
+    [evaluate]: evaluateCont,
+    [contA]: matchSuccess,
+    [contE]: onFailure
+  });
+  const MatchImpl = function(self, handlers) {
+    this[args] = self;
+    this.payload = handlers;
+  };
+  MatchImpl.prototype = Proto;
+  return MatchImpl;
+};
+var MatchImpl = /* @__PURE__ */ makeMatch("Match", function(cause, fiber) {
+  const fail = cause.reasons.find(isFailReason);
+  if (fail === undefined)
+    return failCause(cause);
+  const handlers = this.payload;
+  return fiber.succeedWith(continuationMarksStack ? handlers.onFailure(fail.error) : internalCall(() => handlers.onFailure(fail.error)));
+});
 var matchEffect = /* @__PURE__ */ dual(2, (self, options) => matchCauseEffect(self, {
   onFailure: (cause) => {
     const fail = cause.reasons.find(isFailReason);
-    return fail ? internalCall(() => options.onFailure(fail.error)) : failCause(cause);
+    return fail ? options.onFailure(fail.error) : failCause(cause);
   },
   onSuccess: options.onSuccess
 }));
-var match4 = /* @__PURE__ */ dual(2, (self, options) => matchEffect(self, {
-  onFailure: (error) => sync(() => options.onFailure(error)),
-  onSuccess: (value) => sync(() => options.onSuccess(value))
-}));
+var match4 = /* @__PURE__ */ dual(2, (self, options) => new MatchImpl(self, options));
 var matchEager = /* @__PURE__ */ dual(2, (self, options) => {
   if (effectIsExit(self)) {
     if (self._tag === "Success")
@@ -3290,40 +3216,51 @@ var exitPrimitive = /* @__PURE__ */ makePrimitive({
     fiber._stack.push(this);
     return this[args];
   },
-  [contA](value, _, exit) {
-    return succeed3(exit ?? exitSucceed(value));
+  [contA](value, fiber, exit) {
+    return fiber.succeedWith(exit ?? exitSucceed(value));
   },
-  [contE](cause, _, exit) {
-    return succeed3(exit ?? exitFailCause(cause));
+  [contE](cause, fiber, exit) {
+    return fiber.succeedWith(exit ?? exitFailCause(cause));
   }
 });
 var ScopeTypeId = "~effect/Scope";
 var ScopeCloseableTypeId = "~effect/Scope/Closeable";
 var scopeTag = /* @__PURE__ */ Service("effect/Scope");
-var scopeClose = (self, exit_) => suspend(() => scopeCloseUnsafe(self, exit_) ?? void_);
+var scopeClose = (self, exit_) => withFiber((fiber) => {
+  const close = scopeCloseUnsafe(self, exit_);
+  if (close === undefined)
+    return void_;
+  fiberEnterUninterruptibleUnsafe(fiber);
+  return close;
+});
 var scopeCloseUnsafe = (self, exit_) => {
-  if (self.state._tag === "Closed")
+  const state = self.state;
+  if (state._tag === "Closed")
     return;
-  const closed = {
+  self.state = {
     _tag: "Closed",
     exit: exit_
   };
-  if (self.state._tag === "Empty") {
-    self.state = closed;
-    return;
+  if (self.parent !== undefined) {
+    scopeRemoveFinalizerUnsafe(self.parent, self);
   }
-  const state = self.state;
-  self.state = closed;
+  if (state._tag === "Empty")
+    return;
   if (state.finalizer !== undefined) {
-    return state.finalizer(exit_);
+    return runFinalizer(state.finalizer, exit_);
   }
   const finalizers = state.finalizers;
-  if (finalizers === undefined || finalizers.size === 0) {
-    return;
-  } else if (finalizers.size === 1) {
-    return finalizers.values().next().value(exit_);
+  if (finalizers.size === 1) {
+    return runFinalizer(finalizers.values().next().value, exit_);
   }
   return scopeCloseFinalizers(self, finalizers, exit_);
+};
+var runFinalizer = (finalizer, exit_) => {
+  try {
+    return finalizer(exit_);
+  } catch (defect) {
+    return exitDie(defect);
+  }
 };
 var combineFinalizerCause = (exit_, finalizer) => exitIsSuccess(exit_) ? finalizer : catchCause(finalizer, (cause) => failCause(causeCombine(exit_.cause, cause)));
 var scopeCloseFinalizers = /* @__PURE__ */ fnUntraced(function* (self, finalizers, exit_) {
@@ -3334,9 +3271,9 @@ var scopeCloseFinalizers = /* @__PURE__ */ fnUntraced(function* (self, finalizer
   for (let i = arr.length - 1;i >= 0; i--) {
     const finalizer = arr[i];
     if (self.strategy === "sequential") {
-      exits.push(yield* exit(finalizer(exit_)));
+      exits.push(yield* exit(runFinalizer(finalizer, exit_)));
     } else {
-      fibers.push(forkUnsafe(parent, finalizer(exit_), true, true, "inherit"));
+      fibers.push(forkUnsafe(parent, runFinalizer(finalizer, exit_), true, true, "inherit"));
     }
   }
   if (fibers.length > 0) {
@@ -3345,15 +3282,13 @@ var scopeCloseFinalizers = /* @__PURE__ */ fnUntraced(function* (self, finalizer
   return yield* exitAsVoidAll(exits);
 });
 var scopeForkUnsafe = (scope, finalizerStrategy) => {
-  const newScope = scopeMakeUnsafe(finalizerStrategy);
+  const child = makeScope(finalizerStrategy, scope);
   if (scope.state._tag === "Closed") {
-    newScope.state = scope.state;
-    return newScope;
+    child.state = scope.state;
+    return child;
   }
-  const key = {};
-  scopeAddFinalizerUnsafe(scope, key, (exit) => scopeClose(newScope, exit));
-  scopeAddFinalizerUnsafe(newScope, key, (_) => sync(() => scopeRemoveFinalizerUnsafe(scope, key)));
-  return newScope;
+  scopeAddFinalizerUnsafe(scope, child, (exit) => scopeClose(child, exit));
+  return child;
 };
 var scopeAddFinalizerExit = (scope, finalizer) => {
   return suspend(() => {
@@ -3380,30 +3315,30 @@ var scopeAddFinalizerUnsafe = (scope, key, finalizer) => {
       state.finalizerKey = undefined;
       state.finalizer = undefined;
       state.finalizers.set(key, finalizer);
-    } else if (state.finalizers === undefined) {
-      state.finalizerKey = key;
-      state.finalizer = finalizer;
     } else {
       state.finalizers.set(key, finalizer);
     }
   }
 };
 var scopeRemoveFinalizerUnsafe = (scope, key) => {
-  if (scope.state._tag === "Open") {
-    const state = scope.state;
-    if (state.finalizerKey === key) {
-      state.finalizerKey = undefined;
-      state.finalizer = undefined;
-    } else if (state.finalizers !== undefined) {
-      state.finalizers.delete(key);
+  if (scope.state._tag !== "Open")
+    return;
+  const state = scope.state;
+  if (state.finalizerKey === key) {
+    scope.state = constScopeEmpty;
+  } else if (state.finalizers !== undefined) {
+    state.finalizers.delete(key);
+    if (state.finalizers.size === 0) {
+      scope.state = constScopeEmpty;
     }
   }
 };
-var scopeFinalizerCountUnsafe = (scope) => scope.state._tag !== "Open" ? 0 : scope.state.finalizer !== undefined ? 1 : scope.state.finalizers?.size ?? 0;
-var scopeMakeUnsafe = (finalizerStrategy = "sequential") => ({
+var scopeMakeUnsafe = (finalizerStrategy) => makeScope(finalizerStrategy, undefined);
+var makeScope = (finalizerStrategy = "sequential", parent) => ({
   [ScopeCloseableTypeId]: ScopeCloseableTypeId,
   [ScopeTypeId]: ScopeTypeId,
   strategy: finalizerStrategy,
+  parent,
   state: constScopeEmpty
 });
 var constScopeEmpty = {
@@ -3415,10 +3350,11 @@ var scoped = (self) => withFiber((fiber) => {
   const prev = fiber.context;
   const scope = scopeMakeUnsafe();
   fiber.setContext(add(fiber.context, scopeTag, scope));
-  return onExitPrimitive(self, (exit) => {
+  onExitUnsafe(fiber, (exit) => {
     fiber.setContext(prev);
     return scopeCloseUnsafe(scope, exit);
   });
+  return self;
 });
 var scopedWith = (f) => suspend(() => {
   const scope = scopeMakeUnsafe();
@@ -3426,7 +3362,7 @@ var scopedWith = (f) => suspend(() => {
 });
 var acquireRelease = (acquire, release, options) => contextWith((context) => uninterruptibleMask((restore) => flatMap2(scope, (scope) => tap(options?.interruptible ? restore(acquire) : acquire, (a) => scopeAddFinalizerExit(scope, (exit) => provideContext(release(a, exit), context))))));
 var addFinalizer = (finalizer) => flatMap2(scope, (scope) => contextWith((context) => scopeAddFinalizerExit(scope, (exit) => provideContext(finalizer(exit), context))));
-var onExitPrimitive = /* @__PURE__ */ function() {
+var OnExitImpl = /* @__PURE__ */ function() {
   const Proto = /* @__PURE__ */ makePrimitiveProto({
     op: "OnExit",
     [evaluate](fiber) {
@@ -3441,12 +3377,22 @@ var onExitPrimitive = /* @__PURE__ */ function() {
     },
     [contA](value, _, exit) {
       exit ??= exitSucceed(value);
-      const eff = this.onExit(exit);
+      let eff;
+      try {
+        eff = this.onExit(exit);
+      } catch (defect) {
+        eff = exitDie(defect);
+      }
       return eff ? flatMap2(eff, (_) => exit) : exit;
     },
     [contE](cause, _, exit) {
       exit ??= exitFailCause(cause);
-      const eff = this.onExit(exit);
+      let eff;
+      try {
+        eff = this.onExit(exit);
+      } catch (defect) {
+        eff = exitDie(defect);
+      }
       return eff ? flatMap2(combineFinalizerCause(exit, eff), (_) => exit) : exit;
     }
   });
@@ -3456,10 +3402,12 @@ var onExitPrimitive = /* @__PURE__ */ function() {
     this.interruptible = interruptible;
   };
   OnExitImpl.prototype = Proto;
-  return function(effect, onExit, interruptible) {
-    return new OnExitImpl(effect, onExit, interruptible);
-  };
+  return OnExitImpl;
 }();
+var onExitPrimitive = (effect, onExit, interruptible) => new OnExitImpl(effect, onExit, interruptible);
+var onExitUnsafe = (fiber, f) => {
+  fiber._stack.push(new OnExitImpl(undefined, f, undefined));
+};
 var onExit = /* @__PURE__ */ dual(2, onExitPrimitive);
 var ensuring = /* @__PURE__ */ dual(2, (self, finalizer) => onExit(self, (_) => finalizer));
 var onExitFilter = /* @__PURE__ */ dual(3, (self, filter, f) => onExit(self, (exit) => {
@@ -3492,6 +3440,13 @@ var setFiberInterruptible = (fiber) => {
   if (fiber._interruptedCause)
     return failCause(fiber._interruptedCause);
 };
+var fiberEnterUninterruptibleUnsafe = (fiber) => {
+  const impl = fiber;
+  if (!impl.interruptible)
+    return;
+  impl.interruptible = false;
+  impl._stack.push(setInterruptibleTrue);
+};
 var interruptible = (self) => withFiber((fiber) => {
   if (fiber.interruptible)
     return self;
@@ -3512,7 +3467,7 @@ var all = (arg, options) => {
   }
   return suspend(() => {
     const out = {};
-    return as(forEach(Object.entries(arg), ([key, effect]) => map3(options?.mode === "result" ? result(effect) : effect, (value) => {
+    return as(forEach(Object.entries(arg), ([key, effect]) => map2(options?.mode === "result" ? result(effect) : effect, (value) => {
       assignProperty(out, key, value);
     }), {
       discard: true,
@@ -3576,12 +3531,13 @@ var resolveConcurrency = (concurrency) => concurrency === "unbounded" ? Number.P
 var iterateEager = () => (options) => {
   const onItem = options.onItem;
   const step = options.step;
+  const resumeSequential = (state, items, index, end, effect) => flatMap2(exit(effect), (itemExit) => step(state, items[index], itemExit, index) ?? runSequential(state, items, index + 1, end) ?? void_);
   const runSequential = (state, items, index = 0, end = items.length) => {
     for (;index < end; index++) {
       const item = items[index];
       const effect = onItem(state, item, index);
       if (!effectIsExit(effect)) {
-        return flatMap2(exit(effect), (itemExit) => step(state, item, itemExit, index) ?? runSequential(state, items, index + 1, end) ?? void_);
+        return resumeSequential(state, items, index, end, effect);
       }
       const terminal = step(state, item, effect, index);
       if (terminal)
@@ -3792,7 +3748,7 @@ var fiberRunIn = /* @__PURE__ */ dual(2, (self, scope) => {
   self.addObserver(() => scopeRemoveFinalizerUnsafe(scope, key));
   return self;
 });
-var runFork = /* @__PURE__ */ runForkWith(/* @__PURE__ */ empty2());
+var runFork = /* @__PURE__ */ runForkWith(/* @__PURE__ */ empty());
 var runSyncExitWith = (context) => {
   const runFork = runForkWith(context);
   return (effect) => {
@@ -3806,7 +3762,7 @@ var runSyncExitWith = (context) => {
     return fiber._exit ?? exitDie(new AsyncFiberError(fiber));
   };
 };
-var runSyncExit = /* @__PURE__ */ runSyncExitWith(/* @__PURE__ */ empty2());
+var runSyncExit = /* @__PURE__ */ runSyncExitWith(/* @__PURE__ */ empty());
 var succeedTrue = /* @__PURE__ */ succeed3(true);
 var succeedFalse = /* @__PURE__ */ succeed3(false);
 
@@ -3921,17 +3877,17 @@ var filterDisablePropagation = (span) => {
   return get(span.annotations, DisablePropagation) ? span._tag === "Span" ? filterDisablePropagation(getOrUndefined(span.parent)) : none2() : some2(span);
 };
 var makeSpanUnsafe = (fiber, name, options) => {
-  const disablePropagation = !fiber.getRef(TracerEnabled) || options?.annotations && get(options.annotations, DisablePropagation);
+  const disablePropagation = !fiber.cache.tracerEnabled || options?.annotations && get(options.annotations, DisablePropagation);
   const parent = options?.parent !== undefined ? some2(options.parent) : options?.root ? none2() : filterDisablePropagation(fiber.cache.span);
   let span;
   if (disablePropagation) {
     span = noopSpan({
       name,
       parent,
-      annotations: add(options?.annotations ?? empty2(), DisablePropagation, true)
+      annotations: add(options?.annotations ?? empty(), DisablePropagation, true)
     });
   } else {
-    const tracer = fiber.getRef(Tracer);
+    const tracer = fiber.cache.tracer ?? nativeTracer;
     const clock = fiber.getRef(ClockRef);
     const timingEnabled = fiber.getRef(TracerTimingEnabled);
     const annotationsFromEnv = fiber.getRef(TracerSpanAnnotations);
@@ -3941,7 +3897,7 @@ var makeSpanUnsafe = (fiber, name, options) => {
     span = tracer.span({
       name,
       parent,
-      annotations: options?.annotations ?? empty2(),
+      annotations: options?.annotations ?? empty(),
       links,
       startTime: timingEnabled ? clock.currentTimeNanosUnsafe() : bigint02,
       kind: options?.kind ?? "internal",
@@ -3971,7 +3927,8 @@ var useSpan = (name, ...args) => {
     const span = makeSpanUnsafe(fiber, name, options);
     const clock = fiber.getRef(ClockRef);
     const timingEnabled = fiber.getRef(TracerTimingEnabled);
-    return onExit(suspend(() => internalCall(() => evaluate(span))), (exit) => endSpan(span, exit, clock, timingEnabled));
+    onExitUnsafe(fiber, (exit) => endSpan(span, exit, clock, timingEnabled));
+    return evaluate(span);
   });
 };
 var provideParentSpan = /* @__PURE__ */ provideService(ParentSpan);
@@ -4236,7 +4193,7 @@ var fromReasons = causeFromReasons;
 var fail4 = causeFail;
 var die2 = causeDie;
 var hasInterruptsOnly2 = hasInterruptsOnly;
-var map4 = causeMap;
+var map3 = causeMap;
 var squash = causeSquash;
 var findError2 = findError;
 var isDone2 = isDone;
@@ -4283,8 +4240,6 @@ var _await = (self) => callback((resume) => {
       resumes.splice(index, 1);
   });
 });
-var completeWith = /* @__PURE__ */ dual(2, (self, effect) => sync(() => doneUnsafe(self, effect)));
-var done3 = completeWith;
 var isDone3 = (self) => sync(() => isDoneUnsafe(self));
 var isDoneUnsafe = (self) => self.effect !== undefined;
 var doneUnsafe = (self, effect) => {
@@ -4313,9 +4268,26 @@ var close = scopeClose;
 // node_modules/effect/dist/Layer.js
 var TypeId6 = "~effect/Layer";
 var MemoMapTypeId = "~effect/Layer/MemoMap";
-var memoMapReuse = (entry, scope) => {
+var makeMemoMapEntry = (memoMap, layer) => {
+  const entry = {
+    observers: 0,
+    deferred: makeUnsafe2(),
+    scope: makeUnsafe3(),
+    finalizer: (exit) => suspend(() => {
+      if (--entry.observers > 0)
+        return void_;
+      memoMap.map.delete(layer);
+      return close(entry.scope, exit);
+    })
+  };
+  return entry;
+};
+var memoMapObserve = (entry, scope) => {
+  if (scope.state._tag === "Closed")
+    return false;
   entry.observers++;
-  return andThen(scopeAddFinalizerExit(scope, (exit) => entry.finalizer(exit)), entry.effect);
+  scopeAddFinalizerUnsafe(scope, {}, entry.finalizer);
+  return true;
 };
 var LayerProto = {
   [TypeId6]: {
@@ -4340,27 +4312,6 @@ var fromBuildMemo = (build) => {
   const self = fromBuild((memoMap, scope) => memoMap.getOrElseMemoize(self, scope, build));
   return self;
 };
-var memoMapBuild = (memoMap, layer, scope, build) => {
-  const layerScope = makeUnsafe3();
-  const deferred = makeUnsafe2();
-  const entry = {
-    observers: 1,
-    effect: _await(deferred),
-    finalizer: (exit) => suspend(() => {
-      entry.observers--;
-      if (entry.observers === 0) {
-        memoMap.map.delete(layer);
-        return close(layerScope, exit);
-      }
-      return void_;
-    })
-  };
-  memoMap.map.set(layer, entry);
-  return scopeAddFinalizerExit(scope, entry.finalizer).pipe(flatMap2(() => build(memoMap, layerScope)), onExit((exit) => {
-    entry.effect = exit;
-    return done3(deferred, exit);
-  }));
-};
 
 class MemoMapImpl {
   get [MemoMapTypeId]() {
@@ -4374,17 +4325,28 @@ class MemoMapImpl {
   get(layer, scope) {
     const local = this.map.get(layer);
     if (local) {
-      return memoMapReuse(local, scope);
+      memoMapObserve(local, scope);
+      return local.deferred.effect ?? _await(local.deferred);
     }
     return this.parent?.get(layer, scope);
   }
   getOrElseMemoize(layer, scope, build) {
     return suspend(() => {
-      const existing = this.get(layer, scope);
-      if (existing) {
-        return existing;
-      }
-      return memoMapBuild(this, layer, scope, build);
+      let deferred;
+      return onExitPrimitive(suspend(() => {
+        const existing = this.get(layer, scope);
+        if (existing)
+          return existing;
+        const entry = makeMemoMapEntry(this, layer);
+        if (!memoMapObserve(entry, scope))
+          return build(this, scope);
+        deferred = entry.deferred;
+        this.map.set(layer, entry);
+        return build(this, entry.scope);
+      }), (exit) => {
+        if (deferred)
+          doneUnsafe(deferred, exit);
+      });
     });
   }
 }
@@ -4396,7 +4358,7 @@ class CurrentMemoMap extends (/* @__PURE__ */ Service()("effect/Layer/CurrentMem
     return current ? forkMemoMapUnsafe(current) : makeMemoMapUnsafe();
   }
 }
-var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope) => provideService(map3(self.build(memoMap, scope), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
+var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope) => provideService(map2(self.build(memoMap, scope), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
 var buildWithScope = /* @__PURE__ */ dual(2, (self, scope) => withFiber((fiber) => buildWithMemoMap(self, CurrentMemoMap.forkOrCreate(fiber.context), scope)));
 var succeed5 = function() {
   if (arguments.length === 1) {
@@ -4418,16 +4380,16 @@ var effect = function() {
   }
   return effectImpl(arguments[0], arguments[1]);
 };
-var effectImpl = (service, effect) => effectContext(map3(effect, (value) => make2(service, value)));
+var effectImpl = (service, effect) => effectContext(map2(effect, (value) => make2(service, value)));
 var effectContext = (effect) => fromBuildMemo((_, scope) => provide(effect, scope));
 var mergeAllEffect = (layers, memoMap, scope) => {
   const parentScope = forkUnsafe2(scope, "parallel");
   return forEach(layers, (layer) => layer.build(memoMap, forkUnsafe2(parentScope, "sequential")), {
     concurrency: layers.length
-  }).pipe(map3((context) => mergeAll(...context)));
+  }).pipe(map2((context) => mergeAll(...context)));
 };
 var mergeAll2 = (...layers) => fromBuild((memoMap, scope) => mergeAllEffect(layers, memoMap, scope));
-var provideWith = (self, that, f) => fromBuild((memoMap, scope) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope) : that.build(memoMap, scope), (context) => self.build(memoMap, scope).pipe(provideContext(context), map3((merged) => f(merged, context)))));
+var provideWith = (self, that, f) => fromBuild((memoMap, scope) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope) : that.build(memoMap, scope), (context) => self.build(memoMap, scope).pipe(provideContext(context), map2((merged) => f(merged, context)))));
 var provide2 = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, identity));
 var provideMerge = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, (self, that) => merge(that, self)));
 
@@ -4510,7 +4472,7 @@ var flatMap3 = flatMap2;
 var andThen2 = andThen;
 var tap2 = tap;
 var exit2 = exit;
-var map5 = map3;
+var map4 = map2;
 var as2 = as;
 var catch_2 = catch_;
 var catchTag2 = catchTag;
@@ -4564,6 +4526,218 @@ var mapEager2 = mapEager;
 var mapErrorEager2 = mapErrorEager;
 var flatMapEager2 = flatMapEager;
 var fnUntracedEager2 = fnUntracedEager;
+
+// node_modules/effect/dist/BigInt.js
+var BigInt2 = globalThis.BigInt;
+var toNumber = (b) => {
+  if (b > BigInt2(Number.MAX_SAFE_INTEGER) || b < BigInt2(Number.MIN_SAFE_INTEGER)) {
+    return none2();
+  }
+  return some2(Number(b));
+};
+
+// node_modules/effect/dist/ByteSize.js
+var bigint03 = /* @__PURE__ */ BigInt(0);
+var bigint12 = /* @__PURE__ */ BigInt(1);
+var decimalBase = /* @__PURE__ */ BigInt(1000);
+var binaryBase = /* @__PURE__ */ BigInt(1024);
+var decimalUnits = [{
+  symbol: "B",
+  factor: bigint12,
+  names: ["B", "byte", "bytes"]
+}, {
+  symbol: "kB",
+  factor: decimalBase,
+  names: ["kB", "kilobyte", "kilobytes"]
+}, {
+  symbol: "MB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(2),
+  names: ["MB", "megabyte", "megabytes"]
+}, {
+  symbol: "GB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(3),
+  names: ["GB", "gigabyte", "gigabytes"]
+}, {
+  symbol: "TB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(4),
+  names: ["TB", "terabyte", "terabytes"]
+}, {
+  symbol: "PB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(5),
+  names: ["PB", "petabyte", "petabytes"]
+}, {
+  symbol: "EB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(6),
+  names: ["EB", "exabyte", "exabytes"]
+}, {
+  symbol: "ZB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(7),
+  names: ["ZB", "zettabyte", "zettabytes"]
+}, {
+  symbol: "YB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(8),
+  names: ["YB", "yottabyte", "yottabytes"]
+}, {
+  symbol: "RB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(9),
+  names: ["RB", "ronnabyte", "ronnabytes"]
+}, {
+  symbol: "QB",
+  factor: decimalBase ** /* @__PURE__ */ BigInt(10),
+  names: ["QB", "quettabyte", "quettabytes"]
+}];
+var binaryUnits = [decimalUnits[0], {
+  symbol: "KiB",
+  factor: binaryBase,
+  names: ["KiB", "kibibyte", "kibibytes"]
+}, {
+  symbol: "MiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(2),
+  names: ["MiB", "mebibyte", "mebibytes"]
+}, {
+  symbol: "GiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(3),
+  names: ["GiB", "gibibyte", "gibibytes"]
+}, {
+  symbol: "TiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(4),
+  names: ["TiB", "tebibyte", "tebibytes"]
+}, {
+  symbol: "PiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(5),
+  names: ["PiB", "pebibyte", "pebibytes"]
+}, {
+  symbol: "EiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(6),
+  names: ["EiB", "exbibyte", "exbibytes"]
+}, {
+  symbol: "ZiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(7),
+  names: ["ZiB", "zebibyte", "zebibytes"]
+}, {
+  symbol: "YiB",
+  factor: binaryBase ** /* @__PURE__ */ BigInt(8),
+  names: ["YiB", "yobibyte", "yobibytes"]
+}];
+var allUnits = [...decimalUnits, .../* @__PURE__ */ binaryUnits.slice(1)];
+var unitsByName = /* @__PURE__ */ new Map(/* @__PURE__ */ allUnits.flatMap((unit) => unit.names.map((name) => [name, unit])));
+var make5 = (value) => value;
+var invalid2 = (message) => {
+  throw new Error(`Invalid ByteSize: ${message}`);
+};
+var fromNumber = (input) => {
+  if (!Number.isSafeInteger(input) || input < 0) {
+    return invalid2(`expected a non-negative safe integer, received ${input}`);
+  }
+  return make5(BigInt(input));
+};
+var fromStringUnsafe = (input) => {
+  const match = /^\s*(\d+)(?:\.(\d+))?\s*([A-Za-z]+)\s*$/.exec(input);
+  if (match === null)
+    return invalid2(`unsupported syntax ${JSON.stringify(input)}`);
+  const unit = unitsByName.get(match[3]);
+  if (unit === undefined)
+    return invalid2(`unsupported unit ${JSON.stringify(match[3])}`);
+  const fraction = match[2] ?? "";
+  const scale = BigInt(10) ** BigInt(fraction.length);
+  const numerator = BigInt(match[1] + fraction) * unit.factor;
+  if (numerator % scale !== bigint03) {
+    return invalid2(`${JSON.stringify(input)} does not represent an integral number of bytes`);
+  }
+  return make5(numerator / scale);
+};
+var fromInputUnsafe2 = (input) => {
+  switch (typeof input) {
+    case "bigint":
+      if (input < bigint03)
+        return invalid2(`expected a non-negative bigint, received ${input}`);
+      return make5(input);
+    case "number":
+      return fromNumber(input);
+    case "string":
+      return fromStringUnsafe(input);
+  }
+  return invalid2(`unsupported input ${input}`);
+};
+var bytes = (value) => typeof value === "bigint" ? fromInputUnsafe2(value) : fromNumber(value);
+
+// node_modules/effect/dist/encoding/Base64.js
+var encode = (input) => encodeBytes(typeof input === "string" ? encoder.encode(input) : input);
+var decode = (str) => {
+  const stripped = stripCrlf(str);
+  const length = stripped.length;
+  if (length % 4 !== 0) {
+    return fail2(new EncodingError({
+      kind: "Decode",
+      module: "Base64",
+      input: stripped,
+      message: `Length must be a multiple of 4, but is ${length}`
+    }));
+  }
+  const index = stripped.indexOf("=");
+  if (index !== -1 && (index < length - 2 || index === length - 2 && stripped[length - 1] !== "=")) {
+    return fail2(new EncodingError({
+      kind: "Decode",
+      module: "Base64",
+      input: stripped,
+      message: "Found a '=' character, but it is not at the end"
+    }));
+  }
+  try {
+    const missingOctets = stripped.endsWith("==") ? 2 : stripped.endsWith("=") ? 1 : 0;
+    const result = new Uint8Array(3 * (length / 4) - missingOctets);
+    for (let i = 0, j = 0;i < length; i += 4, j += 3) {
+      const buffer = getCode(stripped.charCodeAt(i)) << 18 | getCode(stripped.charCodeAt(i + 1)) << 12 | getCode(stripped.charCodeAt(i + 2)) << 6 | getCode(stripped.charCodeAt(i + 3));
+      result[j] = buffer >> 16;
+      result[j + 1] = buffer >> 8 & 255;
+      result[j + 2] = buffer & 255;
+    }
+    return succeed2(result);
+  } catch (cause) {
+    return fail2(new EncodingError({
+      kind: "Decode",
+      module: "Base64",
+      input: stripped,
+      message: cause instanceof Error ? cause.message : "Invalid input"
+    }));
+  }
+};
+var encodeBytes = (bytes) => {
+  const length = bytes.length;
+  let result = "";
+  let i;
+  for (i = 2;i < length; i += 3) {
+    result += alphabet[bytes[i - 2] >> 2];
+    result += alphabet[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
+    result += alphabet[(bytes[i - 1] & 15) << 2 | bytes[i] >> 6];
+    result += alphabet[bytes[i] & 63];
+  }
+  if (i === length + 1) {
+    result += alphabet[bytes[i - 2] >> 2];
+    result += alphabet[(bytes[i - 2] & 3) << 4];
+    result += "==";
+  }
+  if (i === length) {
+    result += alphabet[bytes[i - 2] >> 2];
+    result += alphabet[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
+    result += alphabet[(bytes[i - 1] & 15) << 2];
+    result += "=";
+  }
+  return result;
+};
+var encoder = /* @__PURE__ */ new TextEncoder;
+var stripCrlf = (str) => str.replace(/[\n\r]/g, "");
+var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+var codes = /* @__PURE__ */ new Uint8Array(123).fill(255);
+for (let i = 0;i < alphabet.length; i++)
+  codes[/* @__PURE__ */ alphabet.charCodeAt(i)] = i;
+codes[61] = 0;
+var getCode = (charCode) => {
+  if (charCode >= codes.length || codes[charCode] === 255) {
+    throw new TypeError(`Invalid character ${String.fromCharCode(charCode)}`);
+  }
+  return codes[charCode];
+};
 
 // node_modules/effect/dist/internal/schema/annotations.js
 function resolve(ast) {
@@ -4899,139 +5073,14 @@ function stringifyJson(options) {
     }, input, parseOptions)
   }));
 }
-function encodeBase642() {
-  return transform(encodeBase64);
+function encodeBase64() {
+  return transform(encode);
 }
-function decodeBase642() {
-  return transformEffect((input, options) => mapErrorEager2(fromResult2(decodeBase64(input)), () => new InvalidValue({
+function decodeBase64() {
+  return transformEffect((input, options) => mapErrorEager2(fromResult2(decode(input)), () => new InvalidValue({
     expected: "a valid Base64 string"
   }, input, options)));
 }
-
-// node_modules/effect/dist/ByteSize.js
-var bigint03 = /* @__PURE__ */ BigInt(0);
-var bigint12 = /* @__PURE__ */ BigInt(1);
-var decimalBase = /* @__PURE__ */ BigInt(1000);
-var binaryBase = /* @__PURE__ */ BigInt(1024);
-var decimalUnits = [{
-  symbol: "B",
-  factor: bigint12,
-  names: ["B", "byte", "bytes"]
-}, {
-  symbol: "kB",
-  factor: decimalBase,
-  names: ["kB", "kilobyte", "kilobytes"]
-}, {
-  symbol: "MB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(2),
-  names: ["MB", "megabyte", "megabytes"]
-}, {
-  symbol: "GB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(3),
-  names: ["GB", "gigabyte", "gigabytes"]
-}, {
-  symbol: "TB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(4),
-  names: ["TB", "terabyte", "terabytes"]
-}, {
-  symbol: "PB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(5),
-  names: ["PB", "petabyte", "petabytes"]
-}, {
-  symbol: "EB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(6),
-  names: ["EB", "exabyte", "exabytes"]
-}, {
-  symbol: "ZB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(7),
-  names: ["ZB", "zettabyte", "zettabytes"]
-}, {
-  symbol: "YB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(8),
-  names: ["YB", "yottabyte", "yottabytes"]
-}, {
-  symbol: "RB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(9),
-  names: ["RB", "ronnabyte", "ronnabytes"]
-}, {
-  symbol: "QB",
-  factor: decimalBase ** /* @__PURE__ */ BigInt(10),
-  names: ["QB", "quettabyte", "quettabytes"]
-}];
-var binaryUnits = [decimalUnits[0], {
-  symbol: "KiB",
-  factor: binaryBase,
-  names: ["KiB", "kibibyte", "kibibytes"]
-}, {
-  symbol: "MiB",
-  factor: binaryBase ** /* @__PURE__ */ BigInt(2),
-  names: ["MiB", "mebibyte", "mebibytes"]
-}, {
-  symbol: "GiB",
-  factor: binaryBase ** /* @__PURE__ */ BigInt(3),
-  names: ["GiB", "gibibyte", "gibibytes"]
-}, {
-  symbol: "TiB",
-  factor: binaryBase ** /* @__PURE__ */ BigInt(4),
-  names: ["TiB", "tebibyte", "tebibytes"]
-}, {
-  symbol: "PiB",
-  factor: binaryBase ** /* @__PURE__ */ BigInt(5),
-  names: ["PiB", "pebibyte", "pebibytes"]
-}, {
-  symbol: "EiB",
-  factor: binaryBase ** /* @__PURE__ */ BigInt(6),
-  names: ["EiB", "exbibyte", "exbibytes"]
-}, {
-  symbol: "ZiB",
-  factor: binaryBase ** /* @__PURE__ */ BigInt(7),
-  names: ["ZiB", "zebibyte", "zebibytes"]
-}, {
-  symbol: "YiB",
-  factor: binaryBase ** /* @__PURE__ */ BigInt(8),
-  names: ["YiB", "yobibyte", "yobibytes"]
-}];
-var allUnits = [...decimalUnits, .../* @__PURE__ */ binaryUnits.slice(1)];
-var unitsByName = /* @__PURE__ */ new Map(/* @__PURE__ */ allUnits.flatMap((unit) => unit.names.map((name) => [name, unit])));
-var make5 = (value) => value;
-var invalid2 = (message) => {
-  throw new Error(`Invalid ByteSize: ${message}`);
-};
-var fromNumber = (input) => {
-  if (!Number.isSafeInteger(input) || input < 0) {
-    return invalid2(`expected a non-negative safe integer, received ${input}`);
-  }
-  return make5(BigInt(input));
-};
-var fromStringUnsafe = (input) => {
-  const match = /^\s*(\d+)(?:\.(\d+))?\s*([A-Za-z]+)\s*$/.exec(input);
-  if (match === null)
-    return invalid2(`unsupported syntax ${JSON.stringify(input)}`);
-  const unit = unitsByName.get(match[3]);
-  if (unit === undefined)
-    return invalid2(`unsupported unit ${JSON.stringify(match[3])}`);
-  const fraction = match[2] ?? "";
-  const scale = BigInt(10) ** BigInt(fraction.length);
-  const numerator = BigInt(match[1] + fraction) * unit.factor;
-  if (numerator % scale !== bigint03) {
-    return invalid2(`${JSON.stringify(input)} does not represent an integral number of bytes`);
-  }
-  return make5(numerator / scale);
-};
-var fromInputUnsafe2 = (input) => {
-  switch (typeof input) {
-    case "bigint":
-      if (input < bigint03)
-        return invalid2(`expected a non-negative bigint, received ${input}`);
-      return make5(input);
-    case "number":
-      return fromNumber(input);
-    case "string":
-      return fromStringUnsafe(input);
-  }
-  return invalid2(`unsupported input ${input}`);
-};
-var bytes = (value) => typeof value === "bigint" ? fromInputUnsafe2(value) : fromNumber(value);
 
 // node_modules/effect/dist/SchemaTransformation.js
 var TypeId8 = "~effect/SchemaTransformation/Transformation";
@@ -5129,7 +5178,7 @@ var urlFromString = /* @__PURE__ */ transformEffect2({
   }, s, options)),
   encode: (url) => succeed6(url.href)
 });
-var uint8ArrayFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase642(), /* @__PURE__ */ encodeBase642());
+var uint8ArrayFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase64(), /* @__PURE__ */ encodeBase64());
 function fromJsonString(options) {
   return new Transformation(parseJson(options ?? {}), stringifyJson(options));
 }
@@ -5369,23 +5418,32 @@ var Arrays = class extends ASTNodeImpl {
       }
       return rest[0];
     }
-    return fnUntracedEager2(function* (input, options) {
-      if (input === missing) {
-        return missing;
+    const finish = (state) => {
+      const {
+        input,
+        len,
+        options
+      } = state;
+      if (ast.rest.length === 0 && len > elementLen) {
+        for (let i = elementLen;i < len; i++) {
+          const unexpected = new UnexpectedKey(ast, input[i], options);
+          const issue = new Pointer([i], unexpected);
+          if (options.errors === "all") {
+            if (state.issues)
+              state.issues.push(issue);
+            else
+              state.issues = [issue];
+          } else {
+            return fail6(new Composite(ast, [issue], input, options));
+          }
+        }
       }
-      if (!Array.isArray(input)) {
-        return yield* fail6(new InvalidType(ast, input, options));
+      if (state.issues) {
+        return fail6(new Composite(ast, state.issues, input, options));
       }
-      if (!elements) {
-        elements = ast.elements.map((ast) => ({
-          ast,
-          parser: compileField(ast)
-        }));
-        rest = ast.rest.map((ast) => ({
-          ast,
-          parser: compileField(ast)
-        }));
-      }
+      return succeed7(state.output);
+    };
+    const parse = (input, options) => {
       const len = input.length;
       const state = {
         ast,
@@ -5403,27 +5461,40 @@ var Arrays = class extends ASTNodeImpl {
         concurrency,
         end
       });
-      if (eff)
-        yield* eff;
-      if (ast.rest.length === 0 && len > elementLen) {
-        for (let i = elementLen;i <= len - 1; i++) {
-          const unexpected = new UnexpectedKey(ast, input[i], options);
-          const issue = new Pointer([i], unexpected);
-          if (options.errors === "all") {
-            if (state.issues)
-              state.issues.push(issue);
-            else
-              state.issues = [issue];
-          } else {
-            return yield* fail6(new Composite(ast, [issue], input, options));
-          }
+      if (!eff)
+        return finish(state);
+      if (effectIsExit(eff))
+        return flatMapEager2(eff, () => finish(state));
+      let first = true;
+      return suspend2(() => {
+        if (!first)
+          return parse(input, options);
+        first = false;
+        return flatMap3(eff, () => finish(state));
+      });
+    };
+    return (input, options) => {
+      if (input === missing)
+        return missingExit;
+      try {
+        if (!Array.isArray(input)) {
+          return fail6(new InvalidType(ast, input, options));
         }
+        if (!elements) {
+          elements = ast.elements.map((ast) => ({
+            ast,
+            parser: compileField(ast)
+          }));
+          rest = ast.rest.map((ast) => ({
+            ast,
+            parser: compileField(ast)
+          }));
+        }
+        return parse(input, options);
+      } catch (error) {
+        return die3(error);
       }
-      if (state.issues) {
-        return yield* fail6(new Composite(ast, state.issues, input, options));
-      }
-      return state.output;
-    });
+    };
   }
   _rebuild(recur, checks, encodingChecks) {
     const elements = mapOrSame(this.elements, recur);
@@ -5477,7 +5548,7 @@ var wrapPropertyKeyIssue = (s, ast, key, exit) => {
   }
   const issue = getSchemaIssue(exit.cause);
   if (issue === undefined) {
-    return failCause2(map4(exit.cause, (issue) => new Composite(ast, [new Pointer([key], issue)], s.input, s.options)));
+    return failCause2(map3(exit.cause, (issue) => new Composite(ast, [new Pointer([key], issue)], s.input, s.options)));
   }
   const pointer = new Pointer([key], issue);
   if (s.options.errors === "all") {
@@ -5501,7 +5572,7 @@ function getIndexSignatureKeys(input, parameter, options = defaultParseOptions) 
       case "Number":
         return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchKey(k, options) !== undefined);
       case "Symbol":
-        return (symbolKeys ??= Object.getOwnPropertySymbols(input)).filter((k) => parameter.matchKey(k, options) !== undefined);
+        return (symbolKeys ??= Object.getOwnPropertySymbols(input)).filter((k) => Object.prototype.propertyIsEnumerable.call(input, k) && parameter.matchKey(k, options) !== undefined);
       case "Union":
         return [...new Set(parameter.types.flatMap(go))];
       default:
@@ -5572,71 +5643,16 @@ var Objects = class extends ASTNodeImpl {
     this.propertySignatures = propertySignatures;
     this.indexSignatures = indexSignatures;
     this.encodingChecks = encodingChecks;
-    const seen = new Set;
-    const duplicates = [];
-    for (const propertySignature of propertySignatures) {
-      const name = propertySignature.name;
-      if (seen.has(name)) {
-        duplicates.push(name);
-      } else {
-        seen.add(name);
-      }
-    }
-    if (duplicates.length > 0) {
-      throw new Error(`Duplicate identifiers: ${JSON.stringify(duplicates)}. ts(2300)`);
-    }
   }
   getParser(compile, compileField = compile) {
     const ast = this;
-    const expectedKeys = [];
-    for (const ps of ast.propertySignatures) {
-      expectedKeys.push(typeof ps.name === "number" ? globalThis.String(ps.name) : ps.name);
-    }
-    const hasProperties = expectedKeys.length;
+    const hasProperties = ast.propertySignatures.length;
     const indexCount = ast.indexSignatures.length;
-    let expectedKeysSet = hasProperties && indexCount ? new Set(expectedKeys) : undefined;
     if (!hasProperties && !indexCount) {
       return fromRefinement(ast, isNotNullish);
     }
     let properties;
     let indexes;
-    const finishIndex = (s, key, k2, inputValue, exitValue) => {
-      if (exitValue._tag === "Failure") {
-        return wrapPropertyKeyIssue(s, ast, key, exitValue) ?? void_2;
-      }
-      const value = exitValue === sameExit ? inputValue : exitValue[args];
-      if (k2 !== missing && value !== missing) {
-        if (hasProperties && (expectedKeysSet.has(key) || expectedKeysSet.has(typeof k2 === "number" ? globalThis.String(k2) : k2)))
-          return void_2;
-        assignProperty(s.out, k2, value);
-      }
-      return void_2;
-    };
-    const parseIndex = (s, key, index, exitKey) => {
-      if (!exitKey) {
-        const eff = index.parserKey(key, s.options);
-        if (!effectIsExit(eff)) {
-          return flatMap3(exit2(eff), (exit) => parseIndex(s, key, index, exit));
-        }
-        exitKey = eff;
-      }
-      if (exitKey._tag === "Failure") {
-        return wrapPropertyKeyIssue(s, ast, key, exitKey) ?? void_2;
-      }
-      const k2 = exitKey === sameExit ? key : exitKey[args];
-      const inputValue = s.input[key];
-      const result = index.parserValue(inputValue, s.options);
-      return effectIsExit(result) ? finishIndex(s, key, k2, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, k2, inputValue, exit));
-    };
-    const parseStringIndex = (s, key, index) => {
-      const inputValue = s.input[key];
-      const result = index.parserValue(inputValue, s.options);
-      return effectIsExit(result) ? finishIndex(s, key, key, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, key, inputValue, exit));
-    };
-    const parseIndexes = indexCount ? iterateConcurrent()({
-      onItem: (s, [key, index]) => index.is.parameter === string2 ? parseStringIndex(s, key, index) : parseIndex(s, key, index),
-      step: (_s, _item, exit) => exit._tag === "Failure" ? exit : undefined
-    }) : undefined;
     const compileMembers = () => {
       if (!properties) {
         properties = ast.propertySignatures.map((ps) => ({
@@ -5652,97 +5668,137 @@ var Objects = class extends ASTNodeImpl {
       }
       return properties;
     };
-    const fallback = fnUntracedEager2(function* (input, options) {
-      if (input === missing) {
-        return missing;
-      }
-      if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
-        return yield* fail6(new InvalidType(ast, input, options));
-      }
-      compileMembers();
-      const record = input;
-      const out = {};
-      const state = {
-        ast,
-        input: record,
-        out,
-        issues: undefined,
-        options
-      };
-      const errorsAllOption = options.errors === "all";
-      const onExcessPropertyError = options.onExcessProperty === "error";
-      const concurrency = options.concurrency === undefined ? 1 : resolveConcurrency(options.concurrency);
-      const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record, index.parameter, options)) : undefined;
-      if (onExcessPropertyError) {
-        expectedKeysSet ??= new Set(expectedKeys);
-        const coveredKeys = indexKeys ? new Set(expectedKeysSet) : expectedKeysSet;
-        if (indexKeys) {
-          for (const keys of indexKeys) {
-            for (const key of keys)
-              coveredKeys.add(key);
-          }
+    const makeFallback = () => {
+      const expectedKeys = new Set(ast.propertySignatures.map((ps) => typeof ps.name === "number" ? globalThis.String(ps.name) : ps.name));
+      const finishIndex = (s, key, k2, inputValue, exitValue) => {
+        if (exitValue._tag === "Failure") {
+          return wrapPropertyKeyIssue(s, ast, key, exitValue) ?? void_2;
         }
-        const inputKeys = Reflect.ownKeys(record);
-        for (let i = 0;i < inputKeys.length; i++) {
-          const key = inputKeys[i];
-          if (!coveredKeys.has(key)) {
-            const unexpected = new UnexpectedKey(ast, record[key], options);
-            const issue = new Pointer([key], unexpected);
-            if (errorsAllOption) {
-              if (state.issues) {
-                state.issues.push(issue);
+        const value = exitValue === sameExit ? inputValue : exitValue[args];
+        if (k2 !== missing && value !== missing) {
+          if (hasProperties && (expectedKeys.has(key) || expectedKeys.has(typeof k2 === "number" ? globalThis.String(k2) : k2)))
+            return void_2;
+          assignProperty(s.out, k2, value);
+        }
+        return void_2;
+      };
+      const parseIndex = (s, key, index, exitKey) => {
+        if (!exitKey) {
+          const eff = index.parserKey(key, s.options);
+          if (!effectIsExit(eff)) {
+            return flatMap3(exit2(eff), (exit) => parseIndex(s, key, index, exit));
+          }
+          exitKey = eff;
+        }
+        if (exitKey._tag === "Failure") {
+          return wrapPropertyKeyIssue(s, ast, key, exitKey) ?? void_2;
+        }
+        const k2 = exitKey === sameExit ? key : exitKey[args];
+        const inputValue = s.input[key];
+        const result = index.parserValue(inputValue, s.options);
+        return effectIsExit(result) ? finishIndex(s, key, k2, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, k2, inputValue, exit));
+      };
+      const parseStringIndex = (s, key, index) => {
+        const inputValue = s.input[key];
+        const result = index.parserValue(inputValue, s.options);
+        return effectIsExit(result) ? finishIndex(s, key, key, inputValue, result) : flatMap3(exit2(result), (exit) => finishIndex(s, key, key, inputValue, exit));
+      };
+      const parseIndexes = indexCount ? iterateConcurrent()({
+        onItem: (s, [key, index]) => index.is.parameter === string2 ? parseStringIndex(s, key, index) : parseIndex(s, key, index),
+        step: (_s, _item, exit) => exit._tag === "Failure" ? exit : undefined
+      }) : undefined;
+      return fnUntracedEager2(function* (input, options) {
+        if (input === missing) {
+          return missing;
+        }
+        if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
+          return yield* fail6(new InvalidType(ast, input, options));
+        }
+        compileMembers();
+        const record = input;
+        const out = {};
+        const state = {
+          ast,
+          input: record,
+          out,
+          issues: undefined,
+          options
+        };
+        const errorsAllOption = options.errors === "all";
+        const onExcessPropertyError = options.onExcessProperty === "error";
+        const concurrency = options.concurrency === undefined ? 1 : resolveConcurrency(options.concurrency);
+        const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record, index.parameter, options)) : undefined;
+        if (onExcessPropertyError) {
+          const coveredKeys = indexKeys ? new Set(expectedKeys) : expectedKeys;
+          if (indexKeys) {
+            for (const keys of indexKeys) {
+              for (const key of keys)
+                coveredKeys.add(key);
+            }
+          }
+          const inputKeys = Reflect.ownKeys(record);
+          for (let i = 0;i < inputKeys.length; i++) {
+            const key = inputKeys[i];
+            if (!coveredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(record, key)) {
+              const unexpected = new UnexpectedKey(ast, record[key], options);
+              const issue = new Pointer([key], unexpected);
+              if (errorsAllOption) {
+                if (state.issues) {
+                  state.issues.push(issue);
+                } else {
+                  state.issues = [issue];
+                }
+                continue;
               } else {
-                state.issues = [issue];
+                return yield* fail6(new Composite(ast, [issue], input, options));
               }
-              continue;
-            } else {
-              return yield* fail6(new Composite(ast, [issue], input, options));
             }
           }
         }
-      }
-      if (hasProperties) {
-        const eff = concurrency === 1 ? parseProperties(state, properties) : parsePropertiesConcurrent(state, properties, {
-          concurrency
-        });
-        if (eff)
-          yield* eff;
-      }
-      if (indexCount && concurrency === 1) {
-        for (let i = 0;i < indexCount; i++) {
-          const index = indexes[i];
-          const parse = index.is.parameter === string2 ? parseStringIndex : parseIndex;
-          const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
-          for (let j = 0;j < keys.length; j++) {
-            const eff = parse(state, keys[j], index);
-            if (!effectIsExit(eff))
-              yield* eff;
-            else if (eff._tag === "Failure")
-              return yield* eff;
-          }
+        if (hasProperties) {
+          const eff = concurrency === 1 ? parseProperties(state, properties) : parsePropertiesConcurrent(state, properties, {
+            concurrency
+          });
+          if (eff)
+            yield* eff;
         }
-      } else if (parseIndexes) {
-        const keyPairs = empty();
-        for (let i = 0;i < indexCount; i++) {
-          const index = indexes[i];
-          const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
-          for (let j = 0;j < keys.length; j++) {
-            keyPairs.push([keys[j], index]);
+        if (indexCount && concurrency === 1) {
+          for (let i = 0;i < indexCount; i++) {
+            const index = indexes[i];
+            const parse = index.is.parameter === string2 ? parseStringIndex : parseIndex;
+            const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
+            for (let j = 0;j < keys.length; j++) {
+              const eff = parse(state, keys[j], index);
+              if (!effectIsExit(eff))
+                yield* eff;
+              else if (eff._tag === "Failure")
+                return yield* eff;
+            }
           }
+        } else if (parseIndexes) {
+          const keyPairs = empty2();
+          for (let i = 0;i < indexCount; i++) {
+            const index = indexes[i];
+            const keys = indexKeys?.[i] ?? (index.is.parameter === string2 ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
+            for (let j = 0;j < keys.length; j++) {
+              keyPairs.push([keys[j], index]);
+            }
+          }
+          const eff = parseIndexes(state, keyPairs, {
+            concurrency
+          });
+          if (eff)
+            yield* eff;
         }
-        const eff = parseIndexes(state, keyPairs, {
-          concurrency
-        });
-        if (eff)
-          yield* eff;
-      }
-      if (state.issues) {
-        return yield* fail6(new Composite(ast, state.issues, input, options));
-      }
-      return out;
-    });
+        if (state.issues) {
+          return yield* fail6(new Composite(ast, state.issues, input, options));
+        }
+        return out;
+      });
+    };
     if (indexCount)
-      return fallback;
+      return makeFallback();
+    let fallback;
     const resume = (state, index, pending) => {
       const property = properties[index];
       return flatMap3(exit2(pending), (exit) => {
@@ -5758,7 +5814,7 @@ var Objects = class extends ASTNodeImpl {
       if (input === missing)
         return missingExit;
       if (options.errors === "all" || options.onExcessProperty !== undefined || options.concurrency !== undefined && resolveConcurrency(options.concurrency) !== 1) {
-        return fallback(input, options);
+        return (fallback ??= makeFallback())(input, options);
       }
       if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
         return fail6(new InvalidType(ast, input, options));
@@ -5985,6 +6041,7 @@ function collectSentinels(ast) {
 }
 var candidateIndexCache = /* @__PURE__ */ new WeakMap;
 var emptyCandidates = /* @__PURE__ */ Object.freeze([]);
+var getRuntimeType = (input) => input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
 var hasPropertySignature = (input, key) => key === "__proto__" ? Object.hasOwn(input, key) : (key in input);
 function getIndex(types) {
   let index = candidateIndexCache.get(types);
@@ -6000,17 +6057,15 @@ function getIndex(types) {
     const encoded = toCandidate(a);
     if (isNever2(encoded))
       continue;
-    if (onlyLiterals) {
-      if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
-        literalCandidates ??= new Map;
-        const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
-        let arr = literalCandidates.get(literal);
-        if (!arr)
-          literalCandidates.set(literal, arr = []);
-        arr.push(a);
-      } else {
-        onlyLiterals = false;
-      }
+    if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
+      literalCandidates ??= new Map;
+      const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
+      let arr = literalCandidates.get(literal);
+      if (!arr)
+        literalCandidates.set(literal, arr = []);
+      arr.push(a);
+    } else {
+      onlyLiterals = false;
     }
     const sentinels = collectSentinels(encoded);
     if (sentinels.length) {
@@ -6036,6 +6091,8 @@ function getIndex(types) {
         (otherwise[t] ??= []).push(i);
     }
   }
+  const fallbacks = {};
+  const getFallback = (type) => fallbacks[type] ??= Object.freeze((otherwise?.[type] ?? emptyCandidates).map((i) => types[i]));
   if (onlyLiterals && literalCandidates) {
     literalCandidates.forEach(Object.freeze);
     index = (input) => literalCandidates.get(input) ?? emptyCandidates;
@@ -6063,11 +6120,10 @@ function getIndex(types) {
       }
     }
     index = (input, isConstructor) => {
-      const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
-      const base = otherwise?.[runtimeType] ?? emptyCandidates;
+      const runtimeType = getRuntimeType(input);
       if (!isObjectKeyword(input))
-        return base.map((i) => types[i]);
-      const selected = new Set(base);
+        return getFallback(runtimeType);
+      const selected = new Set(otherwise?.[runtimeType]);
       let directKey;
       if (commonSentinel) {
         const [key, [byValue]] = commonSentinel;
@@ -6076,7 +6132,7 @@ function getIndex(types) {
         if (hasKey && (!isConstructor || value !== undefined)) {
           const match = byValue.get(value);
           if (!match)
-            return base.map((i) => types[i]);
+            return getFallback(runtimeType);
           for (const i of match)
             selected.add(i);
           directKey = key;
@@ -6115,8 +6171,8 @@ function getIndex(types) {
     };
   } else {
     index = (input) => {
-      const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
-      return (otherwise?.[runtimeType] ?? emptyCandidates).map((i) => types[i]).filter(filterLiterals(input));
+      const fallback = getFallback(getRuntimeType(input));
+      return literalCandidates ? fallback.filter(filterLiterals(input)) : fallback;
     };
   }
   candidateIndexCache.set(types, index);
@@ -6339,36 +6395,29 @@ function isFinite2(annotations) {
 var finite = /* @__PURE__ */ appendChecks(number2, [/* @__PURE__ */ isFinite2()]);
 var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finite, nonFiniteLiterals]), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
 function isPattern(regExp, annotations) {
-  const source = regExp.source;
-  const pattern = new globalThis.RegExp(source, regExp.flags);
+  const copy = new globalThis.RegExp(regExp);
+  const payload = {
+    source: copy.source,
+    flags: copy.flags
+  };
   return makeFilter((s) => {
-    pattern.lastIndex = 0;
-    return pattern.test(s);
+    copy.lastIndex = 0;
+    return copy.test(s);
   }, {
-    expected: `a string matching the RegExp ${source}`,
+    expected: `a string matching the RegExp ${payload.source}`,
     representation: {
       id: "effect/schema/isPattern",
-      payload: {
-        source,
-        flags: regExp.flags
-      }
+      payload
     },
-    toJsonSchema: () => ({
-      pattern: source
-    }),
+    toJsonSchema: () => [{}, true],
     arbitraryConstraint: {
-      patterns: [{
-        source: regExp.source,
-        flags: regExp.flags
-      }]
+      patterns: [payload]
     },
     ...annotations
   });
 }
-function modifyOwnPropertyDescriptors(ast, f) {
-  const d = Object.getOwnPropertyDescriptors(ast);
-  f(d);
-  return Object.create(Object.getPrototypeOf(ast), d);
+function copy(ast) {
+  return Object.assign(Object.create(Object.getPrototypeOf(ast)), ast);
 }
 var contextOwners = /* @__PURE__ */ new WeakMap;
 function getContextOwner(ast) {
@@ -6378,9 +6427,9 @@ function replaceEncoding(ast, encoding) {
   if (ast.encoding === encoding) {
     return ast;
   }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.encoding.value = encoding;
-  });
+  const out = copy(ast);
+  out.encoding = encoding;
+  return out;
 }
 function replaceContext(ast, context) {
   if (ast.context === context) {
@@ -6390,9 +6439,8 @@ function replaceContext(ast, context) {
   if (owner.context === context) {
     return owner;
   }
-  const out = modifyOwnPropertyDescriptors(ast, (d) => {
-    d.context.value = context;
-  });
+  const out = copy(ast);
+  out.context = context;
   contextOwners.set(out, owner);
   return out;
 }
@@ -6404,12 +6452,12 @@ function annotate(ast, annotations) {
     const last = ast.checks[ast.checks.length - 1];
     return replaceChecks(ast, append(ast.checks.slice(0, -1), last.annotate(annotations)));
   }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.annotations.value = {
-      ...d.annotations.value,
-      ...annotations
-    };
-  });
+  const out = copy(ast);
+  out.annotations = {
+    ...ast.annotations,
+    ...annotations
+  };
+  return out;
 }
 function replaceChecks(ast, checks) {
   if (ast._tag === "Suspend" && checks) {
@@ -6418,9 +6466,9 @@ function replaceChecks(ast, checks) {
   if (ast.checks === checks) {
     return ast;
   }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.checks.value = checks;
-  });
+  const out = copy(ast);
+  out.checks = checks;
+  return out;
 }
 function appendChecks(ast, checks) {
   return replaceChecks(ast, combineChecks(ast.checks, checks));
@@ -6453,17 +6501,21 @@ function appendTransformation(from, transformation, to) {
   return replaceEncoding(to, to.encoding ? [...to.encoding, link] : [link]);
 }
 function mapOrSame(as, f) {
-  let changed = false;
-  const out = new Array(as.length);
+  let out;
   for (let i = 0;i < as.length; i++) {
     const a = as[i];
     const fa = f(a);
-    if (fa !== a) {
-      changed = true;
+    if (out) {
+      out[i] = fa;
+    } else if (fa !== a) {
+      out = new Array(as.length);
+      for (let j = 0;j < i; j++) {
+        out[j] = as[j];
+      }
+      out[i] = fa;
     }
-    out[i] = fa;
   }
-  return changed ? out : as;
+  return out ?? as;
 }
 function annotateKey(ast, annotations) {
   const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, ast.context.constructorDefault, {
@@ -6500,20 +6552,18 @@ function extractStructuralChecks(checks) {
   return isArrayNonEmpty2(out) ? out : undefined;
 }
 var toType = /* @__PURE__ */ memoizeIdempotent((ast) => {
-  if (ast.encoding) {
-    return toType(replaceEncoding(ast, undefined));
-  }
   const out = ast;
   const type = out.recur?.(toType) ?? out;
   const encodingChecks = type.encodingChecks;
   if (encodingChecks) {
     const checks = type === ast ? encodingChecks : isArrays(type) || isObjects(type) || isDeclaration(type) && type.typeParameters.length > 0 ? extractStructuralChecks(encodingChecks) : undefined;
-    return modifyOwnPropertyDescriptors(type, (d) => {
-      d.encodingChecks.value = undefined;
-      d.checks.value = combineChecks(type.checks, checks);
-    });
+    const copyOfType = copy(type);
+    copyOfType.encoding = undefined;
+    copyOfType.encodingChecks = undefined;
+    copyOfType.checks = combineChecks(type.checks, checks);
+    return copyOfType;
   }
-  return type;
+  return type.encoding ? replaceEncoding(type, undefined) : type;
 });
 var toEncoded = /* @__PURE__ */ memoizeIdempotent((ast) => {
   return toType(flip2(ast));
@@ -6711,842 +6761,6 @@ var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast, options)
 });
 var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough2());
 
-// node_modules/effect/dist/Brand.js
-function nominal() {
-  return Object.assign((input) => input, {
-    option: (input) => some2(input),
-    result: (input) => succeed2(input),
-    is: (_) => true
-  });
-}
-// node_modules/effect/dist/Fiber.js
-var join = fiberJoin;
-var interrupt3 = fiberInterrupt;
-var runIn = fiberRunIn;
-
-// node_modules/effect/dist/Latch.js
-var makeUnsafe4 = makeLatchUnsafe;
-var make6 = makeLatch;
-
-// node_modules/effect/dist/MutableRef.js
-var TypeId10 = "~effect/MutableRef";
-var MutableRefProto = {
-  [TypeId10]: TypeId10,
-  ...PipeInspectableProto,
-  toJSON() {
-    return {
-      _id: "MutableRef",
-      current: toJson(this.current)
-    };
-  }
-};
-var make7 = (value) => {
-  const ref = Object.create(MutableRefProto);
-  ref.current = value;
-  return ref;
-};
-
-// node_modules/effect/dist/MutableList.js
-var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
-var make8 = () => ({
-  head: undefined,
-  tail: undefined,
-  length: 0
-});
-var emptyBucket = () => ({
-  array: [],
-  mutable: true,
-  offset: 0,
-  next: undefined
-});
-var append2 = (self, message) => {
-  if (!self.tail) {
-    self.head = self.tail = emptyBucket();
-  } else if (!self.tail.mutable) {
-    self.tail.next = emptyBucket();
-    self.tail = self.tail.next;
-  }
-  self.tail.array.push(message);
-  self.length++;
-};
-var clear = (self) => {
-  self.head = self.tail = undefined;
-  self.length = 0;
-};
-var takeN = (self, n) => {
-  n = normalize(n);
-  if (n <= 0 || !self.head)
-    return [];
-  n = Math.min(n, self.length);
-  if (n === self.length && self.head?.offset === 0 && !self.head.next) {
-    const array = self.head.array;
-    clear(self);
-    return array;
-  }
-  const array = new Array(n);
-  let index = 0;
-  let chunk = self.head;
-  while (chunk) {
-    while (chunk.offset < chunk.array.length) {
-      array[index++] = chunk.array[chunk.offset];
-      if (chunk.mutable)
-        chunk.array[chunk.offset] = undefined;
-      chunk.offset++;
-      if (index === n) {
-        self.head = chunk;
-        self.length -= n;
-        if (self.length === 0)
-          clear(self);
-        return array;
-      }
-    }
-    chunk = chunk.next;
-  }
-  clear(self);
-  return array;
-};
-var take = (self) => {
-  if (!self.head)
-    return Empty;
-  const message = self.head.array[self.head.offset];
-  if (self.head.mutable)
-    self.head.array[self.head.offset] = undefined;
-  self.head.offset++;
-  self.length--;
-  if (self.head.offset === self.head.array.length) {
-    if (self.head.next) {
-      self.head = self.head.next;
-    } else {
-      clear(self);
-    }
-  }
-  return message;
-};
-
-// node_modules/effect/dist/Queue.js
-var TypeId11 = "~effect/Queue";
-var EnqueueTypeId = "~effect/Queue/Enqueue";
-var DequeueTypeId = "~effect/Queue/Dequeue";
-var variance = {
-  _A: identity,
-  _E: identity
-};
-var QueueProto = {
-  [TypeId11]: variance,
-  [EnqueueTypeId]: variance,
-  [DequeueTypeId]: variance,
-  ...PipeInspectableProto,
-  toJSON() {
-    return {
-      _id: "effect/Queue",
-      state: this.state._tag,
-      size: sizeUnsafe(this)
-    };
-  }
-};
-var make9 = (options) => withFiber((fiber) => {
-  const self = Object.create(QueueProto);
-  self.dispatcher = fiber.currentDispatcher;
-  self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
-  self.strategy = options?.strategy ?? "suspend";
-  self.messages = make8();
-  self.scheduleRunning = false;
-  self.state = {
-    _tag: "Open",
-    takers: new Set,
-    offers: new Set,
-    awaiters: new Set
-  };
-  return succeed3(self);
-});
-var bounded = (capacity) => make9({
-  capacity
-});
-var offer = (self, message) => suspend(() => {
-  if (self.state._tag !== "Open") {
-    return exitFalse;
-  } else if (self.messages.length >= self.capacity) {
-    switch (self.strategy) {
-      case "dropping":
-        return exitFalse;
-      case "suspend":
-        if (self.capacity <= 0 && self.state.takers.size > 0) {
-          append2(self.messages, message);
-          releaseTakers(self);
-          return exitTrue;
-        }
-        return offerRemainingSingle(self, message);
-      case "sliding":
-        take(self.messages);
-        append2(self.messages, message);
-        return exitTrue;
-    }
-  }
-  append2(self.messages, message);
-  scheduleReleaseTaker(self);
-  return exitTrue;
-});
-var offerUnsafe = (self, message) => {
-  if (self.state._tag !== "Open") {
-    return false;
-  } else if (self.messages.length >= self.capacity) {
-    if (self.strategy === "sliding") {
-      take(self.messages);
-      append2(self.messages, message);
-      return true;
-    } else if (self.capacity <= 0 && self.state.takers.size > 0) {
-      append2(self.messages, message);
-      releaseTakers(self);
-      return true;
-    }
-    return false;
-  }
-  append2(self.messages, message);
-  scheduleReleaseTaker(self);
-  return true;
-};
-var failCause4 = /* @__PURE__ */ dual(2, (self, cause) => sync(() => failCauseUnsafe(self, cause)));
-var failCauseUnsafe = (self, cause) => {
-  if (self.state._tag !== "Open") {
-    return false;
-  }
-  const exit = exitFailCause(cause);
-  const fail = exitZipRight(exit, exitFailDone);
-  if (self.state.offers.size === 0 && self.messages.length === 0) {
-    finalize(self, fail);
-    return true;
-  }
-  self.state = {
-    ...self.state,
-    _tag: "Closing",
-    exit: fail
-  };
-  return true;
-};
-var endUnsafe = (self) => failCauseUnsafe(self, causeFail(Done()));
-var shutdown = (self) => sync(() => shutdownUnsafe(self));
-var shutdownUnsafe = (self) => {
-  if (self.state._tag === "Done") {
-    return false;
-  }
-  clear(self.messages);
-  const offers = self.state.offers;
-  finalize(self, self.state._tag === "Open" ? exitInterrupt2 : self.state.exit);
-  for (const entry of offers) {
-    if (entry._tag === "Single") {
-      entry.resume(exitFalse);
-    } else {
-      entry.resume(exitSucceed(entry.remaining.slice(entry.offset)));
-    }
-  }
-  return true;
-};
-var takeAll2 = (self) => takeBetween(self, 1, Number.POSITIVE_INFINITY);
-var takeBetween = (self, min, max) => {
-  min = normalize(min);
-  max = normalize(max);
-  return suspend(() => takeBetweenUnsafe(self, min, max) ?? andThen(awaitTake(self), takeBetween(self, 1, max)));
-};
-var take2 = (self) => suspend(() => takeUnsafe(self) ?? andThen(awaitTake(self), take2(self)));
-var poll = (self) => suspend(() => {
-  const result = takeUnsafe(self);
-  if (result === undefined) {
-    return succeed3(none2());
-  }
-  if (result._tag === "Success") {
-    return succeed3(some2(result.value));
-  }
-  return succeed3(none2());
-});
-var takeUnsafe = (self) => {
-  if (self.state._tag === "Done") {
-    return self.state.exit;
-  }
-  if (self.messages.length > 0) {
-    const message = take(self.messages);
-    releaseCapacity(self);
-    return exitSucceed(message);
-  } else if (self.capacity <= 0 && self.state.offers.size > 0) {
-    const message = takeOfferUnsafe(self.state.offers);
-    releaseCapacity(self);
-    return exitSucceed(message);
-  }
-  return;
-};
-var sizeUnsafe = (self) => self.state._tag === "Done" ? 0 : self.messages.length;
-var exitFalse = /* @__PURE__ */ exitSucceed(false);
-var exitTrue = /* @__PURE__ */ exitSucceed(true);
-var exitFailDone = /* @__PURE__ */ exitFail(/* @__PURE__ */ Done());
-var exitInterrupt2 = /* @__PURE__ */ exitInterrupt();
-var releaseTakers = (self) => {
-  if (self.state._tag === "Done" || self.state.takers.size === 0) {
-    return;
-  }
-  for (const taker of self.state.takers) {
-    self.state.takers.delete(taker);
-    taker(exitVoid);
-    if (self.messages.length === 0) {
-      break;
-    }
-  }
-};
-var scheduleReleaseTaker = (self) => {
-  if (self.scheduleRunning || self.state._tag === "Done" || self.state.takers.size === 0) {
-    return;
-  }
-  self.scheduleRunning = true;
-  self.dispatcher.scheduleTask(() => {
-    self.scheduleRunning = false;
-    releaseTakers(self);
-  }, 0);
-};
-var takeBetweenUnsafe = (self, min, max) => {
-  if (self.state._tag === "Done") {
-    return self.state.exit;
-  } else if (max <= 0 || min <= 0) {
-    return exitSucceed([]);
-  } else if (self.capacity <= 0 && self.messages.length === 0 && self.state.offers.size > 0) {
-    const messages = [takeOfferUnsafe(self.state.offers)];
-    releaseCapacity(self);
-    return exitSucceed(messages);
-  }
-  min = Math.min(min, self.capacity || 1);
-  if (min <= self.messages.length) {
-    const messages = takeN(self.messages, max);
-    releaseCapacity(self);
-    return exitSucceed(messages);
-  }
-};
-var offerRemainingSingle = (self, message) => {
-  return callback((resume) => {
-    if (self.state._tag !== "Open") {
-      return resume(exitFalse);
-    }
-    const entry = {
-      _tag: "Single",
-      message,
-      resume
-    };
-    self.state.offers.add(entry);
-    return sync(() => {
-      if (self.state._tag === "Open") {
-        self.state.offers.delete(entry);
-      }
-    });
-  });
-};
-var takeOfferUnsafe = (offers) => {
-  const entry = offers.values().next().value;
-  if (entry._tag === "Single") {
-    offers.delete(entry);
-    entry.resume(exitTrue);
-    return entry.message;
-  }
-  const message = entry.remaining[entry.offset++];
-  if (entry.offset === entry.remaining.length) {
-    offers.delete(entry);
-    entry.resume(exitSucceed([]));
-  }
-  return message;
-};
-var releaseCapacity = (self) => {
-  if (self.state._tag === "Done") {
-    return isDoneCause(self.state.exit.cause);
-  } else if (self.state.offers.size === 0) {
-    if (self.state._tag === "Closing" && self.messages.length === 0) {
-      finalize(self, self.state.exit);
-      return isDoneCause(self.state.exit.cause);
-    }
-    return false;
-  }
-  for (const entry of self.state.offers) {
-    let n = self.capacity - self.messages.length;
-    if (n <= 0)
-      break;
-    else if (entry._tag === "Single") {
-      append2(self.messages, entry.message);
-      self.state.offers.delete(entry);
-      entry.resume(exitTrue);
-    } else {
-      for (;entry.offset < entry.remaining.length; entry.offset++) {
-        if (n === 0)
-          return false;
-        append2(self.messages, entry.remaining[entry.offset]);
-        n--;
-      }
-      self.state.offers.delete(entry);
-      entry.resume(exitSucceed([]));
-    }
-  }
-  return false;
-};
-var awaitTake = (self) => callback((resume) => {
-  if (self.state._tag === "Done") {
-    return resume(self.state.exit);
-  }
-  self.state.takers.add(resume);
-  return sync(() => {
-    if (self.state._tag !== "Done") {
-      self.state.takers.delete(resume);
-    }
-  });
-});
-var finalize = (self, exit) => {
-  if (self.state._tag === "Done") {
-    return;
-  }
-  const openState = self.state;
-  self.state = {
-    _tag: "Done",
-    exit
-  };
-  for (const taker of openState.takers) {
-    taker(exit);
-  }
-  openState.takers.clear();
-  for (const awaiter of openState.awaiters) {
-    awaiter(exit);
-  }
-  openState.awaiters.clear();
-};
-
-// node_modules/effect/dist/Semaphore.js
-var makeUnsafe5 = (permits) => new SemaphoreImpl(permits);
-var waitForPermits = (self, n, effect) => callback((resume) => {
-  if (self.free >= n)
-    return resume(effect);
-  const observer = () => {
-    if (self.free < n)
-      return;
-    self.waiters.delete(observer);
-    resume(effect);
-  };
-  self.waiters.add(observer);
-  return sync(() => {
-    self.waiters.delete(observer);
-  });
-});
-
-class SemaphoreImpl {
-  waiters = /* @__PURE__ */ new Set;
-  taken = 0;
-  permits;
-  constructor(permits) {
-    this.permits = permits;
-  }
-  get free() {
-    return this.permits - this.taken;
-  }
-  take(n) {
-    const take = suspend(() => {
-      if (this.free < n) {
-        return waitForPermits(this, n, take);
-      }
-      this.taken += n;
-      return succeed3(n);
-    });
-    return take;
-  }
-  takeIfAvailable(n) {
-    return suspend(() => {
-      if (this.free < n)
-        return succeed3(false);
-      this.taken += n;
-      return succeed3(true);
-    });
-  }
-  releaseUnsafe(fiber, n) {
-    this.taken -= n;
-    if (this.waiters.size > 0) {
-      fiber.currentDispatcher.scheduleTask(() => {
-        for (const observer of this.waiters) {
-          if (this.free <= 0)
-            break;
-          observer();
-        }
-      }, 0);
-    }
-    return this.free;
-  }
-  resize(permits) {
-    return withFiber((fiber) => {
-      this.permits = permits;
-      if (this.free < 0)
-        return void_;
-      this.releaseUnsafe(fiber, 0);
-      return void_;
-    });
-  }
-  release(n) {
-    return withFiber((fiber) => succeed3(this.releaseUnsafe(fiber, n)));
-  }
-  get releaseAll() {
-    return withFiber((fiber) => succeed3(this.releaseUnsafe(fiber, this.taken)));
-  }
-  withPermits(n) {
-    return (self) => uninterruptibleMask((restore) => {
-      const acquire = suspend(() => {
-        if (this.free < n) {
-          const wait = waitForPermits(this, n, void_);
-          return flatMap2(restore(wait), () => acquire);
-        }
-        this.taken += n;
-        return onExitPrimitive(restore(self), () => {
-          this.releaseUnsafe(getCurrentFiber(), n);
-          return;
-        }, true);
-      });
-      return acquire;
-    });
-  }
-  withPermit = /* @__PURE__ */ this.withPermits(1);
-  withPermitsIfAvailable(n) {
-    return (self) => uninterruptibleMask((restore) => {
-      if (this.free < n)
-        return succeedNone;
-      this.taken += n;
-      return onExitPrimitive(restore(asSome(self)), () => {
-        this.releaseUnsafe(getCurrentFiber(), n);
-        return;
-      }, true);
-    });
-  }
-}
-
-// node_modules/effect/dist/Channel.js
-var TypeId12 = "~effect/Channel";
-var isChannel = (u) => hasProperty(u, TypeId12);
-var ChannelProto = {
-  [TypeId12]: {
-    _Env: identity,
-    _InErr: identity,
-    _InElem: identity,
-    _OutErr: identity,
-    _OutElem: identity
-  },
-  pipe() {
-    return pipeArguments(this, arguments);
-  }
-};
-var fromTransform = (transform) => {
-  const self = Object.create(ChannelProto);
-  self.transform = (upstream, scope) => catchCause2(transform(upstream, scope), (cause) => succeed6(failCause3(cause)));
-  return self;
-};
-var transformPull = (self, f) => fromTransform((upstream, scope) => flatMap3(toTransform(self)(upstream, scope), (pull) => f(pull, scope)));
-var fromPull = (effect) => fromTransform((_, __) => effect);
-var fromTransformBracket = (f) => fromTransform(fnUntraced2(function* (upstream, scope) {
-  const closableScope = forkUnsafe2(scope);
-  const onCause = (cause) => close(closableScope, doneExitFromCause(cause));
-  const pull = yield* onError2(f(upstream, scope, closableScope), onCause);
-  return onError2(pull, onCause);
-}));
-var toTransform = (channel) => channel.transform;
-var asyncQueue = (scope, f, options) => make9({
-  capacity: options?.bufferSize,
-  strategy: options?.strategy
-}).pipe(tap2((queue) => addFinalizer2(scope, shutdown(queue))), tap2((queue) => forkIn2(provide(f(queue), scope), scope)));
-var callbackArray = (f, options) => fromTransform((_, scope) => map5(asyncQueue(scope, f, options), takeAll2));
-var suspend3 = (evaluate) => fromTransform((upstream, scope) => suspend2(() => toTransform(evaluate())(upstream, scope)));
-var succeed8 = (value) => fromEffect(succeed6(value));
-var empty3 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done2()));
-var fail7 = (error) => fromPull(succeed6(fail6(error)));
-var failCause5 = (cause) => fromPull(failCause3(cause));
-var fromEffect = (effect) => fromPull(sync3(() => {
-  let done = false;
-  return suspend2(() => {
-    if (done)
-      return done2();
-    done = true;
-    return effect;
-  });
-}));
-var fromEffectDrain = (effect) => fromPull(flatMap3(effect, () => done2()));
-var map6 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => sync3(() => {
-  let i = 0;
-  return map5(pull, (o) => f(o, i++));
-})));
-var mapDone = /* @__PURE__ */ dual(2, (self, f) => mapDoneEffect(self, (o) => succeed6(f(o))));
-var mapDoneEffect = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => succeed6(catchDone(pull, (done) => flatMap3(f(done), done2)))));
-var concurrencyIsSequential = (concurrency) => concurrency === undefined || concurrency !== "unbounded" && concurrency <= 1;
-var flatMap4 = /* @__PURE__ */ dual((args) => isChannel(args[0]), (self, f, options) => concurrencyIsSequential(options?.concurrency) ? flatMapSequential(self, f) : flatMapConcurrent(self, f, options));
-var flatMapSequential = (self, f) => fromTransform((upstream, scope) => map5(toTransform(self)(upstream, scope), (pull) => {
-  let childPull;
-  let childScope;
-  const makePull = flatMap3(pull, (value) => {
-    childScope ??= forkUnsafe2(scope);
-    return flatMapEager2(toTransform(f(value))(upstream, childScope), (pull) => {
-      childPull = catchHalt(pull);
-      return childPull;
-    });
-  });
-  const catchHalt = catchDone((_) => {
-    childPull = undefined;
-    if (childScope.state._tag === "Open" && scopeFinalizerCountUnsafe(childScope) === 1) {
-      return makePull;
-    }
-    const close2 = close(childScope, void_2);
-    childScope = undefined;
-    return flatMap3(close2, () => makePull);
-  });
-  return suspend2(() => childPull ?? makePull);
-}));
-var flatMapConcurrent = (self, f, options) => self.pipe(map6(f), mergeAll3(options));
-var flattenArray = (self) => transformPull(self, (pull) => {
-  let array;
-  let index = 0;
-  const pump = suspend2(function loop() {
-    if (array === undefined) {
-      return flatMap3(pull, (array_) => {
-        switch (array_.length) {
-          case 0:
-            return loop();
-          case 1:
-            return succeed6(array_[0]);
-          default: {
-            array = array_;
-            return succeed6(array_[index++]);
-          }
-        }
-      });
-    }
-    const next = array[index++];
-    if (index >= array.length) {
-      array = undefined;
-      index = 0;
-    }
-    return succeed6(next);
-  });
-  return succeed6(pump);
-});
-var drain = (self) => transformPull(self, (pull) => succeed6(forever2(pull, {
-  disableYield: true
-})));
-var catchCause3 = /* @__PURE__ */ dual(2, (self, f) => fromTransform((upstream, scope) => {
-  let forkedScope = forkUnsafe2(scope);
-  return map5(toTransform(self)(upstream, forkedScope), (pull) => {
-    let currentPull = pull.pipe(catchCause2((cause) => {
-      if (isDoneCause(cause)) {
-        return failCause3(cause);
-      }
-      const toClose = forkedScope;
-      forkedScope = forkUnsafe2(scope);
-      return close(toClose, failCause2(cause)).pipe(andThen2(toTransform(f(cause))(upstream, forkedScope)), flatMap3((childPull) => {
-        currentPull = childPull;
-        return childPull;
-      }));
-    }));
-    return suspend2(() => currentPull);
-  });
-}));
-var catchCauseFilter2 = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause3(self, (cause) => {
-  const result = filter(cause);
-  return isFailure2(result) ? failCause5(result.failure) : f(result.success, cause);
-}));
-var catch_3 = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter2(self, findError2, (e) => f(e)));
-var mapError4 = /* @__PURE__ */ dual(2, (self, f) => catch_3(self, (err) => fail7(f(err))));
-var mergeAll3 = /* @__PURE__ */ dual(2, (channels, {
-  bufferSize = 16,
-  concurrency,
-  switch: switch_ = false
-}) => fromTransformBracket(fnUntraced2(function* (upstream, scope, forkedScope) {
-  const concurrencyN = concurrency === "unbounded" ? Number.MAX_SAFE_INTEGER : Math.max(1, concurrency);
-  const semaphore = switch_ ? undefined : makeUnsafe5(concurrencyN);
-  const doneLatch = yield* make6(true);
-  const fibers = new Set;
-  const queue = yield* bounded(bufferSize);
-  yield* addFinalizer2(forkedScope, shutdown(queue));
-  const pull = yield* toTransform(channels)(upstream, scope);
-  yield* gen2(function* () {
-    while (true) {
-      let pullFiber;
-      if (semaphore) {
-        if (fibers.size < concurrencyN) {
-          yield* semaphore.take(1);
-        } else {
-          pullFiber = yield* forkChild2(pull);
-          yield* raceFirst2(semaphore.take(1), andThen2(join(pullFiber), never2));
-        }
-      }
-      const channel = pullFiber === undefined ? yield* pull : yield* join(pullFiber);
-      const childScope = forkUnsafe2(forkedScope);
-      const childPull = yield* toTransform(channel)(upstream, childScope);
-      while (fibers.size >= concurrencyN) {
-        const fiber = headUnsafe(fibers);
-        fibers.delete(fiber);
-        if (fibers.size === 0)
-          yield* doneLatch.open;
-        yield* interrupt3(fiber);
-      }
-      const fiber = yield* childPull.pipe(tap2(() => yieldNow2), flatMap3((value) => offer(queue, value)), forever2({
-        disableYield: true
-      }), onError2(fnUntraced2(function* (cause) {
-        const halt = filterDone(cause);
-        yield* exit2(close(childScope, !isFailure2(halt) ? succeed4(halt.success.value) : failCause2(halt.failure)));
-        if (!fibers.has(fiber))
-          return;
-        fibers.delete(fiber);
-        if (semaphore)
-          yield* semaphore.release(1);
-        if (fibers.size === 0)
-          yield* doneLatch.open;
-        if (isSuccess2(halt))
-          return;
-        return yield* failCause4(queue, cause);
-      })), forkChild2);
-      doneLatch.closeUnsafe();
-      fibers.add(fiber);
-    }
-  }).pipe(catchCause2((cause) => {
-    const halt = filterDone(cause);
-    if (isSuccess2(halt)) {
-      return doneLatch.whenOpen(failCause4(queue, cause));
-    }
-    return failCause4(queue, cause);
-  }), forkIn2(forkedScope));
-  return take2(queue);
-})));
-var merge2 = /* @__PURE__ */ dual((args) => isChannel(args[0]) && isChannel(args[1]), (left, right, options) => fromTransformBracket(fnUntraced2(function* (upstream, _scope, forkedScope) {
-  const strategy = options?.haltStrategy ?? "both";
-  const queue = yield* bounded(0);
-  yield* addFinalizer2(forkedScope, shutdown(queue));
-  let done = 0;
-  function onExit(side, cause) {
-    done++;
-    if (!isDoneCause(cause)) {
-      return failCause4(queue, cause);
-    }
-    switch (strategy) {
-      case "both": {
-        return done === 2 ? failCause4(queue, cause) : void_3;
-      }
-      case "left":
-      case "right": {
-        return side === strategy ? failCause4(queue, cause) : void_3;
-      }
-      case "either": {
-        return failCause4(queue, cause);
-      }
-    }
-  }
-  const runSide = (side, channel, scope) => toTransform(channel)(upstream, scope).pipe(flatMap3((pull) => pull.pipe(flatMap3((value) => offer(queue, value)), forever2)), onError2((cause) => andThen2(close(scope, doneExitFromCause(cause)), onExit(side, cause))), forkIn2(forkedScope));
-  yield* runSide("left", left, forkUnsafe2(forkedScope));
-  yield* runSide("right", right, forkUnsafe2(forkedScope));
-  return take2(queue);
-})));
-var mergeEffect = /* @__PURE__ */ dual(2, (self, effect) => merge2(self, fromEffectDrain(effect), {
-  haltStrategy: "left"
-}));
-var splitLines = () => fromTransform((upstream, _scope) => sync3(() => {
-  let stringBuilder = "";
-  let midCRLF = false;
-  let done = none2();
-  function splitLinesArray(chunk) {
-    const chunkBuilder = [];
-    function pushLine(segment) {
-      if (stringBuilder.length === 0) {
-        chunkBuilder.push(segment);
-      } else {
-        chunkBuilder.push(stringBuilder + segment);
-        stringBuilder = "";
-      }
-    }
-    for (let i = 0;i < chunk.length; i++) {
-      const str = chunk[i];
-      if (str.length !== 0) {
-        let from = 0;
-        let indexOfCR = str.indexOf("\r");
-        let indexOfLF = str.indexOf(`
-`);
-        if (midCRLF) {
-          if (indexOfLF === 0) {
-            from = 1;
-            indexOfLF = str.indexOf(`
-`, from);
-          }
-          midCRLF = false;
-        }
-        while (indexOfCR !== -1 || indexOfLF !== -1) {
-          if (indexOfCR === -1 || indexOfLF !== -1 && indexOfLF < indexOfCR) {
-            pushLine(str.substring(from, indexOfLF));
-            from = indexOfLF + 1;
-            indexOfLF = str.indexOf(`
-`, from);
-          } else {
-            pushLine(str.substring(from, indexOfCR));
-            if (str.length === indexOfCR + 1) {
-              midCRLF = true;
-              from = str.length;
-              indexOfCR = -1;
-            } else {
-              from = indexOfCR + (indexOfLF === indexOfCR + 1 ? 2 : 1);
-              indexOfCR = str.indexOf("\r", from);
-              indexOfLF = str.indexOf(`
-`, from);
-            }
-          }
-        }
-        stringBuilder = stringBuilder + str.substring(from);
-      }
-    }
-    return isReadonlyArrayNonEmpty(chunkBuilder) ? chunkBuilder : null;
-  }
-  const pullOrFlush = suspend2(() => {
-    if (done._tag === "Some") {
-      return done2(done.value);
-    }
-    return matchEffect2(upstream, {
-      onSuccess: loop,
-      onFailure: failCause3,
-      onDone: (leftover) => {
-        done = some2(leftover);
-        if (stringBuilder.length > 0) {
-          const last = stringBuilder;
-          stringBuilder = "";
-          midCRLF = false;
-          return succeed6([last]);
-        }
-        return done2(leftover);
-      }
-    });
-  });
-  function loop(chunk) {
-    const lines = splitLinesArray(chunk);
-    return lines !== null ? succeed6(lines) : pullOrFlush;
-  }
-  return pullOrFlush;
-}));
-var pipeTo = /* @__PURE__ */ dual(2, (self, that) => fromTransform((upstream, scope) => flatMap3(toTransform(self)(upstream, scope), (upstream) => toTransform(that)(upstream, scope))));
-var unwrap = (channel) => fromTransform((upstream, scope) => {
-  let pull;
-  return succeed6(suspend2(() => {
-    if (pull)
-      return pull;
-    return channel.pipe(provide(scope), flatMap3((channel) => toTransform(channel)(upstream, scope)), flatMap3((pull_) => pull = pull_));
-  }));
-});
-var runWith = (self, f, onHalt) => suspend2(() => {
-  const scope = makeUnsafe3();
-  const makePull = toTransform(self)(done2(), scope);
-  return catchDone(flatMap3(makePull, f), onHalt ? onHalt : succeed6).pipe(onExit2((exit) => close(scope, exit)));
-});
-var runDrain = (self) => runWith(self, (pull) => forever2(pull, {
-  disableYield: true
-}));
-var runForEach = /* @__PURE__ */ dual(2, (self, f) => runWith(self, (pull) => forever2(flatMap3(pull, f), {
-  disableYield: true
-})));
-var runFold = /* @__PURE__ */ dual(3, (self, initial, f) => suspend2(() => {
-  let state = initial();
-  return runWith(self, (pull) => whileLoop2({
-    while: constTrue,
-    body: () => pull,
-    step: (value) => {
-      state = f(state, value);
-    }
-  }), () => succeed6(state));
-}));
-var toPullScoped = (self, scope) => toTransform(self)(done2(), scope);
 // node_modules/effect/dist/internal/schema/interpreter.js
 var flatMapTransformation = (result, current, f) => result === sameExit ? f(current) : flatMapEager2(result, f);
 function compileTransformation(transformation) {
@@ -7575,7 +6789,7 @@ function compileTransformation(transformation) {
   }
 }
 var fromOptionalEffect = (effect) => flatMapEager2(effect, fromOptionExit);
-var wrapEncoding = (ast, input, options, effect) => catchCause2(effect, (cause) => failCauseSync2(() => map4(cause, (issue) => new Encoding(ast, issue, input, options))));
+var wrapEncoding = (ast, input, options, effect) => catchCause2(effect, (cause) => failCauseSync2(() => map3(cause, (issue) => new Encoding(ast, issue, input, options))));
 function makeConstructorParser(descriptor, compile) {
   const transform = compileTransformation(descriptor.link.transformation);
   let sourceParser;
@@ -7832,7 +7046,7 @@ function makeOption(schema) {
     return none2();
   };
 }
-function make10(schema) {
+function make6(schema) {
   return makeConstructorSync(toType(schema.ast));
 }
 function is(schema) {
@@ -7963,9 +7177,34 @@ var normalCompiler = (ast) => resolve2(ast).parser;
 var constructorCompiler = (ast) => resolve2(ast).makeEffect;
 
 // node_modules/effect/dist/internal/schema/make.js
-var TypeId13 = "~effect/Schema/Schema";
+var TypeId10 = "~effect/Schema/Schema";
+var RebuildOptions = /* @__PURE__ */ Symbol();
 var SchemaProto = {
-  [TypeId13]: TypeId13,
+  [TypeId10]: TypeId10,
+  get make() {
+    const value = make6(this);
+    Object.defineProperty(this, "make", {
+      value,
+      enumerable: true
+    });
+    return value;
+  },
+  get makeEffect() {
+    const value = makeEffect(this);
+    Object.defineProperty(this, "makeEffect", {
+      value,
+      enumerable: true
+    });
+    return value;
+  },
+  get makeOption() {
+    const value = makeOption(this);
+    Object.defineProperty(this, "makeOption", {
+      value,
+      enumerable: true
+    });
+    return value;
+  },
   pipe() {
     return pipeArguments(this, arguments);
   },
@@ -7977,9 +7216,12 @@ var SchemaProto = {
   },
   check(...checks) {
     return this.rebuild(appendChecks(this.ast, checks));
+  },
+  rebuild(ast) {
+    return make7(ast, this[RebuildOptions]);
   }
 };
-function make11(ast, options) {
+function make7(ast, options) {
   function Schema() {}
   const self = Object.setPrototypeOf(Schema, SchemaProto);
   if (options && (Object.hasOwn(options, "name") || Object.hasOwn(options, "length") || Object.hasOwn(options, "__proto__"))) {
@@ -7989,11 +7231,8 @@ function make11(ast, options) {
   } else {
     Object.assign(self, options);
   }
+  self[RebuildOptions] = options;
   self.ast = ast;
-  self.rebuild = (ast) => make11(ast, options);
-  self.makeEffect = makeEffect(self);
-  self.make = make10(self);
-  self.makeOption = makeOption(self);
   return self;
 }
 
@@ -8007,10 +7246,10 @@ function isSchemaError(u) {
 }
 
 // node_modules/effect/dist/Schema.js
-var TypeId14 = TypeId13;
+var TypeId11 = TypeId10;
 function declareConstructor() {
   return (typeParameters, run, annotations) => {
-    return make12(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make12(ast))), annotations));
+    return make8(new Declaration(typeParameters.map(getAST), (typeParameters) => run(typeParameters.map((ast) => make8(ast))), annotations));
   };
 }
 function declare(is, annotations) {
@@ -8043,10 +7282,10 @@ function fromIssueEffect(self) {
   if (effectIsExit(self)) {
     return fromIssueExit(self);
   }
-  return catchCause2(self, (cause) => failCauseSync2(() => map4(cause, (issue) => new SchemaError(issue))));
+  return catchCause2(self, (cause) => failCauseSync2(() => map3(cause, (issue) => new SchemaError(issue))));
 }
 function fromIssueExit(exit) {
-  return isSuccess3(exit) ? exit : failCause2(map4(exit.cause, (issue) => new SchemaError(issue)));
+  return isSuccess3(exit) ? exit : failCause2(map3(exit.cause, (issue) => new SchemaError(issue)));
 }
 function decodeUnknownEffect2(schema, options) {
   const parser = decodeUnknownEffect(schema, options);
@@ -8055,18 +7294,18 @@ function decodeUnknownEffect2(schema, options) {
   };
 }
 var decodeEffect2 = decodeUnknownEffect2;
-var make12 = make11;
+var make8 = make7;
 function isSchema(u) {
-  return hasProperty(u, TypeId14) && u[TypeId14] === TypeId14;
+  return hasProperty(u, TypeId11) && u[TypeId11] === TypeId11;
 }
-var optionalKey2 = /* @__PURE__ */ lambda((schema) => make12(optionalKey(schema.ast), {
+var optionalKey2 = /* @__PURE__ */ lambda((schema) => make8(optionalKey(schema.ast), {
   schema
 }));
-var toType2 = /* @__PURE__ */ lambda((schema) => make12(toType(schema.ast), {
+var toType2 = /* @__PURE__ */ lambda((schema) => make8(toType(schema.ast), {
   schema
 }));
 function Literal2(literal) {
-  const out = make12(new Literal(literal), {
+  const out = make8(new Literal(literal), {
     literal,
     transform(to) {
       return out.pipe(decodeTo2(Literal2(to), {
@@ -8077,12 +7316,12 @@ function Literal2(literal) {
   });
   return out;
 }
-var Unknown2 = /* @__PURE__ */ make12(unknown);
-var String4 = /* @__PURE__ */ make12(string2);
-var Number5 = /* @__PURE__ */ make12(number2);
-var Boolean2 = /* @__PURE__ */ make12(boolean);
+var Unknown2 = /* @__PURE__ */ make8(unknown);
+var String4 = /* @__PURE__ */ make8(string2);
+var Number5 = /* @__PURE__ */ make8(number2);
+var Boolean2 = /* @__PURE__ */ make8(boolean);
 function makeStruct(ast, fields) {
-  return make12(ast, {
+  return make8(ast, {
     fields,
     mapFields(f, options) {
       const fields = f(this.fields);
@@ -8094,7 +7333,7 @@ function Struct(fields) {
   return makeStruct(struct(fields, undefined), fields);
 }
 function makeTuple(ast, elements) {
-  return make12(ast, {
+  return make8(ast, {
     elements,
     mapElements(f, options) {
       const elements = f(this.elements);
@@ -8105,11 +7344,11 @@ function makeTuple(ast, elements) {
 function Tuple(elements) {
   return makeTuple(tuple(elements), elements);
 }
-var ArraySchema = /* @__PURE__ */ lambda((schema) => make12(new Arrays(false, [], [schema.ast]), {
+var ArraySchema = /* @__PURE__ */ lambda((schema) => make8(new Arrays(false, [], [schema.ast]), {
   value: schema
 }));
 function makeUnion(ast, members) {
-  return make12(ast, {
+  return make8(ast, {
     members,
     mapMembers(f, options) {
       const members = f(this.members);
@@ -8122,7 +7361,7 @@ function Union2(members, options) {
 }
 function Literals(literals) {
   const members = literals.map(Literal2);
-  return make12(union(members, undefined, undefined), {
+  return make8(union(members, undefined, undefined), {
     literals,
     members,
     mapMembers(f) {
@@ -8138,14 +7377,14 @@ function Literals(literals) {
 }
 function decodeTo2(to, transformation) {
   return (from) => {
-    return make12(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough2()), {
+    return make8(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough2()), {
       from,
       to
     });
   };
 }
 function withConstructorDefault2(defaultValue) {
-  return (schema) => make12(withConstructorDefault(schema.ast, defaultValue), {
+  return (schema) => make8(withConstructorDefault(schema.ast, defaultValue), {
     schema
   });
 }
@@ -8245,7 +7484,7 @@ function TaggedUnion(casesByTag) {
     match,
     matchOrElse
   } = toTaggedUnion("_tag")(union);
-  return make12(union.ast, {
+  return make8(union.ast, {
     cases,
     isAnyOf,
     guards,
@@ -8265,8 +7504,12 @@ var makeFilter2 = makeFilter;
 function isPattern2(regExp, annotations) {
   const source = regExp.source;
   const flags = regExp.flags;
+  const canExport = /^[dg]*uy?$/.test(flags);
   const runtimeRegExp = flags === "" ? `new RegExp(${format(source)})` : `new RegExp(${format(source)}, ${format(flags)})`;
   return isPattern(regExp, {
+    toJsonSchema: () => canExport ? {
+      pattern: flags.endsWith("y") ? `^(?:${source})` : source
+    } : [{}, true],
     toCode: () => ({
       runtime: `Schema.isPattern(${runtimeRegExp})`
     }),
@@ -8290,7 +7533,7 @@ function isBase64(annotations) {
     ...annotations
   });
 }
-var Finite = /* @__PURE__ */ make12(finite);
+var Finite = /* @__PURE__ */ make8(finite);
 function isInt(annotations) {
   return makeFilter2((n) => globalThis.Number.isSafeInteger(n), {
     expected: "an integer",
@@ -8298,9 +7541,9 @@ function isInt(annotations) {
       id: "effect/schema/isInt",
       payload: null
     },
-    toJsonSchema: () => ({
+    toJsonSchema: () => [{
       type: "integer"
-    }),
+    }, true],
     toCode: () => ({
       runtime: "Schema.isInt()"
     }),
@@ -8406,7 +7649,7 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
     name: String4,
     lastModified: Int
   }), transformEffect2({
-    decode: (e, options) => match2(decodeBase64(e.data), {
+    decode: (e, options) => match2(decode(e.data), {
       onFailure: () => fail6(new InvalidValue({
         expected: "a valid Base64 string"
       }, e.data, options)),
@@ -8422,7 +7665,7 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
       try: async () => {
         const bytes = new globalThis.Uint8Array(await file.arrayBuffer());
         return {
-          data: encodeBase64(bytes),
+          data: encode(bytes),
           type: file.type,
           name: file.name,
           lastModified: file.lastModified
@@ -8534,7 +7777,7 @@ function makeClass(Inherited, identifier, struct2, annotations, proto) {
         }
       });
     }
-    static [TypeId14] = TypeId14;
+    static [TypeId11] = TypeId11;
     get [ClassTypeId]() {
       return ClassTypeId;
     }
@@ -8551,7 +7794,7 @@ function makeClass(Inherited, identifier, struct2, annotations, proto) {
       return getClassSchema(this).rebuild(ast);
     }
     static make(input, options) {
-      return make10(getClassSchema(this))(input ?? {}, options);
+      return make6(getClassSchema(this))(input ?? {}, options);
     }
     static makeOption(input, options) {
       return makeOption(getClassSchema(this))(input ?? {}, options);
@@ -8610,7 +7853,7 @@ function getClassSchemaFactory(from, identifier, annotations) {
     const ClassTypeId = getClassTypeId(identifier);
     const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
     const transformation = getClassTransformation(self);
-    const to = make12(new Declaration([from.ast], () => (input, ast, options) => {
+    const to = make8(new Declaration([from.ast], () => (input, ast, options) => {
       return isClassValue(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options));
     }, {
       identifier,
@@ -8648,12 +7891,816 @@ var TaggedError3 = (identifier) => {
     return Error4(identifier ?? tagValue)(struct, annotations);
   };
 };
-var Json2 = /* @__PURE__ */ make12(/* @__PURE__ */ annotate(Json, {
+var Json2 = /* @__PURE__ */ make8(/* @__PURE__ */ annotate(Json, {
   toCode: () => ({
     runtime: "Schema.Json",
     Type: "Schema.Json"
   })
 }));
+// node_modules/effect/dist/Brand.js
+function nominal() {
+  return Object.assign((input) => input, {
+    option: (input) => some2(input),
+    result: (input) => succeed2(input),
+    is: (_) => true
+  });
+}
+// node_modules/effect/dist/Fiber.js
+var join = fiberJoin;
+var interrupt3 = fiberInterrupt;
+var runIn = fiberRunIn;
+
+// node_modules/effect/dist/Latch.js
+var makeUnsafe4 = makeLatchUnsafe;
+var make9 = makeLatch;
+
+// node_modules/effect/dist/MutableRef.js
+var TypeId12 = "~effect/MutableRef";
+var MutableRefProto = {
+  [TypeId12]: TypeId12,
+  ...PipeInspectableProto,
+  toJSON() {
+    return {
+      _id: "MutableRef",
+      current: toJson(this.current)
+    };
+  }
+};
+var make10 = (value) => {
+  const ref = Object.create(MutableRefProto);
+  ref.current = value;
+  return ref;
+};
+
+// node_modules/effect/dist/MutableList.js
+var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
+var make11 = () => ({
+  head: undefined,
+  tail: undefined,
+  length: 0
+});
+var compactHead = (self) => {
+  const head = self.head;
+  if (head.offset >= 1024 && head === self.tail && head.mutable && (head.array.length - head.offset) * 8 <= head.offset) {
+    self.head = self.tail = {
+      array: head.array.slice(head.offset),
+      mutable: true,
+      offset: 0,
+      next: undefined
+    };
+  }
+};
+var emptyBucket = () => ({
+  array: [],
+  mutable: true,
+  offset: 0,
+  next: undefined
+});
+var append2 = (self, message) => {
+  if (!self.tail) {
+    self.head = self.tail = emptyBucket();
+  } else if (!self.tail.mutable) {
+    self.tail.next = emptyBucket();
+    self.tail = self.tail.next;
+  }
+  self.tail.array.push(message);
+  self.length++;
+};
+var clear = (self) => {
+  self.head = self.tail = undefined;
+  self.length = 0;
+};
+var takeN = (self, n) => {
+  n = normalize(n);
+  if (n <= 0 || !self.head)
+    return [];
+  n = Math.min(n, self.length);
+  if (n === self.length && self.head?.offset === 0 && !self.head.next) {
+    const array = self.head.array;
+    clear(self);
+    return array;
+  }
+  const array = new Array(n);
+  let index = 0;
+  let chunk = self.head;
+  while (chunk) {
+    while (chunk.offset < chunk.array.length) {
+      array[index++] = chunk.array[chunk.offset];
+      if (chunk.mutable)
+        chunk.array[chunk.offset] = undefined;
+      chunk.offset++;
+      if (index === n) {
+        self.head = chunk.offset === chunk.array.length && chunk.next ? chunk.next : chunk;
+        self.length -= n;
+        if (self.length === 0)
+          clear(self);
+        else
+          compactHead(self);
+        return array;
+      }
+    }
+    chunk = chunk.next;
+  }
+  clear(self);
+  return array;
+};
+var take = (self) => {
+  if (!self.head)
+    return Empty;
+  const message = self.head.array[self.head.offset];
+  if (self.head.mutable)
+    self.head.array[self.head.offset] = undefined;
+  self.head.offset++;
+  self.length--;
+  if (self.head.offset === self.head.array.length) {
+    if (self.head.next) {
+      self.head = self.head.next;
+    } else {
+      clear(self);
+    }
+  } else {
+    compactHead(self);
+  }
+  return message;
+};
+
+// node_modules/effect/dist/Queue.js
+var TypeId13 = "~effect/Queue";
+var EnqueueTypeId = "~effect/Queue/Enqueue";
+var DequeueTypeId = "~effect/Queue/Dequeue";
+var variance = {
+  _A: identity,
+  _E: identity
+};
+var QueueProto = {
+  [TypeId13]: variance,
+  [EnqueueTypeId]: variance,
+  [DequeueTypeId]: variance,
+  ...PipeInspectableProto,
+  toJSON() {
+    return {
+      _id: "effect/Queue",
+      state: this.state._tag,
+      size: sizeUnsafe(this)
+    };
+  }
+};
+var make12 = (options) => withFiber((fiber) => {
+  const self = Object.create(QueueProto);
+  self.dispatcher = fiber.currentDispatcher;
+  self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
+  self.strategy = options?.strategy ?? "suspend";
+  self.messages = make11();
+  self.scheduleRunning = false;
+  self.state = {
+    _tag: "Open",
+    takers: new Set,
+    offers: new Set,
+    awaiters: new Set
+  };
+  return succeed3(self);
+});
+var bounded = (capacity) => make12({
+  capacity
+});
+var offer = /* @__PURE__ */ dual(2, (self, message) => suspend(() => offerUnsafe(self, message) ? exitTrue : self.state._tag === "Open" && self.strategy === "suspend" ? offerOrWait(self, message) : exitFalse));
+var offerUnsafe = (self, message) => {
+  if (self.state._tag !== "Open") {
+    return false;
+  } else if (self.messages.length >= self.capacity) {
+    if (self.strategy === "sliding") {
+      take(self.messages);
+      append2(self.messages, message);
+      return true;
+    } else if (self.capacity <= 0 && self.state.takers.size > 0) {
+      append2(self.messages, message);
+      releaseTakers(self);
+      return true;
+    }
+    return false;
+  }
+  append2(self.messages, message);
+  scheduleReleaseTaker(self);
+  return true;
+};
+var failCause4 = /* @__PURE__ */ dual(2, (self, cause) => sync(() => failCauseUnsafe(self, cause)));
+var failCauseUnsafe = (self, cause) => {
+  if (self.state._tag !== "Open") {
+    return false;
+  }
+  const exit = exitFailCause(cause);
+  const fail = exitZipRight(exit, exitFailDone);
+  if (self.state.offers.size === 0 && self.messages.length === 0) {
+    finalize(self, fail);
+    return true;
+  }
+  self.state = {
+    ...self.state,
+    _tag: "Closing",
+    exit: fail
+  };
+  scheduleReleaseTaker(self);
+  return true;
+};
+var endUnsafe = (self) => failCauseUnsafe(self, causeFail(Done()));
+var shutdown = (self) => sync(() => shutdownUnsafe(self));
+var shutdownUnsafe = (self) => {
+  if (self.state._tag === "Done") {
+    return false;
+  }
+  clear(self.messages);
+  const offers = self.state.offers;
+  finalize(self, self.state._tag === "Open" ? exitInterrupt2 : self.state.exit);
+  for (const entry of offers) {
+    resumeUnoffered(entry);
+  }
+  return true;
+};
+var takeAll2 = (self) => takeBetween(self, 1, Number.POSITIVE_INFINITY);
+var takeBetween = /* @__PURE__ */ dual(3, (self, min, max) => {
+  min = normalize(min);
+  max = normalize(max);
+  return suspend(() => takeBetweenUnsafe(self, min, max) ?? andThen(awaitTake(self, () => canTake(self, min)), takeBetween(self, min, max)));
+});
+var take2 = (self) => suspend(() => takeUnsafe(self) ?? andThen(awaitTake(self, () => canTake(self, 1)), take2(self)));
+var poll = (self) => suspend(() => {
+  const result = takeUnsafe(self);
+  if (result === undefined) {
+    return succeed3(none2());
+  }
+  if (result._tag === "Success") {
+    return succeed3(some2(result.value));
+  }
+  return succeed3(none2());
+});
+var takeUnsafe = (self) => {
+  if (self.state._tag === "Done") {
+    return self.state.exit;
+  }
+  if (self.messages.length > 0) {
+    const message = take(self.messages);
+    releaseCapacity(self);
+    return exitSucceed(message);
+  } else if (self.capacity <= 0 && self.state.offers.size > 0) {
+    const message = takeOfferUnsafe(self.state.offers);
+    releaseCapacity(self);
+    return exitSucceed(message);
+  }
+  return;
+};
+var sizeUnsafe = (self) => self.state._tag === "Done" ? 0 : self.messages.length;
+var exitFalse = /* @__PURE__ */ exitSucceed(false);
+var exitTrue = /* @__PURE__ */ exitSucceed(true);
+var exitFailDone = /* @__PURE__ */ exitFail(/* @__PURE__ */ Done());
+var exitInterrupt2 = /* @__PURE__ */ exitInterrupt();
+var releaseTakers = (self) => {
+  if (self.state._tag === "Done" || self.state.takers.size === 0) {
+    return;
+  }
+  for (const taker of self.state.takers) {
+    self.state.takers.delete(taker);
+    taker(exitVoid);
+    if (self.messages.length === 0) {
+      break;
+    }
+  }
+};
+var scheduleReleaseTaker = (self) => {
+  if (self.scheduleRunning || self.state._tag === "Done" || self.state.takers.size === 0) {
+    return;
+  }
+  self.scheduleRunning = true;
+  self.dispatcher.scheduleTask(() => {
+    self.scheduleRunning = false;
+    releaseTakers(self);
+  }, 0);
+};
+var takeBetweenUnsafe = (self, min, max) => {
+  if (self.state._tag === "Done") {
+    return self.state.exit;
+  } else if (max <= 0 || min <= 0) {
+    return exitSucceed([]);
+  } else if (!canTake(self, min)) {
+    return;
+  }
+  const messages = self.messages.length > 0 ? takeN(self.messages, max) : [takeOfferUnsafe(self.state.offers)];
+  releaseCapacity(self);
+  return exitSucceed(messages);
+};
+var canTake = (self, min) => self.messages.length >= (self.state._tag === "Closing" ? 1 : Math.min(min, self.capacity || 1)) || self.capacity <= 0 && self.state._tag !== "Done" && self.state.offers.size > 0;
+var awaitTake = (self, ready) => callback((resume) => {
+  if (self.state._tag === "Done")
+    return resume(self.state.exit);
+  if (ready())
+    return resume(exitVoid);
+  self.state.takers.add(resume);
+  return sync(() => {
+    if (self.state._tag !== "Done")
+      self.state.takers.delete(resume);
+  });
+});
+var offerOrWait = (self, message) => callback((resume) => offerUnsafe(self, message) ? resume(exitTrue) : waitToOffer(self, {
+  _tag: "Single",
+  message,
+  resume
+}));
+var waitToOffer = (self, entry) => {
+  if (self.state._tag !== "Open")
+    return resumeUnoffered(entry);
+  const offers = self.state.offers;
+  offers.add(entry);
+  return sync(() => {
+    if (self.state._tag === "Done")
+      return;
+    offers.delete(entry);
+    if (self.state._tag === "Closing" && offers.size === 0 && self.messages.length === 0) {
+      finalize(self, self.state.exit);
+    }
+  });
+};
+var resumeUnoffered = (entry) => entry._tag === "Single" ? entry.resume(exitFalse) : entry.resume(exitSucceed(entry.remaining.slice(entry.offset)));
+var takeOfferUnsafe = (offers) => {
+  const entry = offers.values().next().value;
+  if (entry._tag === "Single") {
+    offers.delete(entry);
+    entry.resume(exitTrue);
+    return entry.message;
+  }
+  const message = entry.remaining[entry.offset++];
+  if (entry.offset === entry.remaining.length) {
+    offers.delete(entry);
+    entry.resume(exitSucceed([]));
+  }
+  return message;
+};
+var releaseCapacity = (self) => {
+  if (self.state._tag === "Done") {
+    return isDoneCause(self.state.exit.cause);
+  } else if (self.state.offers.size === 0) {
+    if (self.state._tag === "Closing" && self.messages.length === 0) {
+      finalize(self, self.state.exit);
+      return isDoneCause(self.state.exit.cause);
+    }
+    return false;
+  }
+  for (const entry of self.state.offers) {
+    let n = self.capacity - self.messages.length;
+    if (n <= 0)
+      break;
+    else if (entry._tag === "Single") {
+      append2(self.messages, entry.message);
+      self.state.offers.delete(entry);
+      entry.resume(exitTrue);
+    } else {
+      for (;entry.offset < entry.remaining.length; entry.offset++) {
+        if (n === 0)
+          return false;
+        append2(self.messages, entry.remaining[entry.offset]);
+        n--;
+      }
+      self.state.offers.delete(entry);
+      entry.resume(exitSucceed([]));
+    }
+  }
+  return false;
+};
+var finalize = (self, exit) => {
+  if (self.state._tag === "Done") {
+    return;
+  }
+  const openState = self.state;
+  self.state = {
+    _tag: "Done",
+    exit
+  };
+  for (const taker of openState.takers) {
+    taker(exit);
+  }
+  openState.takers.clear();
+  for (const awaiter of openState.awaiters) {
+    awaiter(exit);
+  }
+  openState.awaiters.clear();
+};
+
+// node_modules/effect/dist/Semaphore.js
+var makeUnsafe5 = (permits) => new SemaphoreImpl(permits);
+var waitForPermits = (self, n, effect) => callback((resume) => {
+  if (self.free >= n)
+    return resume(effect);
+  const observer = () => {
+    if (self.free < n)
+      return;
+    self.waiters.delete(observer);
+    resume(effect);
+  };
+  self.waiters.add(observer);
+  return sync(() => {
+    self.waiters.delete(observer);
+  });
+});
+
+class SemaphoreImpl {
+  waiters = /* @__PURE__ */ new Set;
+  taken = 0;
+  permits;
+  constructor(permits) {
+    this.permits = permits;
+  }
+  get free() {
+    return this.permits - this.taken;
+  }
+  take(n) {
+    const take = suspend(() => {
+      if (this.free < n) {
+        return waitForPermits(this, n, take);
+      }
+      this.taken += n;
+      return succeed3(n);
+    });
+    return take;
+  }
+  takeIfAvailable(n) {
+    return suspend(() => {
+      if (this.free < n)
+        return succeed3(false);
+      this.taken += n;
+      return succeed3(true);
+    });
+  }
+  releaseUnsafe(fiber, n) {
+    this.taken -= n;
+    if (this.waiters.size > 0) {
+      fiber.currentDispatcher.scheduleTask(() => {
+        for (const observer of this.waiters) {
+          if (this.free <= 0)
+            break;
+          observer();
+        }
+      }, 0);
+    }
+    return this.free;
+  }
+  resize(permits) {
+    return withFiber((fiber) => {
+      this.permits = permits;
+      if (this.free < 0)
+        return void_;
+      this.releaseUnsafe(fiber, 0);
+      return void_;
+    });
+  }
+  release(n) {
+    return withFiber((fiber) => succeed3(this.releaseUnsafe(fiber, n)));
+  }
+  get releaseAll() {
+    return withFiber((fiber) => succeed3(this.releaseUnsafe(fiber, this.taken)));
+  }
+  withPermits(n) {
+    return (self) => uninterruptibleMask((restore) => {
+      const acquire = suspend(() => {
+        if (this.free < n) {
+          const wait = waitForPermits(this, n, void_);
+          return flatMap2(restore(wait), () => acquire);
+        }
+        this.taken += n;
+        return onExitPrimitive(restore(self), () => {
+          this.releaseUnsafe(getCurrentFiber(), n);
+          return;
+        }, true);
+      });
+      return acquire;
+    });
+  }
+  withPermit = /* @__PURE__ */ this.withPermits(1);
+  withPermitsIfAvailable(n) {
+    return (self) => uninterruptibleMask((restore) => {
+      if (this.free < n)
+        return succeedNone;
+      this.taken += n;
+      return onExitPrimitive(restore(asSome(self)), () => {
+        this.releaseUnsafe(getCurrentFiber(), n);
+        return;
+      }, true);
+    });
+  }
+}
+
+// node_modules/effect/dist/Channel.js
+var TypeId14 = "~effect/Channel";
+var isChannel = (u) => hasProperty(u, TypeId14);
+var ChannelProto = {
+  [TypeId14]: {
+    _Env: identity,
+    _InErr: identity,
+    _InElem: identity,
+    _OutErr: identity,
+    _OutElem: identity
+  },
+  pipe() {
+    return pipeArguments(this, arguments);
+  }
+};
+var fromTransform = (transform) => {
+  const self = Object.create(ChannelProto);
+  self.transform = (upstream, scope) => catchCause2(transform(upstream, scope), (cause) => succeed6(failCause3(cause)));
+  return self;
+};
+var transformPull = (self, f) => fromTransform((upstream, scope) => flatMap3(toTransform(self)(upstream, scope), (pull) => f(pull, scope)));
+var fromPull = (effect) => fromTransform((_, __) => effect);
+var fromTransformBracket = (f) => fromTransform(fnUntraced2(function* (upstream, scope) {
+  const closableScope = forkUnsafe2(scope);
+  const onCause = (cause) => close(closableScope, doneExitFromCause(cause));
+  const pull = yield* onError2(f(upstream, scope, closableScope), onCause);
+  return onError2(pull, onCause);
+}));
+var toTransform = (channel) => channel.transform;
+var asyncQueue = (scope, f, options) => make12({
+  capacity: options?.bufferSize,
+  strategy: options?.strategy
+}).pipe(tap2((queue) => addFinalizer2(scope, shutdown(queue))), tap2((queue) => forkIn2(provide(f(queue), scope), scope)));
+var callbackArray = (f, options) => fromTransform((_, scope) => map4(asyncQueue(scope, f, options), takeAll2));
+var suspend3 = (evaluate) => fromTransform((upstream, scope) => suspend2(() => toTransform(evaluate())(upstream, scope)));
+var fromIterator = (iterator) => fromPull(sync3(() => {
+  const iter = iterator();
+  return suspend2(() => {
+    const state = iter.next();
+    return state.done ? done2(state.value) : succeed6(state.value);
+  });
+}));
+var succeed8 = (value) => fromEffect(succeed6(value));
+var empty3 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done2()));
+var fail7 = (error) => fromPull(succeed6(fail6(error)));
+var failCause5 = (cause) => fromPull(failCause3(cause));
+var fromEffect = (effect) => fromPull(sync3(() => {
+  let done = false;
+  return suspend2(() => {
+    if (done)
+      return done2();
+    done = true;
+    return effect;
+  });
+}));
+var fromEffectDrain = (effect) => fromPull(flatMap3(effect, () => done2()));
+var map6 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => sync3(() => {
+  let i = 0;
+  return map4(pull, (o) => f(o, i++));
+})));
+var mapDone = /* @__PURE__ */ dual(2, (self, f) => mapDoneEffect(self, (o) => succeed6(f(o))));
+var mapDoneEffect = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => succeed6(catchDone(pull, (done) => flatMap3(f(done), done2)))));
+var concurrencyIsSequential = (concurrency) => concurrency === undefined || concurrency !== "unbounded" && concurrency <= 1;
+var flatMap4 = /* @__PURE__ */ dual((args) => isChannel(args[0]), (self, f, options) => concurrencyIsSequential(options?.concurrency) ? flatMapSequential(self, f) : flatMapConcurrent(self, f, options));
+var flatMapSequential = (self, f) => fromTransform((upstream, scope) => map4(toTransform(self)(upstream, scope), (pull) => {
+  let childPull;
+  let childScope;
+  const makePull = flatMap3(pull, (value) => {
+    childScope ??= forkUnsafe2(scope);
+    return flatMapEager2(toTransform(f(value))(upstream, childScope), (pull) => {
+      childPull = catchHalt(pull);
+      return childPull;
+    });
+  });
+  const catchHalt = catchDone((_) => {
+    childPull = undefined;
+    if (childScope.state._tag === "Empty") {
+      return makePull;
+    }
+    const close2 = close(childScope, void_2);
+    childScope = undefined;
+    return flatMap3(close2, () => makePull);
+  });
+  return suspend2(() => childPull ?? makePull);
+}));
+var flatMapConcurrent = (self, f, options) => self.pipe(map6(f), mergeAll3(options));
+var flatten4 = (channels) => flatMap4(channels, identity);
+var drain = (self) => transformPull(self, (pull) => succeed6(forever2(pull, {
+  disableYield: true
+})));
+var catchCause3 = /* @__PURE__ */ dual(2, (self, f) => fromTransform((upstream, scope) => {
+  let forkedScope = forkUnsafe2(scope);
+  return map4(toTransform(self)(upstream, forkedScope), (pull) => {
+    let currentPull = pull.pipe(catchCause2((cause) => {
+      if (isDoneCause(cause)) {
+        return failCause3(cause);
+      }
+      const toClose = forkedScope;
+      forkedScope = forkUnsafe2(scope);
+      return close(toClose, failCause2(cause)).pipe(andThen2(toTransform(f(cause))(upstream, forkedScope)), flatMap3((childPull) => {
+        currentPull = childPull;
+        return childPull;
+      }));
+    }));
+    return suspend2(() => currentPull);
+  });
+}));
+var catchCauseFilter2 = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause3(self, (cause) => {
+  const result = filter(cause);
+  return isFailure2(result) ? failCause5(result.failure) : f(result.success, cause);
+}));
+var catch_3 = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter2(self, findError2, (e) => f(e)));
+var mapError4 = /* @__PURE__ */ dual(2, (self, f) => catch_3(self, (err) => fail7(f(err))));
+var mergeAll3 = /* @__PURE__ */ dual(2, (channels, {
+  bufferSize = 16,
+  concurrency,
+  switch: switch_ = false
+}) => fromTransformBracket(fnUntraced2(function* (upstream, scope, forkedScope) {
+  const concurrencyN = concurrency === "unbounded" ? Number.MAX_SAFE_INTEGER : Math.max(1, concurrency);
+  const semaphore = switch_ ? undefined : makeUnsafe5(concurrencyN);
+  const doneLatch = yield* make9(true);
+  const fibers = new Set;
+  const queue = yield* bounded(bufferSize);
+  yield* addFinalizer2(forkedScope, shutdown(queue));
+  const pull = yield* toTransform(channels)(upstream, scope);
+  yield* gen2(function* () {
+    while (true) {
+      let pullFiber;
+      if (semaphore) {
+        if (fibers.size < concurrencyN) {
+          yield* semaphore.take(1);
+        } else {
+          pullFiber = yield* forkChild2(pull);
+          yield* raceFirst2(semaphore.take(1), andThen2(join(pullFiber), never2));
+        }
+      }
+      const channel = pullFiber === undefined ? yield* pull : yield* join(pullFiber);
+      const childScope = forkUnsafe2(forkedScope);
+      const childPull = yield* toTransform(channel)(upstream, childScope);
+      while (fibers.size >= concurrencyN) {
+        const fiber = headUnsafe(fibers);
+        fibers.delete(fiber);
+        if (fibers.size === 0)
+          yield* doneLatch.open;
+        yield* interrupt3(fiber);
+      }
+      const fiber = yield* childPull.pipe(tap2(() => yieldNow2), flatMap3((value) => offer(queue, value)), forever2({
+        disableYield: true
+      }), onError2(fnUntraced2(function* (cause) {
+        const halt = filterDone(cause);
+        yield* exit2(close(childScope, !isFailure2(halt) ? succeed4(halt.success.value) : failCause2(halt.failure)));
+        if (!fibers.has(fiber))
+          return;
+        fibers.delete(fiber);
+        if (semaphore)
+          yield* semaphore.release(1);
+        if (fibers.size === 0)
+          yield* doneLatch.open;
+        if (isSuccess2(halt))
+          return;
+        return yield* failCause4(queue, cause);
+      })), forkChild2);
+      doneLatch.closeUnsafe();
+      fibers.add(fiber);
+    }
+  }).pipe(catchCause2((cause) => {
+    const halt = filterDone(cause);
+    if (isSuccess2(halt)) {
+      return doneLatch.whenOpen(failCause4(queue, cause));
+    }
+    return failCause4(queue, cause);
+  }), forkIn2(forkedScope));
+  return take2(queue);
+})));
+var merge2 = /* @__PURE__ */ dual((args) => isChannel(args[0]) && isChannel(args[1]), (left, right, options) => fromTransformBracket(fnUntraced2(function* (upstream, _scope, forkedScope) {
+  const strategy = options?.haltStrategy ?? "both";
+  const queue = yield* bounded(0);
+  yield* addFinalizer2(forkedScope, shutdown(queue));
+  let done = 0;
+  function onExit(side, cause) {
+    done++;
+    if (!isDoneCause(cause)) {
+      return failCause4(queue, cause);
+    }
+    switch (strategy) {
+      case "both": {
+        return done === 2 ? failCause4(queue, cause) : void_3;
+      }
+      case "left":
+      case "right": {
+        return side === strategy ? failCause4(queue, cause) : void_3;
+      }
+      case "either": {
+        return failCause4(queue, cause);
+      }
+    }
+  }
+  const runSide = (side, channel, scope) => toTransform(channel)(upstream, scope).pipe(flatMap3((pull) => pull.pipe(flatMap3((value) => offer(queue, value)), forever2)), onError2((cause) => andThen2(close(scope, doneExitFromCause(cause)), onExit(side, cause))), forkIn2(forkedScope));
+  yield* runSide("left", left, forkUnsafe2(forkedScope));
+  yield* runSide("right", right, forkUnsafe2(forkedScope));
+  return take2(queue);
+})));
+var mergeEffect = /* @__PURE__ */ dual(2, (self, effect) => merge2(self, fromEffectDrain(effect), {
+  haltStrategy: "left"
+}));
+var splitLines = () => fromTransform((upstream, _scope) => sync3(() => {
+  let stringBuilder = "";
+  let midCRLF = false;
+  let done = none2();
+  function splitLinesArray(chunk) {
+    const chunkBuilder = [];
+    function pushLine(segment) {
+      if (stringBuilder.length === 0) {
+        chunkBuilder.push(segment);
+      } else {
+        chunkBuilder.push(stringBuilder + segment);
+        stringBuilder = "";
+      }
+    }
+    for (let i = 0;i < chunk.length; i++) {
+      const str = chunk[i];
+      if (str.length !== 0) {
+        let from = 0;
+        let indexOfCR = str.indexOf("\r");
+        let indexOfLF = str.indexOf(`
+`);
+        if (midCRLF) {
+          if (indexOfLF === 0) {
+            from = 1;
+            indexOfLF = str.indexOf(`
+`, from);
+          }
+          midCRLF = false;
+        }
+        while (indexOfCR !== -1 || indexOfLF !== -1) {
+          if (indexOfCR === -1 || indexOfLF !== -1 && indexOfLF < indexOfCR) {
+            pushLine(str.substring(from, indexOfLF));
+            from = indexOfLF + 1;
+            indexOfLF = str.indexOf(`
+`, from);
+          } else {
+            pushLine(str.substring(from, indexOfCR));
+            if (str.length === indexOfCR + 1) {
+              midCRLF = true;
+              from = str.length;
+              indexOfCR = -1;
+            } else {
+              from = indexOfCR + (indexOfLF === indexOfCR + 1 ? 2 : 1);
+              indexOfCR = str.indexOf("\r", from);
+              indexOfLF = str.indexOf(`
+`, from);
+            }
+          }
+        }
+        stringBuilder = stringBuilder + str.substring(from);
+      }
+    }
+    return isReadonlyArrayNonEmpty(chunkBuilder) ? chunkBuilder : null;
+  }
+  const pullOrFlush = suspend2(() => {
+    if (done._tag === "Some") {
+      return done2(done.value);
+    }
+    return matchEffect2(upstream, {
+      onSuccess: loop,
+      onFailure: failCause3,
+      onDone: (leftover) => {
+        done = some2(leftover);
+        if (stringBuilder.length > 0) {
+          const last = stringBuilder;
+          stringBuilder = "";
+          midCRLF = false;
+          return succeed6([last]);
+        }
+        return done2(leftover);
+      }
+    });
+  });
+  function loop(chunk) {
+    const lines = splitLinesArray(chunk);
+    return lines !== null ? succeed6(lines) : pullOrFlush;
+  }
+  return pullOrFlush;
+}));
+var pipeTo = /* @__PURE__ */ dual(2, (self, that) => fromTransform((upstream, scope) => flatMap3(toTransform(self)(upstream, scope), (upstream) => toTransform(that)(upstream, scope))));
+var unwrap = (channel) => fromTransform((upstream, scope) => {
+  let pull;
+  return succeed6(suspend2(() => {
+    if (pull)
+      return pull;
+    return channel.pipe(provide(scope), flatMap3((channel) => toTransform(channel)(upstream, scope)), flatMap3((pull_) => pull = pull_));
+  }));
+});
+var runWith = (self, f, onHalt) => suspend2(() => {
+  const scope = makeUnsafe3();
+  const makePull = toTransform(self)(done2(), scope);
+  return catchDone(flatMap3(makePull, f), onHalt ? onHalt : succeed6).pipe(onExit2((exit) => close(scope, exit)));
+});
+var runDrain = (self) => runWith(self, (pull) => forever2(pull, {
+  disableYield: true
+}));
+var runForEach = /* @__PURE__ */ dual(2, (self, f) => runWith(self, (pull) => forever2(flatMap3(pull, f), {
+  disableYield: true
+})));
+var runFold = /* @__PURE__ */ dual(3, (self, initial, f) => suspend2(() => {
+  let state = initial();
+  return runWith(self, (pull) => whileLoop2({
+    while: constTrue,
+    body: () => pull,
+    step: (value) => {
+      state = f(state, value);
+    }
+  }), () => succeed6(state));
+}));
+var toPullScoped = (self, scope) => toTransform(self)(done2(), scope);
 // node_modules/effect/dist/PlatformError.js
 var TypeId15 = "~effect/PlatformError";
 
@@ -8743,7 +8790,7 @@ var forEach3 = (f) => forEachArray(forEach2((_) => f(_), {
 var forEachArray = (f) => fromTransform2((upstream) => upstream.pipe(flatMap3(f), forever2({
   disableYield: true
 }), catchDone(() => endVoid)));
-var unwrap2 = (effect) => fromChannel2(unwrap(map5(effect, toChannel)));
+var unwrap2 = (effect) => fromChannel2(unwrap(map4(effect, toChannel)));
 
 // node_modules/effect/dist/internal/rcRef.js
 var TypeId18 = "~effect/RcRef";
@@ -8786,21 +8833,22 @@ var make13 = (options) => withFiber2((fiber) => {
     return close2;
   }), ref);
 });
-var getState = (self) => uninterruptibleMask2(function loop(restore) {
+var getState = (self, restore) => {
   switch (self.state._tag) {
     case "Closed": {
       return interrupt2;
     }
     case "Acquired": {
-      self.state.refCount++;
-      return self.state.fiber ? as2(interrupt3(self.state.fiber), self.state) : succeed6(self.state);
+      const state = self.state;
+      state.refCount++;
+      return state.fiber ? as2(interrupt3(state.fiber), state) : succeed6(state);
     }
     case "Empty": {
-      const scope = makeUnsafe3();
       return self.semaphore.withPermit(suspend2(() => {
         if (self.state._tag !== "Empty") {
-          return loop(restore);
+          return getState(self, restore);
         }
+        const scope = makeUnsafe3();
         return restore(provideContext2(self.acquire, add(self.context, Scope, scope))).pipe(flatMap3((value) => {
           if (self.state._tag === "Closed") {
             return interrupt2;
@@ -8819,38 +8867,36 @@ var getState = (self) => uninterruptibleMask2(function loop(restore) {
       }));
     }
   }
-});
-var get2 = /* @__PURE__ */ fnUntraced2(function* (self_) {
+};
+var get2 = (self_) => {
   const self = self_;
-  const state = yield* getState(self);
-  const scope = yield* scope2;
-  const isFinite2 = self.idleTimeToLive !== undefined && isFinite(self.idleTimeToLive);
-  yield* addFinalizerExit(scope, () => {
-    state.refCount--;
-    if (state.refCount > 0) {
-      return void_3;
-    }
-    if (self.idleTimeToLive === undefined || state.invalidated) {
-      if (self.state === state) {
-        self.state = stateEmpty;
-      }
-      return close(state.scope, void_2);
-    } else if (!isFinite2) {
-      return void_3;
-    }
-    state.fiber = sleep2(self.idleTimeToLive).pipe(flatMap3(() => {
-      if (self.state === state && state.refCount === 0) {
-        self.state = stateEmpty;
-        return close(state.scope, void_2);
-      }
-      return void_3;
-    }), ensuring2(sync3(() => {
-      state.fiber = undefined;
-    })), runForkWith2(self.context), runIn(self.scope));
+  return uninterruptibleMask2((restore) => flatMap3(scope2, (scope) => flatMap3(getState(self, restore), (state) => as2(addFinalizerExit(scope, () => release(self, state)), state.value))));
+};
+var release = (self, state) => {
+  state.refCount--;
+  if (state.refCount > 0) {
     return void_3;
-  });
-  return state.value;
-});
+  }
+  const idleTimeToLive = self.idleTimeToLive;
+  if (idleTimeToLive === undefined || state.invalidated) {
+    if (self.state === state) {
+      self.state = stateEmpty;
+    }
+    return close(state.scope, void_2);
+  } else if (!isFinite(idleTimeToLive)) {
+    return void_3;
+  }
+  state.fiber = uninterruptibleMask2((restore) => flatMap3(restore(sleep2(idleTimeToLive)), () => {
+    if (self.state === state && state.refCount === 0) {
+      self.state = stateEmpty;
+      return close(state.scope, void_2);
+    }
+    return void_3;
+  })).pipe(ensuring2(sync3(() => {
+    state.fiber = undefined;
+  })), runForkWith2(self.context), runIn(self.scope));
+  return void_3;
+};
 
 // node_modules/effect/dist/RcRef.js
 var make14 = make13;
@@ -8860,7 +8906,7 @@ var get3 = get2;
 var TypeId19 = "~effect/Stream";
 var isStream = (u) => hasProperty(u, TypeId19);
 var fromChannel3 = fromChannel;
-var fromEffect2 = (effect) => fromChannel3(fromEffect(map5(effect, of)));
+var fromEffect2 = (effect) => fromChannel3(fromEffect(map4(effect, of)));
 var fromPull2 = (pull) => fromChannel3(fromPull(pull));
 var transformPull2 = (self, f) => fromChannel3(fromTransform((_, scope) => flatMap3(toPullScoped(self.channel, scope), (pull) => f(pull, scope))));
 var toChannel2 = (stream) => stream.channel;
@@ -8868,16 +8914,29 @@ var callback3 = (f, options) => fromChannel3(callbackArray(f, options));
 var empty4 = /* @__PURE__ */ fromChannel3(empty3);
 var succeed9 = (value) => fromChannel3(succeed8(of(value)));
 var suspend4 = (stream) => fromChannel3(suspend3(() => stream().channel));
-var fromArray2 = (array) => isReadonlyArrayNonEmpty(array) ? fromChannel3(succeed8(array)) : empty4;
-var unwrap3 = (effect) => fromChannel3(unwrap(map5(effect, toChannel2)));
+var unwrap3 = (effect) => fromChannel3(unwrap(map4(effect, toChannel2)));
 var map7 = /* @__PURE__ */ dual(2, (self, f) => suspend4(() => {
   let i = 0;
   return fromChannel3(map6(self.channel, map((o) => f(o, i++))));
 }));
-var flatMap5 = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, f, options) => self.channel.pipe(flattenArray, flatMap4((a) => f(a).channel, options), fromChannel3));
-var flatten4 = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, options) => flatMap5(self, identity, options));
 var drain3 = (self) => fromChannel3(drain(self.channel));
-var concat = /* @__PURE__ */ dual(2, (self, that) => flatten4(fromArray2([self, that])));
+var concat = /* @__PURE__ */ dual(2, (self, that) => {
+  const stream = fromChannel3(flatten4(fromIterator(() => concatChannels(self, that))));
+  concatParts.set(stream, [self, that]);
+  return stream;
+});
+var concatParts = /* @__PURE__ */ new WeakMap;
+function* concatChannels(self, that) {
+  const stack = [that, self];
+  while (stack.length > 0) {
+    const stream = stack.pop();
+    const parts = concatParts.get(stream);
+    if (parts === undefined)
+      yield stream.channel;
+    else
+      stack.push(parts[1], parts[0]);
+  }
+}
 var merge3 = /* @__PURE__ */ dual((args) => isStream(args[0]) && isStream(args[1]), (self, that, options) => fromChannel3(merge2(toChannel2(self), toChannel2(that), options)));
 var mergeEffect2 = /* @__PURE__ */ dual(2, (self, effect) => self.channel.pipe(mergeEffect(effect), fromChannel3));
 var mapError5 = /* @__PURE__ */ dual(2, (self, f) => fromChannel3(mapError4(self.channel, f)));
@@ -8895,7 +8954,7 @@ var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (up
     done = fail5(error);
     return done2();
   }));
-  const pull = map5(suspend2(() => sink.transform(upstreamWithLeftover, scope)), ([value, leftover_]) => {
+  const pull = map4(suspend2(() => sink.transform(upstreamWithLeftover, scope)), ([value, leftover_]) => {
     leftover = leftover_;
     return of(value);
   });
@@ -8908,7 +8967,7 @@ var decodeText = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, option
   }));
 }));
 var splitLines2 = (self) => self.channel.pipe(pipeTo(splitLines()), fromChannel3);
-var run2 = /* @__PURE__ */ dual(2, (self, sink) => scopedWith2((scope) => toPullScoped(self.channel, scope).pipe(flatMap3((upstream) => sink.transform(upstream, scope)), map5(([a]) => a))));
+var run2 = /* @__PURE__ */ dual(2, (self, sink) => scopedWith2((scope) => toPullScoped(self.channel, scope).pipe(flatMap3((upstream) => sink.transform(upstream, scope)), map4(([a]) => a))));
 var runCollect = (self) => runFold(self.channel, () => [], (acc, chunk) => {
   for (let i = 0;i < chunk.length; i++) {
     acc.push(chunk[i]);
@@ -8976,7 +9035,7 @@ var make15 = (impl) => FileSystem.of({
   sink: (path, options) => pipe(impl.open(path, {
     ...options,
     flag: options?.flag ?? "w"
-  }), map5((file) => forEach3((_) => file.writeAll(_))), unwrap2),
+  }), map4((file) => forEach3((_) => file.writeAll(_))), unwrap2),
   writeFileString: (path, data, options) => flatMap3(try_2({
     try: () => new TextEncoder().encode(data),
     catch: (cause) => badArgument({
@@ -9533,7 +9592,7 @@ var TypeId22 = "~effect/Crypto";
 var Crypto = /* @__PURE__ */ Service("effect/Crypto");
 var make16 = (impl) => {
   const randomBytesUnsafe = impl.randomBytes;
-  const randomBytes = (size) => map5(validateSize("randomBytes", size), randomBytesUnsafe);
+  const randomBytes = (size) => map4(validateSize("randomBytes", size), randomBytesUnsafe);
   const readUint53 = (bytes) => (bytes[0] & 31) * 2 ** 48 + bytes[1] * 2 ** 40 + bytes[2] * 2 ** 32 + bytes[3] * 2 ** 24 + bytes[4] * 2 ** 16 + bytes[5] * 2 ** 8 + bytes[6];
   const nextDoubleUnsafe = () => readUint53(randomBytesUnsafe(7)) / 2 ** 53;
   const nextIntUnsafe = () => {
@@ -9722,7 +9781,7 @@ var RefProto = {
 };
 var makeUnsafe6 = (value) => {
   const self = Object.create(RefProto);
-  self.ref = make7(value);
+  self.ref = make10(value);
   return self;
 };
 var make17 = (value) => sync3(() => makeUnsafe6(value));
@@ -9800,7 +9859,7 @@ var make19 = (impl) => Terminal.of({
   ...impl,
   [TypeId26]: TypeId26
 });
-// node_modules/effect/dist/unstable/process/ChildProcessSpawner.js
+// node_modules/effect/dist/process/ChildProcessSpawner.js
 var ExitCode = /* @__PURE__ */ nominal();
 var ProcessId = /* @__PURE__ */ nominal();
 var HandleTypeId = "~effect/process/ChildProcessSpawner/ChildProcessHandle";
@@ -9818,7 +9877,7 @@ var makeHandle = (params) => Object.setPrototypeOf({
   ...params
 }, HandleProto);
 var make20 = (spawn) => {
-  const streamString = (command, options) => spawn(command).pipe(map5((handle) => decodeText(options?.includeStderr === true ? handle.all : handle.stdout)), unwrap3);
+  const streamString = (command, options) => spawn(command).pipe(map4((handle) => decodeText(options?.includeStderr === true ? handle.all : handle.stdout)), unwrap3);
   const streamLines = (command, options) => splitLines2(streamString(command, options));
   return ChildProcessSpawner.of({
     spawn,
@@ -9833,7 +9892,7 @@ var make20 = (spawn) => {
 class ChildProcessSpawner extends (/* @__PURE__ */ Service()("effect/process/ChildProcessSpawner")) {
 }
 
-// node_modules/effect/dist/unstable/process/ChildProcess.js
+// node_modules/effect/dist/process/ChildProcess.js
 var TypeId27 = "~effect/process/ChildProcess";
 var Proto2 = {
   .../* @__PURE__ */ Prototype2({
@@ -10235,7 +10294,7 @@ var fromReadableChannel = (options) => fromTransform((_, scope) => readableToPul
 var readableToPullUnsafe = (options) => {
   const readable = options.readable;
   const closeOnDone = options.closeOnDone ?? true;
-  const exit = options.exit ?? make7(undefined);
+  const exit = options.exit ?? make10(undefined);
   const latch = options.latch ?? makeUnsafe4(false);
   function onReadable() {
     latch.openUnsafe();
@@ -10677,7 +10736,7 @@ var make22 = /* @__PURE__ */ gen2(function* () {
           getInputFd,
           getOutputFd
         } = yield* setupAdditionalFds(cmd, childProcess, resolvedAdditionalFds);
-        const isRunning = map5(isDone3(exitSignal), (done) => !done);
+        const isRunning = map4(isDone3(exitSignal), (done) => !done);
         const exitCode = flatMap3(_await(exitSignal), ([code, signal]) => {
           if (isNotNull(code)) {
             return succeed6(ExitCode(code));
@@ -10876,7 +10935,7 @@ var access2 = /* @__PURE__ */ (() => {
     return nodeAccess(path, mode);
   };
 })();
-var copy = /* @__PURE__ */ (() => {
+var copy2 = /* @__PURE__ */ (() => {
   const nodeCp = /* @__PURE__ */ effectify(NFS.cp, /* @__PURE__ */ handleErrnoException("FileSystem", "copy"), /* @__PURE__ */ handleBadArgument("copy"));
   return (fromPath, toPath, options) => nodeCp(fromPath, toPath, {
     force: options?.overwrite ?? false,
@@ -10941,7 +11000,7 @@ var makeTempDirectoryScoped = /* @__PURE__ */ (() => {
 var openFactory = (method) => {
   const nodeOpen = effectify(NFS.open, handleErrnoException("FileSystem", method), handleBadArgument(method));
   const nodeClose = effectify(NFS.close, handleErrnoException("FileSystem", method), handleBadArgument(method));
-  return (path, options) => pipe(acquireRelease2(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map5((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
+  return (path, options) => pipe(acquireRelease2(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map4((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
 };
 var open2 = /* @__PURE__ */ openFactory("open");
 var makeFile = /* @__PURE__ */ (() => {
@@ -10990,7 +11049,7 @@ var makeFile = /* @__PURE__ */ (() => {
     read(buffer) {
       return suspend2(() => {
         const position = this.position;
-        return map5(nodeRead(this.fd, {
+        return map4(nodeRead(this.fd, {
           buffer,
           position
         }), (bytesRead) => {
@@ -11007,7 +11066,7 @@ var makeFile = /* @__PURE__ */ (() => {
           }
           const buffer = Buffer.allocUnsafeSlow(size);
           const position = this.position;
-          return map5(nodeReadAlloc(this.fd, {
+          return map4(nodeReadAlloc(this.fd, {
             buffer,
             position
           }), (bytesRead) => {
@@ -11028,7 +11087,7 @@ var makeFile = /* @__PURE__ */ (() => {
       });
     }
     truncate(length) {
-      return map5(nodeTruncate(this.fd, length || undefined), () => {
+      return map4(nodeTruncate(this.fd, length || undefined), () => {
         if (!this.append) {
           const len = BigInt(length ?? 0);
           if (this.position > len) {
@@ -11040,7 +11099,7 @@ var makeFile = /* @__PURE__ */ (() => {
     write(buffer) {
       return suspend2(() => {
         const position = this.position;
-        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "write"), (nodePosition) => map5(nodeWrite(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
+        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "write"), (nodePosition) => map4(nodeWrite(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
           if (!this.append) {
             this.position = position + BigInt(bytesWritten);
           }
@@ -11204,7 +11263,7 @@ var watchNode = (path, info, options) => callback3((queue) => acquireRelease2(sy
   });
   return watcher;
 }), (watcher) => sync3(() => watcher.close())));
-var watch2 = (backend, path, options) => stat2(path).pipe(map5((stat) => backend.pipe(flatMap((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap3);
+var watch2 = (backend, path, options) => stat2(path).pipe(map4((stat) => backend.pipe(flatMap((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap3);
 var writeFile2 = (path, data, options) => callback2((resume, signal) => {
   try {
     NFS.writeFile(path, data, {
@@ -11222,11 +11281,11 @@ var writeFile2 = (path, data, options) => callback2((resume, signal) => {
     resume(fail6(handleBadArgument("writeFile")(err)));
   }
 });
-var makeFileSystem = /* @__PURE__ */ map5(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make15({
+var makeFileSystem = /* @__PURE__ */ map4(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make15({
   access: access2,
   chmod: chmod2,
   chown: chown2,
-  copy,
+  copy: copy2,
   copyFile: copyFile2,
   glob: glob2,
   link: link3,
@@ -11345,7 +11404,7 @@ import * as readline from "node:readline";
 var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
   const stdin = process.stdin;
   const stdout = process.stdout;
-  const lines = yield* make9();
+  const lines = yield* make12();
   let inputEnded = stdin.readableEnded;
   let readlineActive = false;
   const onStdinEnd = () => {
@@ -11400,7 +11459,7 @@ var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
   const columns = sync3(() => stdout.columns ?? 0);
   const rows = sync3(() => stdout.rows ?? 0);
   const readInput = gen2(function* () {
-    const queue = yield* make9();
+    const queue = yield* make12();
     const handleKeypress = (s, k) => {
       const userInput = {
         input: fromUndefinedOr(s),
@@ -11532,7 +11591,7 @@ var testLayer = effectContext(gen2(function* () {
       return yield* get4(recorded);
     })
   });
-  return empty2().pipe(add(Service2, service), add(TestService, service));
+  return empty().pipe(add(Service2, service), add(TestService, service));
 }));
 
 class ActionFailure extends TaggedError3()("ActionFailure", {
@@ -11998,7 +12057,7 @@ var publishRelease = fn2("ReleaseBunCli.publishRelease")(function* (inputs) {
   const assets = commands.run("bash", ["-c", `set -euo pipefail
 printf "%s\\0" "$ASSET_ROOT"/*`], {
     env
-  }).pipe(mapCommand, map5((stdout) => stdout.split("\x00").slice(0, -1)));
+  }).pipe(mapCommand, map4((stdout) => stdout.split("\x00").slice(0, -1)));
   if (env.EXISTING_RELEASE === "true") {
     yield* github.stream(["release", "view", releaseVersion], {
       env,
