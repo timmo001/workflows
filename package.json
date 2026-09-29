@@ -12,7 +12,7 @@
     "format": "prettier --write \"{src,tests,scripts}/**/*.ts\" oxlint.config.ts package.json tsconfig.json",
     "format:check": "prettier --check \"{src,tests,scripts}/**/*.ts\" oxlint.config.ts package.json tsconfig.json",
     "validate": "bun run lint && bun run typecheck && bun run test && bun run format:check && bun run bundle:check",
-    "prepare": "effect-tsgo patch"
+    "prepare": "effect-tsgo patch --force=false"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.118",
@@ -20,7 +20,7 @@
     "effect": "4.0.0-rc.118"
   },
   "devDependencies": {
-    "@effect/tsgo": "0.46.1",
+    "@effect/tsgo": "0.47.0",
     "@effect/vitest": "4.0.0-rc.118",
     "@oxlint/plugins": "1.86.0",
     "@timmo001/oxlint-rules": "0.4.0",
