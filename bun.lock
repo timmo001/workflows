@@ -6,7 +6,7 @@
       "name": "@timmo001/workflows-actions",
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.118",
-        "@timmo001/effect-gh": "0.2.0",
+        "@timmo001/effect-gh": "0.3.0",
         "effect": "4.0.0-rc.118",
       },
       "devDependencies": {
@@ -148,7 +148,7 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@timmo001/effect-gh": ["@timmo001/effect-gh@0.2.0", "", { "peerDependencies": { "effect": "4.0.0-rc.118" } }, "sha512-+osMxyuXDzkzoNZo6oXcwwHPvUoU20COLZgwDQEmXP3pFHLvW71ko94ixHgUOyQNOJ4lOzWPchsMwaaN23CSrw=="],
+    "@timmo001/effect-gh": ["@timmo001/effect-gh@0.3.0", "", { "peerDependencies": { "effect": "4.0.0-rc.118" } }, "sha512-wGkfnPZqJyN73p4DzW58ejAfHp3FPauyEAAIYb91rRvwVLTYEay9hLjE2ozE4MoSeNfNPQiQd9DGRHcjhMafsg=="],
 
     "@timmo001/oxlint-rules": ["@timmo001/oxlint-rules@0.5.0", "", { "peerDependencies": { "@oxlint/plugins": "1.86.0", "oxlint": "1.86.0" }, "bin": { "oxlint-rules": "dist/cli.js" } }, "sha512-5Tm1duCF2fzPRSwFGTOIDoR4qWXQIUtf0dYWt4ApoRbtJTPrPi4OZjdmhglaE/IoEaDSuUFp2Jx08Emmno/o1g=="],
 
