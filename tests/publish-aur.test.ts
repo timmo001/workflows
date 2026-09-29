@@ -1,22 +1,15 @@
-import { execFileSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
-import { Effect, Exit, Layer } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
+import { Effect, Exit, FileSystem, Layer } from "effect";
 import {
   type Inputs,
   run,
   validateIdentity,
 } from "../src/actions/publish-aur/workflow.js";
 import { CommandExecutor } from "../src/services/CommandExecutor.js";
+import { tempDirectory, withEnv } from "./support.js";
 
 const actionPath = join(process.cwd(), ".github/actions/publish-aur");
 
@@ -26,32 +19,46 @@ const validInputs = {
   actionPath,
 } satisfies Inputs;
 
-const git = (args: string[]) =>
-  execFileSync("git", args, { encoding: "utf8" }).trim();
-
 const commandLayer = CommandExecutor.layer.pipe(
   Layer.provide(NodeServices.layer),
 );
 
+const git = Effect.fn("PublishAurTest.git")(function* (
+  args: readonly string[],
+) {
+  const commands = yield* CommandExecutor.Service;
+
+  return (yield* commands.run("git", args)).trim();
+});
+
 const runStage = (inputs: Inputs) =>
-  Effect.runPromiseExit(run(inputs).pipe(Effect.provide(commandLayer)));
+  Effect.exit(run(inputs)).pipe(Effect.provide(commandLayer));
 
-const writeValidatedPackage = (root: string, pkgbuild: string) => {
-  mkdirSync(root, { recursive: true });
-  writeFileSync(join(root, "PKGBUILD"), pkgbuild);
-  writeFileSync(join(root, ".SRCINFO"), "pkgbase = example-git\n");
-  writeFileSync(join(root, "MANIFEST"), "PKGBUILD\n.SRCINFO\n");
+const writeValidatedPackage = Effect.fn("PublishAurTest.writeValidatedPackage")(
+  function* (root: string, pkgbuild: string) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(root, { recursive: true });
+    yield* fs.writeFileString(join(root, "PKGBUILD"), pkgbuild);
+    yield* fs.writeFileString(
+      join(root, ".SRCINFO"),
+      "pkgbase = example-git\n",
+    );
+    yield* fs.writeFileString(join(root, "MANIFEST"), "PKGBUILD\n.SRCINFO\n");
 
-  const checksum = (path: string) =>
-    execFileSync("sha256sum", [join(root, path)], { encoding: "utf8" })
-      .split(" ", 1)[0]
-      ?.trim();
+    const checksum = Effect.fn("PublishAurTest.checksum")(function* (
+      path: string,
+    ) {
+      return createHash("sha256")
+        .update(yield* fs.readFile(join(root, path)))
+        .digest("hex");
+    });
 
-  writeFileSync(
-    join(root, "CHECKSUMS"),
-    `${checksum("PKGBUILD")}\tPKGBUILD\n${checksum(".SRCINFO")}\t.SRCINFO\n`,
-  );
-};
+    yield* fs.writeFileString(
+      join(root, "CHECKSUMS"),
+      `${yield* checksum("PKGBUILD")}\tPKGBUILD\n${yield* checksum(".SRCINFO")}\t.SRCINFO\n`,
+    );
+  },
+);
 
 describe("publish-aur contract", () => {
   it("accepts the existing package name contract", () => {
@@ -69,73 +76,74 @@ describe("publish-aur contract", () => {
 });
 
 describe("publish-aur artifact protocol", () => {
-  it("accepts matching manifest checksums and rejects tampering", async () => {
-    const root = mkdtempSync(join(tmpdir(), "publish-aur-verify-"));
-
-    try {
+  it.effect("accepts matching manifest checksums and rejects tampering", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("publish-aur-verify-");
       const validated = join(root, "aur-validated");
-      process.env.RUNNER_TEMP = root;
-      writeValidatedPackage(validated, "pkgname=example-git\n");
-      expect(Exit.isSuccess(await runStage(validInputs))).toBe(true);
-      writeFileSync(join(validated, "PKGBUILD"), "pkgname=tampered\n");
-      expect(Exit.isFailure(await runStage(validInputs))).toBe(true);
-    } finally {
-      delete process.env.RUNNER_TEMP;
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+      yield* withEnv("RUNNER_TEMP", root);
+      yield* writeValidatedPackage(validated, "pkgname=example-git\n");
+      expect(Exit.isSuccess(yield* runStage(validInputs))).toBe(true);
+      yield* fs.writeFileString(
+        join(validated, "PKGBUILD"),
+        "pkgname=tampered\n",
+      );
+      expect(Exit.isFailure(yield* runStage(validInputs))).toBe(true);
+    }).pipe(Effect.provide(NodeServices.layer), Effect.provide(commandLayer)),
+  );
 });
 
 describe("publish-aur Git reconciliation", () => {
-  it.each([
-    ["pkgname=example-git\n", "false"],
-    ["pkgname=example-git\npkgver=2\n", "true"],
+  it.effect.each([
+    { validatedPkgbuild: "pkgname=example-git\n", expected: "false" },
+    { validatedPkgbuild: "pkgname=example-git\npkgver=2\n", expected: "true" },
   ])(
     "reports the expected changed output %#",
-    async (validatedPkgbuild, expected) => {
-      const root = mkdtempSync(join(tmpdir(), "publish-aur-prepare-"));
-
-      try {
+    ({ validatedPkgbuild, expected }) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* tempDirectory("publish-aur-prepare-");
         const remote = join(root, "remote.git");
         const seed = join(root, "seed");
         const validated = join(root, "aur-validated");
         const clone = join(root, "aur-repository");
         const output = join(root, "github-output");
-        git(["init", "--bare", "--initial-branch=master", remote]);
-        git(["clone", remote, seed]);
-        git(["-C", seed, "config", "user.name", "Test"]);
-        git(["-C", seed, "config", "user.email", "test@example.invalid"]);
-        writeValidatedPackage(seed, "pkgname=example-git\n");
-        git(["-C", seed, "add", "PKGBUILD", ".SRCINFO"]);
-        git(["-C", seed, "commit", "-m", "Initial package"]);
-        git(["-C", seed, "push", "origin", "HEAD:master"]);
-        writeValidatedPackage(validated, validatedPkgbuild);
-        writeFileSync(output, "");
+        yield* git(["init", "--bare", "--initial-branch=master", remote]);
+        yield* git(["clone", remote, seed]);
+        yield* git(["-C", seed, "config", "user.name", "Test"]);
+        yield* git([
+          "-C",
+          seed,
+          "config",
+          "user.email",
+          "test@example.invalid",
+        ]);
+        yield* writeValidatedPackage(seed, "pkgname=example-git\n");
+        yield* git(["-C", seed, "add", "PKGBUILD", ".SRCINFO"]);
+        yield* git(["-C", seed, "commit", "-m", "Initial package"]);
+        yield* git(["-C", seed, "push", "origin", "HEAD:master"]);
+        yield* writeValidatedPackage(validated, validatedPkgbuild);
+        yield* fs.writeFileString(output, "");
 
-        process.env.RUNNER_TEMP = root;
-        process.env.GITHUB_OUTPUT = output;
+        yield* withEnv("RUNNER_TEMP", root);
+        yield* withEnv("GITHUB_OUTPUT", output);
+
+        const exit = yield* runStage({
+          stage: "prepare",
+          packageName: "example-git",
+          aurCloneUrl: remote,
+          actionPath,
+        });
+
+        expect(Exit.isSuccess(exit)).toBe(true);
+        expect(yield* fs.readFileString(output)).toBe(`changed=${expected}\n`);
         expect(
-          Exit.isSuccess(
-            await runStage({
-              stage: "prepare",
-              packageName: "example-git",
-              aurCloneUrl: remote,
-              actionPath,
-            }),
-          ),
-        ).toBe(true);
-
-        expect(readFileSync(output, "utf8")).toBe(`changed=${expected}\n`);
-        expect(git(["-C", clone, "log", "-1", "--format=%an <%ae>"])).toBe(
+          yield* git(["-C", clone, "log", "-1", "--format=%an <%ae>"]),
+        ).toBe(
           expected === "true"
             ? "GitHub Actions <41898282+github-actions[bot]@users.noreply.github.com>"
             : "Test <test@example.invalid>",
         );
-      } finally {
-        delete process.env.RUNNER_TEMP;
-        delete process.env.GITHUB_OUTPUT;
-        rmSync(root, { recursive: true, force: true });
-      }
-    },
+      }).pipe(Effect.provide(NodeServices.layer), Effect.provide(commandLayer)),
   );
 });

@@ -1,17 +1,7 @@
-import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
+import { Effect, Exit, FileSystem } from "effect";
 import {
   ARTIFACT_NAME_PREFIX,
   artifactName,
@@ -21,7 +11,15 @@ import {
   validateEvent,
   validateTagScript,
 } from "../src/actions/build-python-pypi-release/workflow.js";
-import { CommandExecutor } from "../src/services/CommandExecutor.js";
+import {
+  commandLayer,
+  exec,
+  git,
+  inDirectory,
+  initRepo,
+  platformLayer,
+  tempDirectory,
+} from "./support.js";
 
 const publishedRelease = {
   stage: "validate-event",
@@ -32,76 +30,54 @@ const publishedRelease = {
   releaseTag: "1.0.0",
 } satisfies Inputs;
 
-const commandLayer = CommandExecutor.layer.pipe(
-  Layer.provide(NodeServices.layer),
-);
-
 const runStage = (inputs: Inputs) =>
-  Effect.runPromiseExit(
-    Effect.scoped(run(inputs)).pipe(
-      Effect.provide(commandLayer),
-      Effect.provide(NodeServices.layer),
-    ),
+  Effect.exit(Effect.scoped(run(inputs))).pipe(
+    Effect.provide(commandLayer),
+    Effect.provide(NodeServices.layer),
   );
 
-const pythonWithPackaging = () => {
+const python = Effect.gen(function* () {
   for (const bin of ["python3", "python", "/usr/bin/python3"]) {
-    try {
-      execFileSync(bin, ["-c", "import packaging.utils, packaging.version"], {
-        stdio: "ignore",
-      });
+    const exit = yield* Effect.exit(
+      exec(bin, ["-c", "import packaging.utils, packaging.version"]),
+    );
 
-      return bin;
-    } catch {
-      continue;
-    }
+    if (Exit.isSuccess(exit)) return bin;
   }
 
-  throw new Error("Python packaging is required for these tests");
-};
-
-const python = pythonWithPackaging();
+  return yield* Effect.die(
+    new Error("Python packaging is required for these tests"),
+  );
+});
 
 const runPython = (script: string, env: Record<string, string>) =>
-  execFileSync(python, ["-c", script], {
-    encoding: "utf8",
-    env: { ...process.env, ...env },
-  });
+  Effect.flatMap(python, (bin) => exec(bin, ["-c", script], { env }));
 
-const git = (args: string[], cwd: string) =>
-  execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+const pythonFailure = (script: string, env: Record<string, string>) =>
+  Effect.flip(runPython(script, env));
 
-const initRepo = (root: string) => {
-  git(["init", "-b", "main"], root);
-  git(["config", "user.email", "test@example.com"], root);
-  git(["config", "user.name", "test"], root);
-  git(["commit", "--allow-empty", "-m", "init"], root);
-
-  return git(["rev-parse", "HEAD"], root);
-};
-
-const writeDistributions = (
-  dist: string,
-  args: {
-    packageName: string;
-    version: string;
-    wheelFile?: string;
-    sdistFile?: string;
-    metadataName?: string;
-    metadataVersion?: string;
-    extraWheelEntries?: ReadonlyArray<readonly [string, string]>;
-    extraSdistEntries?: ReadonlyArray<readonly [string, string]>;
-    omitDefaultMetadata?: boolean;
-    omitDefaultPkgInfo?: boolean;
-    skipWheel?: boolean;
-    skipSdist?: boolean;
-    extraFiles?: ReadonlyArray<string>;
-  },
-) => {
-  mkdirSync(dist, { recursive: true });
-  execFileSync(
-    python,
-    [
+const writeDistributions = Effect.fn("PythonReleaseTest.writeDistributions")(
+  function* (
+    dist: string,
+    args: {
+      packageName: string;
+      version: string;
+      wheelFile?: string;
+      sdistFile?: string;
+      metadataName?: string;
+      metadataVersion?: string;
+      extraWheelEntries?: ReadonlyArray<readonly [string, string]>;
+      extraSdistEntries?: ReadonlyArray<readonly [string, string]>;
+      omitDefaultMetadata?: boolean;
+      omitDefaultPkgInfo?: boolean;
+      skipWheel?: boolean;
+      skipSdist?: boolean;
+      extraFiles?: ReadonlyArray<string>;
+    },
+  ) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(dist, { recursive: true });
+    yield* exec(yield* python, [
       "-c",
       `
 import io
@@ -160,10 +136,9 @@ for extra in args["extraFiles"]:
         skipSdist: args.skipSdist === true,
         extraFiles: args.extraFiles ?? [],
       }),
-    ],
-    { encoding: "utf8" },
-  );
-};
+    ]);
+  },
+);
 
 describe("build-python-pypi-release event contract", () => {
   it("accepts a published stable release", () => {
@@ -202,291 +177,274 @@ describe("build-python-pypi-release event contract", () => {
     expect(validateEvent(inputs)?.message).toBe(message);
   });
 
-  it("runs the validate-event stage", async () => {
-    const exit = await runStage(publishedRelease);
-    expect(exit._tag).toBe("Success");
+  it.effect("runs the validate-event stage", () =>
+    Effect.gen(function* () {
+      const exit = yield* runStage(publishedRelease);
+      expect(exit._tag).toBe("Success");
 
-    const failed = await runStage({
-      ...publishedRelease,
-      eventName: "workflow_dispatch",
-    });
+      const failed = yield* runStage({
+        ...publishedRelease,
+        eventName: "workflow_dispatch",
+      });
 
-    expect(failed._tag).toBe("Failure");
-  });
+      expect(failed._tag).toBe("Failure");
+    }),
+  );
 });
 
 describe("build-python-pypi-release artifact contract", () => {
-  it("keeps the workflow artifact name", () => {
-    expect(artifactName("123", "1")).toBe("python-package-distributions-123-1");
-    expect(
-      readFileSync(".github/workflows/build-python-pypi-release.yml", "utf8"),
-    ).toContain(
-      `${ARTIFACT_NAME_PREFIX}-\${{ github.run_id }}-\${{ github.run_attempt }}`,
-    );
-  });
+  it.effect("keeps the workflow artifact name", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      expect(artifactName("123", "1")).toBe(
+        "python-package-distributions-123-1",
+      );
+      expect(
+        yield* fs.readFileString(
+          ".github/workflows/build-python-pypi-release.yml",
+        ),
+      ).toContain(
+        `${ARTIFACT_NAME_PREFIX}-\${{ github.run_id }}-\${{ github.run_attempt }}`,
+      );
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 });
 
 describe("build-python-pypi-release source immutability", () => {
-  it("accepts a tag that peels to HEAD, including annotated tags", async () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-source-"));
-    const previous = process.cwd();
+  it.effect("accepts a tag that peels to HEAD, including annotated tags", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("python-release-source-");
+      const sha = yield* initRepo(root);
+      yield* git(["tag", "1.0.0"], root);
+      yield* inDirectory(root);
 
-    try {
-      const sha = initRepo(root);
-      git(["tag", "1.0.0"], root);
-      process.chdir(root);
-
-      const lightweight = await runStage({
+      const lightweight = yield* runStage({
         stage: "validate-source",
         releaseTag: "1.0.0",
       });
 
       expect(lightweight._tag).toBe("Success");
-      git(["tag", "-d", "1.0.0"], root);
-      git(["tag", "-a", "1.0.0", "-m", "release"], root);
+      yield* git(["tag", "-d", "1.0.0"], root);
+      yield* git(["tag", "-a", "1.0.0", "-m", "release"], root);
 
-      const annotated = await runStage({
+      const annotated = yield* runStage({
         stage: "validate-source",
         releaseTag: "1.0.0",
       });
 
       expect(annotated._tag).toBe("Success");
-      const tagObject = git(["rev-parse", "refs/tags/1.0.0"], root);
+      const tagObject = yield* git(["rev-parse", "refs/tags/1.0.0"], root);
       expect(tagObject).not.toBe(sha);
-      expect(git(["rev-parse", "refs/tags/1.0.0^{commit}"], root)).toBe(sha);
-    } finally {
-      process.chdir(previous);
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+      expect(yield* git(["rev-parse", "refs/tags/1.0.0^{commit}"], root)).toBe(
+        sha,
+      );
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("rejects a tag that points at another commit", async () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-source-"));
-    const previous = process.cwd();
+  it.effect("rejects a tag that points at another commit", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("python-release-source-");
+      yield* initRepo(root);
+      yield* git(["tag", "1.0.0"], root);
+      yield* git(["commit", "--allow-empty", "-m", "later"], root);
+      yield* inDirectory(root);
 
-    try {
-      initRepo(root);
-      git(["tag", "1.0.0"], root);
-      git(["commit", "--allow-empty", "-m", "later"], root);
-      process.chdir(root);
-
-      const exit = await runStage({
+      const exit = yield* runStage({
         stage: "validate-source",
         releaseTag: "1.0.0",
       });
 
       expect(exit._tag).toBe("Failure");
-    } finally {
-      process.chdir(previous);
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 });
 
 describe("build-python-pypi-release packaging parity", () => {
-  it.each([
-    ["Friendly-Bard", "friendly-bard"],
-    ["oslo.concurrency", "oslo-concurrency"],
-    ["FrIeNdLy-._.-bArD", "friendly-bard"],
-    ["systembridgeconnector", "systembridgeconnector"],
-    ["example_pkg", "example-pkg"],
-  ])("canonicalize_name(%s) is %s", (name, expected) => {
-    const actual = execFileSync(
-      python,
-      [
+  it.effect.each([
+    { name: "Friendly-Bard", expected: "friendly-bard" },
+    { name: "oslo.concurrency", expected: "oslo-concurrency" },
+    { name: "FrIeNdLy-._.-bArD", expected: "friendly-bard" },
+    { name: "systembridgeconnector", expected: "systembridgeconnector" },
+    { name: "example_pkg", expected: "example-pkg" },
+  ])("canonicalize_name($name) is $expected", ({ name, expected }) =>
+    Effect.gen(function* () {
+      const actual = yield* exec(yield* python, [
         "-c",
         "from packaging.utils import canonicalize_name; import sys; print(canonicalize_name(sys.argv[1]), end='')",
         name,
-      ],
-      { encoding: "utf8" },
-    );
+      ]);
 
-    expect(actual).toBe(expected);
-  });
+      expect(actual).toBe(expected);
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it.each([
-    ["1.0.0", true],
-    ["1.0", true],
-    ["v1.2.3", true],
-    ["1.0.0.post1", true],
-    ["1.0.0a1", false],
-    ["1.0.0b2", false],
-    ["1.0.0rc1", false],
-    ["1.0.0.dev1", false],
-    ["1.0.0+local", false],
-    ["not-a-version", false],
-  ])("stable public version %s -> %s", (tag, stable) => {
-    const runTag = () => runPython(validateTagScript, { RELEASE_TAG: tag });
+  it.effect.each([
+    { tag: "1.0.0", stable: true },
+    { tag: "1.0", stable: true },
+    { tag: "v1.2.3", stable: true },
+    { tag: "1.0.0.post1", stable: true },
+    { tag: "1.0.0a1", stable: false },
+    { tag: "1.0.0b2", stable: false },
+    { tag: "1.0.0rc1", stable: false },
+    { tag: "1.0.0.dev1", stable: false },
+    { tag: "1.0.0+local", stable: false },
+    { tag: "not-a-version", stable: false },
+  ])("stable public version $tag -> $stable", ({ tag, stable }) =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        runPython(validateTagScript, { RELEASE_TAG: tag }),
+      );
 
-    if (stable) {
-      expect(runTag).not.toThrow();
+      expect(Exit.isSuccess(exit)).toBe(stable);
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-      return;
-    }
-
-    expect(runTag).toThrow();
-  });
-
-  it("treats 1.0 and 1.0.0 as the same packaging version", () => {
-    const equal = execFileSync(
-      python,
-      [
+  it.effect("treats 1.0 and 1.0.0 as the same packaging version", () =>
+    Effect.gen(function* () {
+      const equal = yield* exec(yield* python, [
         "-c",
         "from packaging.version import Version; import sys; sys.exit(0 if Version('1.0') == Version('1.0.0') else 1)",
-      ],
-      { encoding: "utf8" },
-    );
+      ]);
 
-    expect(equal).toBe("");
-  });
+      expect(equal).toBe("");
+    }).pipe(Effect.provide(platformLayer)),
+  );
 });
 
 describe("build-python-pypi-release distribution contract", () => {
-  it("accepts one matching wheel and sdist, including normalised names", () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
-
-    try {
-      const dist = join(root, "dist");
-      writeDistributions(dist, {
-        packageName: "example-pkg",
-        version: "1.0.0",
-        metadataName: "Example.Pkg",
-      });
-      expect(() =>
-        runPython(validateDistributionsScript, {
+  it.effect(
+    "accepts one matching wheel and sdist, including normalised names",
+    () =>
+      Effect.gen(function* () {
+        const root = yield* tempDirectory("python-release-dist-");
+        const dist = join(root, "dist");
+        yield* writeDistributions(dist, {
+          packageName: "example-pkg",
+          version: "1.0.0",
+          metadataName: "Example.Pkg",
+        });
+        yield* runPython(validateDistributionsScript, {
           PACKAGE_NAME: "Example.Pkg",
           RELEASE_TAG: "1.0.0",
           DIST_DIR: dist,
-        }),
-      ).not.toThrow();
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        });
+      }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("accepts filename version 1.0 against release tag 1.0.0", () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
-
-    try {
+  it.effect("accepts filename version 1.0 against release tag 1.0.0", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("python-release-dist-");
       const dist = join(root, "dist");
-      writeDistributions(dist, {
+      yield* writeDistributions(dist, {
         packageName: "foo",
         version: "1.0",
         metadataVersion: "1.0.0",
       });
-      expect(() =>
-        runPython(validateDistributionsScript, {
-          PACKAGE_NAME: "foo",
-          RELEASE_TAG: "1.0.0",
-          DIST_DIR: dist,
-        }),
-      ).not.toThrow();
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+      yield* runPython(validateDistributionsScript, {
+        PACKAGE_NAME: "foo",
+        RELEASE_TAG: "1.0.0",
+        DIST_DIR: dist,
+      });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("rejects extra files and missing distributions", () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
-
-    try {
+  it.effect("rejects extra files and missing distributions", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("python-release-dist-");
       const extra = join(root, "extra");
-      writeDistributions(extra, {
+      yield* writeDistributions(extra, {
         packageName: "foo",
         version: "1.0.0",
         extraFiles: ["notes.txt"],
       });
-      expect(() =>
-        runPython(validateDistributionsScript, {
+
+      expect(
+        (yield* pythonFailure(validateDistributionsScript, {
           PACKAGE_NAME: "foo",
           RELEASE_TAG: "1.0.0",
           DIST_DIR: extra,
-        }),
-      ).toThrow(/exactly one wheel and one \.tar\.gz/);
+        })).stderr,
+      ).toMatch(/exactly one wheel and one \.tar\.gz/);
 
       const missing = join(root, "missing");
-      writeDistributions(missing, {
+      yield* writeDistributions(missing, {
         packageName: "foo",
         version: "1.0.0",
         skipSdist: true,
       });
-      expect(() =>
-        runPython(validateDistributionsScript, {
+
+      expect(
+        (yield* pythonFailure(validateDistributionsScript, {
           PACKAGE_NAME: "foo",
           RELEASE_TAG: "1.0.0",
           DIST_DIR: missing,
-        }),
-      ).toThrow(/exactly one wheel and one \.tar\.gz/);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        })).stderr,
+      ).toMatch(/exactly one wheel and one \.tar\.gz/);
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("rejects filename and metadata identity mismatches", () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
-
-    try {
+  it.effect("rejects filename and metadata identity mismatches", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("python-release-dist-");
       const filename = join(root, "filename");
-      writeDistributions(filename, {
+      yield* writeDistributions(filename, {
         packageName: "other",
         version: "1.0.0",
       });
-      expect(() =>
-        runPython(validateDistributionsScript, {
+
+      expect(
+        (yield* pythonFailure(validateDistributionsScript, {
           PACKAGE_NAME: "foo",
           RELEASE_TAG: "1.0.0",
           DIST_DIR: filename,
-        }),
-      ).toThrow(/wheel filename identifies/);
+        })).stderr,
+      ).toMatch(/wheel filename identifies/);
 
       const metadata = join(root, "metadata");
-      writeDistributions(metadata, {
+      yield* writeDistributions(metadata, {
         packageName: "foo",
         version: "1.0.0",
         metadataName: "other",
       });
-      expect(() =>
-        runPython(validateDistributionsScript, {
+
+      expect(
+        (yield* pythonFailure(validateDistributionsScript, {
           PACKAGE_NAME: "foo",
           RELEASE_TAG: "1.0.0",
           DIST_DIR: metadata,
-        }),
-      ).toThrow(/wheel metadata identifies/);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        })).stderr,
+      ).toMatch(/wheel metadata identifies/);
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("rejects a second METADATA file", () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
-
-    try {
+  it.effect("rejects a second METADATA file", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("python-release-dist-");
       const dist = join(root, "dist");
-      writeDistributions(dist, {
+      yield* writeDistributions(dist, {
         packageName: "foo",
         version: "1.0.0",
         extraWheelEntries: [["bar-1.0.0.dist-info/METADATA", "Name: bar\n"]],
       });
-      expect(() =>
-        runPython(validateDistributionsScript, {
+
+      expect(
+        (yield* pythonFailure(validateDistributionsScript, {
           PACKAGE_NAME: "foo",
           RELEASE_TAG: "1.0.0",
           DIST_DIR: dist,
-        }),
-      ).toThrow(/exactly one METADATA file/);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        })).stderr,
+      ).toMatch(/exactly one METADATA file/);
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("ignores unsafe extra members without extracting them", () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
-
-    try {
+  it.effect("ignores unsafe extra members without extracting them", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("python-release-dist-");
       const sentinel = join(root, "sentinel.txt");
-      writeFileSync(sentinel, "safe\n");
+      yield* fs.writeFileString(sentinel, "safe\n");
       const dist = join(root, "dist");
-      writeDistributions(dist, {
+      yield* writeDistributions(dist, {
         packageName: "foo",
         version: "1.0.0",
         extraWheelEntries: [
@@ -495,58 +453,52 @@ describe("build-python-pypi-release distribution contract", () => {
         ],
         extraSdistEntries: [["../sentinel.txt", "pwned\n"]],
       });
-      expect(() =>
-        runPython(validateDistributionsScript, {
-          PACKAGE_NAME: "foo",
-          RELEASE_TAG: "1.0.0",
-          DIST_DIR: dist,
-        }),
-      ).not.toThrow();
-      expect(readFileSync(sentinel, "utf8")).toBe("safe\n");
-      expect(existsSync(join(root, "evil.dist-info"))).toBe(false);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it("rejects traversal-only metadata without writing outside dist", () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
-
-    try {
-      const sentinel = join(root, "sentinel.txt");
-      writeFileSync(sentinel, "safe\n");
-      const dist = join(root, "dist");
-      writeDistributions(dist, {
-        packageName: "foo",
-        version: "1.0.0",
-        omitDefaultMetadata: true,
-        omitDefaultPkgInfo: true,
-        extraWheelEntries: [
-          ["../evil.dist-info/METADATA", "Name: foo\nVersion: 1.0.0\n"],
-        ],
-        extraSdistEntries: [["../PKG-INFO", "Name: foo\nVersion: 1.0.0\n"]],
+      yield* runPython(validateDistributionsScript, {
+        PACKAGE_NAME: "foo",
+        RELEASE_TAG: "1.0.0",
+        DIST_DIR: dist,
       });
-      expect(() =>
-        runPython(validateDistributionsScript, {
+      expect(yield* fs.readFileString(sentinel)).toBe("safe\n");
+      expect(yield* fs.exists(join(root, "evil.dist-info"))).toBe(false);
+    }).pipe(Effect.provide(platformLayer)),
+  );
+
+  it.effect(
+    "rejects traversal-only metadata without writing outside dist",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* tempDirectory("python-release-dist-");
+        const sentinel = join(root, "sentinel.txt");
+        yield* fs.writeFileString(sentinel, "safe\n");
+        const dist = join(root, "dist");
+        yield* writeDistributions(dist, {
+          packageName: "foo",
+          version: "1.0.0",
+          omitDefaultMetadata: true,
+          omitDefaultPkgInfo: true,
+          extraWheelEntries: [
+            ["../evil.dist-info/METADATA", "Name: foo\nVersion: 1.0.0\n"],
+          ],
+          extraSdistEntries: [["../PKG-INFO", "Name: foo\nVersion: 1.0.0\n"]],
+        });
+        yield* pythonFailure(validateDistributionsScript, {
           PACKAGE_NAME: "foo",
           RELEASE_TAG: "1.0.0",
           DIST_DIR: dist,
-        }),
-      ).toThrow();
-      expect(readFileSync(sentinel, "utf8")).toBe("safe\n");
-      expect(existsSync(join(root, "evil.dist-info"))).toBe(false);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        });
+        expect(yield* fs.readFileString(sentinel)).toBe("safe\n");
+        expect(yield* fs.exists(join(root, "evil.dist-info"))).toBe(false);
+      }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("rejects a symlink PKG-INFO without following it", () => {
-    const root = mkdtempSync(join(tmpdir(), "python-release-dist-"));
-
-    try {
+  it.effect("rejects a symlink PKG-INFO without following it", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("python-release-dist-");
       const dist = join(root, "dist");
-      mkdirSync(dist, { recursive: true });
-      execFileSync(python, [
+      yield* fs.makeDirectory(dist, { recursive: true });
+      yield* exec(yield* python, [
         "-c",
         `
 import tarfile
@@ -564,15 +516,14 @@ with tarfile.open(dist / "foo-1.0.0.tar.gz", "w:gz") as archive:
     archive.addfile(link)
 `,
       ]);
-      expect(() =>
-        runPython(validateDistributionsScript, {
+
+      expect(
+        (yield* pythonFailure(validateDistributionsScript, {
           PACKAGE_NAME: "foo",
           RELEASE_TAG: "1.0.0",
           DIST_DIR: dist,
-        }),
-      ).toThrow(/one top-level PKG-INFO/);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        })).stderr,
+      ).toMatch(/one top-level PKG-INFO/);
+    }).pipe(Effect.provide(platformLayer)),
+  );
 });

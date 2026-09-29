@@ -1,15 +1,7 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
-import { Cause, Effect, Exit, Layer } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
+import { Cause, Effect, Exit, FileSystem, Layer } from "effect";
 import { Annotations } from "../src/action/Annotations.js";
 import {
   discoverSkillDirectories,
@@ -17,17 +9,20 @@ import {
   run,
 } from "../src/actions/validate-agent-skills/workflow.js";
 import { CommandExecutor } from "../src/services/CommandExecutor.js";
+import { tempDirectory } from "./support.js";
 
-const makeSkill = (root: string, name: string) => {
-  const directory = join(root, name);
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(
-    join(directory, "SKILL.md"),
-    `---\nname: ${name}\ndescription: Test skill\n---\n`,
-  );
+const makeSkill = (root: string, name: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const directory = join(root, name);
+    yield* fs.makeDirectory(directory, { recursive: true });
+    yield* fs.writeFileString(
+      join(directory, "SKILL.md"),
+      `---\nname: ${name}\ndescription: Test skill\n---\n`,
+    );
 
-  return directory;
-};
+    return directory;
+  });
 
 const recordingLayer = (
   recorded: string[],
@@ -62,7 +57,7 @@ const recordingLayer = (
 const runValidation = (skillRoots: string, failures?: ReadonlySet<string>) => {
   const recorded: string[] = [];
 
-  const program = Effect.gen(function* () {
+  const result = Effect.gen(function* () {
     const exit = yield* Effect.exit(run({ skillRoots }));
     const annotations = yield* Annotations.TestService;
 
@@ -70,10 +65,9 @@ const runValidation = (skillRoots: string, failures?: ReadonlySet<string>) => {
   }).pipe(
     Effect.provide(recordingLayer(recorded, failures)),
     Effect.provide(Annotations.testLayer),
-    Effect.provide(NodeServices.layer),
   );
 
-  return { recorded, result: Effect.runPromise(program) };
+  return { recorded, result };
 };
 
 describe("validate-agent-skills root parsing", () => {
@@ -86,103 +80,92 @@ describe("validate-agent-skills root parsing", () => {
 });
 
 describe("validate-agent-skills discovery", () => {
-  it("ignores absent and empty roots", async () => {
-    const root = mkdtempSync(join(tmpdir(), "agent-skills-empty-"));
+  it.effect("ignores absent and empty roots", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("agent-skills-empty-");
 
-    try {
-      const discovered = await Effect.runPromise(
-        discoverSkillDirectories([join(root, "absent"), root]).pipe(
-          Effect.provide(NodeServices.layer),
-        ),
-      );
+      const discovered = yield* discoverSkillDirectories([
+        join(root, "absent"),
+        root,
+      ]);
 
       expect(discovered).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("follows root and skill directory symlinks", async () => {
-    const root = mkdtempSync(join(tmpdir(), "agent-skills-links-"));
-
-    try {
+  it.effect("follows root and skill directory symlinks", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("agent-skills-links-");
       const skills = join(root, "skills");
       const targets = join(root, "targets");
-      mkdirSync(skills);
-      const target = makeSkill(targets, "linked-target");
-      symlinkSync(target, join(skills, "linked-skill"), "dir");
+      yield* fs.makeDirectory(skills);
+      const target = yield* makeSkill(targets, "linked-target");
+      yield* fs.symlink(target, join(skills, "linked-skill"));
       const rootLink = join(root, "skills-link");
-      symlinkSync(skills, rootLink, "dir");
+      yield* fs.symlink(skills, rootLink);
 
-      const discovered = await Effect.runPromise(
-        discoverSkillDirectories([rootLink]).pipe(
-          Effect.provide(NodeServices.layer),
-        ),
-      );
+      const discovered = yield* discoverSkillDirectories([rootLink]);
 
       expect(discovered).toEqual([join(rootLink, "linked-skill")]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 });
 
 describe("validate-agent-skills validation", () => {
-  it("succeeds when no skills are present", async () => {
-    const root = mkdtempSync(join(tmpdir(), "agent-skills-none-"));
-
-    try {
+  it.effect("succeeds when no skills are present", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("agent-skills-none-");
       const { recorded, result } = runValidation(`${root}/absent ${root}`);
-      const { exit, lines } = await result;
+      const { exit, lines } = yield* result;
+
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(recorded).toEqual([]);
       expect(lines).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("validates skill directory names containing spaces as one argument", async () => {
-    const root = mkdtempSync(join(tmpdir(), "agent-skills-spaces-"));
+  it.effect(
+    "validates skill directory names containing spaces as one argument",
+    () =>
+      Effect.gen(function* () {
+        const root = yield* tempDirectory("agent-skills-spaces-");
+        const skill = yield* makeSkill(root, "skill with spaces");
+        const { recorded, result } = runValidation(root);
+        const { exit } = yield* result;
 
-    try {
-      const skill = makeSkill(root, "skill with spaces");
-      const { recorded, result } = runValidation(root);
-      const { exit } = await result;
-      expect(Exit.isSuccess(exit)).toBe(true);
-      expect(recorded).toEqual([`python:${skill}`]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        expect(Exit.isSuccess(exit)).toBe(true);
+        expect(recorded).toEqual([`python:${skill}`]);
+      }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("reports every structural and skills-ref failure before failing", async () => {
-    const root = mkdtempSync(join(tmpdir(), "agent-skills-failures-"));
+  it.effect(
+    "reports every structural and skills-ref failure before failing",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* tempDirectory("agent-skills-failures-");
+        const invalid = yield* makeSkill(root, "invalid");
+        const valid = yield* makeSkill(root, "valid");
+        const missing = join(root, "missing-file");
+        yield* fs.makeDirectory(missing);
 
-    try {
-      const invalid = makeSkill(root, "invalid");
-      const valid = makeSkill(root, "valid");
-      const missing = join(root, "missing-file");
-      mkdirSync(missing);
+        const { recorded, result } = runValidation(root, new Set([invalid]));
+        const { exit, lines } = yield* result;
+        expect(Exit.isFailure(exit)).toBe(true);
 
-      const { recorded, result } = runValidation(root, new Set([invalid]));
-      const { exit, lines } = await result;
-      expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isFailure(exit)) {
+          const error = Cause.squash(exit.cause);
 
-      if (Exit.isFailure(exit)) {
-        const error = Cause.squash(exit.cause);
+          if (!(error instanceof Annotations.ActionFailure)) throw error;
+          expect(error.message).toBe("2 skill(s) failed validation.");
+        }
 
-        if (!(error instanceof Annotations.ActionFailure)) throw error;
-        expect(error.message).toBe("2 skill(s) failed validation.");
-      }
-
-      expect(recorded).toEqual([`python:${invalid}`, `python:${valid}`]);
-      expect(lines).toEqual([
-        `::error title=Invalid Agent Skill,file=${invalid}/SKILL.md::skills-ref validation failed: ${invalid}`,
-        `::error title=Missing Agent Skill definition,file=${missing}/SKILL.md::Skill directory missing SKILL.md: ${missing}`,
-      ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        expect(recorded).toEqual([`python:${invalid}`, `python:${valid}`]);
+        expect(lines).toEqual([
+          `::error title=Invalid Agent Skill,file=${invalid}/SKILL.md::skills-ref validation failed: ${invalid}`,
+          `::error title=Missing Agent Skill definition,file=${missing}/SKILL.md::Skill directory missing SKILL.md: ${missing}`,
+        ]);
+      }).pipe(Effect.provide(NodeServices.layer)),
+  );
 });

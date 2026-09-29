@@ -1,16 +1,7 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
-import { Cause, Effect, Exit, Layer, Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
+import { Cause, Effect, Exit, FileSystem, Layer, Schema } from "effect";
 import { Annotations } from "../src/action/Annotations.js";
 import {
   compareJsrVersions,
@@ -23,6 +14,7 @@ import {
   VersionManifestFromJson,
 } from "../src/actions/validate-js-package/workflow.js";
 import { CommandExecutor } from "../src/services/CommandExecutor.js";
+import { tempDirectory } from "./support.js";
 
 const commandLayer = CommandExecutor.layer.pipe(
   Layer.provide(NodeServices.layer),
@@ -55,11 +47,9 @@ const recordingLayer = (recorded: Array<RecordedCommand>) =>
   );
 
 const runWith = (inputs: Inputs, layer: Layer.Layer<CommandExecutor.Service>) =>
-  Effect.runPromiseExit(
-    Effect.scoped(run(inputs)).pipe(
-      Effect.provide(layer),
-      Effect.provide(NodeServices.layer),
-    ),
+  Effect.exit(Effect.scoped(run(inputs))).pipe(
+    Effect.provide(layer),
+    Effect.provide(NodeServices.layer),
   );
 
 const runRecorded = (inputs: Inputs) => {
@@ -82,12 +72,15 @@ const failureMessage = (
   return error instanceof Annotations.ActionFailure ? error.message : undefined;
 };
 
-const writeManifest = (root: string, filename: string, version: string) => {
-  writeFileSync(
-    join(root, filename),
-    `${JSON.stringify({ name: "@scope/pkg", version }, null, 2)}\n`,
+const writeManifest = (root: string, filename: string, version: string) =>
+  FileSystem.FileSystem.pipe(
+    Effect.flatMap((fs) =>
+      fs.writeFileString(
+        join(root, filename),
+        `${JSON.stringify({ name: "@scope/pkg", version }, null, 2)}\n`,
+      ),
+    ),
   );
-};
 
 describe("validate-js-package version comparison", () => {
   it("accepts an exact release tag match", () => {
@@ -140,46 +133,55 @@ describe("validate-js-package command contract", () => {
 });
 
 describe("validate-js-package workflow YAML", () => {
-  it("keeps npm trusted publishing in the reusable workflow", () => {
-    const workflow = readFileSync(
-      ".github/workflows/publish-npm-package.yml",
-      "utf8",
-    );
+  it.effect("keeps npm trusted publishing in the reusable workflow", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
 
-    expect(workflow).toContain("id-token: write");
-    expect(workflow).toContain("run: npm publish --access public");
-    expect(workflow).toContain("uses: $/.github/actions/validate-js-package");
-  });
+      const workflow = yield* fs.readFileString(
+        ".github/workflows/publish-npm-package.yml",
+      );
 
-  it("keeps JSR trusted publishing in the reusable workflow", () => {
-    const workflow = readFileSync(
-      ".github/workflows/publish-jsr-package.yml",
-      "utf8",
-    );
+      expect(workflow).toContain("id-token: write");
+      expect(workflow).toContain("run: npm publish --access public");
+      expect(workflow).toContain("uses: $/.github/actions/validate-js-package");
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-    expect(workflow).toContain("id-token: write");
-    expect(workflow).toContain('run: bunx "jsr@$JSR_CLI_VERSION" publish');
-    expect(workflow).not.toContain("publish --dry-run");
-    expect(workflow).toContain("uses: $/.github/actions/validate-js-package");
-  });
+  it.effect("keeps JSR trusted publishing in the reusable workflow", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
 
-  it("validates the build contract without publishing", () => {
-    const workflow = readFileSync(
-      ".github/workflows/build-bun-package.yml",
-      "utf8",
-    );
+      const workflow = yield* fs.readFileString(
+        ".github/workflows/publish-jsr-package.yml",
+      );
 
-    expect(workflow).toContain("contract: build");
-    expect(workflow).not.toContain("npm publish");
-    expect(workflow).not.toContain("id-token: write");
-  });
+      expect(workflow).toContain("id-token: write");
+      expect(workflow).toContain('run: bunx "jsr@$JSR_CLI_VERSION" publish');
+      expect(workflow).not.toContain("publish --dry-run");
+      expect(workflow).toContain("uses: $/.github/actions/validate-js-package");
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("validates the build contract without publishing", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+
+      const workflow = yield* fs.readFileString(
+        ".github/workflows/build-bun-package.yml",
+      );
+
+      expect(workflow).toContain("contract: build");
+      expect(workflow).not.toContain("npm publish");
+      expect(workflow).not.toContain("id-token: write");
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 });
 
 describe("validate-js-package contracts", () => {
-  it("runs the build check, build, and dry-run sequence", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-build-"));
+  it.effect("runs the build check, build, and dry-run sequence", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("js-package-build-");
 
-    try {
       const { recorded, exit } = runRecorded({
         contract: "build",
         packagePath: root,
@@ -188,7 +190,7 @@ describe("validate-js-package contracts", () => {
         jsrCliVersion: "0.14.3",
       });
 
-      expect((await exit)._tag).toBe("Success");
+      expect((yield* exit)._tag).toBe("Success");
       expect(recorded).toEqual([
         {
           command: "bash",
@@ -215,72 +217,70 @@ describe("validate-js-package contracts", () => {
           label: "jsr publish --dry-run",
         },
       ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("compares the npm release tag before running trusted commands", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-npm-"));
+  it.effect(
+    "compares the npm release tag before running trusted commands",
+    () =>
+      Effect.gen(function* () {
+        const root = yield* tempDirectory("js-package-npm-");
 
-    try {
-      writeManifest(root, "package.json", "1.2.3");
+        yield* writeManifest(root, "package.json", "1.2.3");
 
-      const { recorded, exit } = runRecorded({
-        contract: "npm",
-        packagePath: root,
-        checkCommand: "bun run check",
-        buildCommand: "bun run build",
-        releaseTag: "9.9.9",
-      });
+        const { recorded, exit } = runRecorded({
+          contract: "npm",
+          packagePath: root,
+          checkCommand: "bun run check",
+          buildCommand: "bun run build",
+          releaseTag: "9.9.9",
+        });
 
-      const result = await exit;
-      expect(failureMessage(result)).toBe(
-        "Release tag 9.9.9 does not match package version 1.2.3",
-      );
-      expect(recorded).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        const result = yield* exit;
+        expect(failureMessage(result)).toBe(
+          "Release tag 9.9.9 does not match package version 1.2.3",
+        );
+        expect(recorded).toEqual([]);
+      }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("runs the npm check, build, and pack sequence after a tag match", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-npm-"));
+  it.effect(
+    "runs the npm check, build, and pack sequence after a tag match",
+    () =>
+      Effect.gen(function* () {
+        const root = yield* tempDirectory("js-package-npm-");
 
-    try {
-      writeManifest(root, "package.json", "1.2.3");
+        yield* writeManifest(root, "package.json", "1.2.3");
 
-      const { recorded, exit } = runRecorded({
-        contract: "npm",
-        packagePath: root,
-        checkCommand: "bun run check",
-        buildCommand: "bun run build",
-        releaseTag: "1.2.3",
-      });
+        const { recorded, exit } = runRecorded({
+          contract: "npm",
+          packagePath: root,
+          checkCommand: "bun run check",
+          buildCommand: "bun run build",
+          releaseTag: "1.2.3",
+        });
 
-      expect((await exit)._tag).toBe("Success");
-      expect(recorded.map((command) => command.command)).toEqual([
-        "bash",
-        "bash",
-        "npm",
-      ]);
-      expect(recorded[2]).toEqual({
-        command: "npm",
-        args: ["pack", "--dry-run"],
-        cwd: root,
-        label: "npm pack --dry-run",
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        expect((yield* exit)._tag).toBe("Success");
+        expect(recorded.map((command) => command.command)).toEqual([
+          "bash",
+          "bash",
+          "npm",
+        ]);
+        expect(recorded[2]).toEqual({
+          command: "npm",
+          args: ["pack", "--dry-run"],
+          cwd: root,
+          label: "npm pack --dry-run",
+        });
+      }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("compares jsr.json before the release tag", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-jsr-"));
+  it.effect("compares jsr.json before the release tag", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("js-package-jsr-");
 
-    try {
-      writeManifest(root, "package.json", "1.2.3");
-      writeManifest(root, "jsr.json", "1.2.4");
+      yield* writeManifest(root, "package.json", "1.2.3");
+      yield* writeManifest(root, "jsr.json", "1.2.4");
 
       const { recorded, exit } = runRecorded({
         contract: "jsr",
@@ -289,22 +289,20 @@ describe("validate-js-package contracts", () => {
         releaseTag: "1.2.3",
       });
 
-      const result = await exit;
+      const result = yield* exit;
       expect(failureMessage(result)).toBe(
         "package.json and jsr.json versions differ",
       );
       expect(recorded).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("rejects a JSR tag mismatch after the manifests agree", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-jsr-"));
+  it.effect("rejects a JSR tag mismatch after the manifests agree", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("js-package-jsr-");
 
-    try {
-      writeManifest(root, "package.json", "1.2.3");
-      writeManifest(root, "jsr.json", "1.2.3");
+      yield* writeManifest(root, "package.json", "1.2.3");
+      yield* writeManifest(root, "jsr.json", "1.2.3");
 
       const { recorded, exit } = runRecorded({
         contract: "jsr",
@@ -313,22 +311,20 @@ describe("validate-js-package contracts", () => {
         releaseTag: "9.9.9",
       });
 
-      const result = await exit;
+      const result = yield* exit;
       expect(failureMessage(result)).toBe(
         "Release tag 9.9.9 does not match package version 1.2.3",
       );
       expect(recorded).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("runs only the JSR check command after versions match", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-jsr-"));
+  it.effect("runs only the JSR check command after versions match", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("js-package-jsr-");
 
-    try {
-      writeManifest(root, "package.json", "1.2.3");
-      writeManifest(root, "jsr.json", "1.2.3");
+      yield* writeManifest(root, "package.json", "1.2.3");
+      yield* writeManifest(root, "jsr.json", "1.2.3");
 
       const { recorded, exit } = runRecorded({
         contract: "jsr",
@@ -337,7 +333,7 @@ describe("validate-js-package contracts", () => {
         releaseTag: "1.2.3",
       });
 
-      expect((await exit)._tag).toBe("Success");
+      expect((yield* exit)._tag).toBe("Success");
       expect(recorded).toEqual([
         {
           command: "bash",
@@ -346,16 +342,18 @@ describe("validate-js-package contracts", () => {
           label: "check package",
         },
       ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("fails when package.json is missing a string version", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-invalid-"));
+  it.effect("fails when package.json is missing a string version", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("js-package-invalid-");
 
-    try {
-      writeFileSync(join(root, "package.json"), '{"name":"@scope/pkg"}\n');
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.writeFileString(
+        join(root, "package.json"),
+        '{"name":"@scope/pkg"}\n',
+      );
 
       const { recorded, exit } = runRecorded({
         contract: "npm",
@@ -365,24 +363,22 @@ describe("validate-js-package contracts", () => {
         releaseTag: "1.0.0",
       });
 
-      const result = await exit;
+      const result = yield* exit;
       expect(failureMessage(result)).toContain("Invalid package.json");
       expect(recorded).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 });
 
 describe("validate-js-package trusted Bash", () => {
-  it("fails a pipeline when pipefail is required", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-pipefail-"));
+  it.effect("fails a pipeline when pipefail is required", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("js-package-pipefail-");
 
-    try {
-      writeManifest(root, "package.json", "1.0.0");
-      writeManifest(root, "jsr.json", "1.0.0");
+      yield* writeManifest(root, "package.json", "1.0.0");
+      yield* writeManifest(root, "jsr.json", "1.0.0");
 
-      const exit = await runReal({
+      const exit = yield* runReal({
         contract: "jsr",
         packagePath: root,
         checkCommand: "false | true",
@@ -390,21 +386,20 @@ describe("validate-js-package trusted Bash", () => {
       });
 
       expect(exit._tag).toBe("Failure");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
-  it("runs the check command in the package path", async () => {
-    const root = mkdtempSync(join(tmpdir(), "js-package-cwd-"));
+  it.effect("runs the check command in the package path", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDirectory("js-package-cwd-");
 
-    try {
       const nested = join(root, "pkg");
-      mkdirSync(nested);
-      writeManifest(nested, "package.json", "1.0.0");
-      writeManifest(nested, "jsr.json", "1.0.0");
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.makeDirectory(nested);
+      yield* writeManifest(nested, "package.json", "1.0.0");
+      yield* writeManifest(nested, "jsr.json", "1.0.0");
 
-      const exit = await runReal({
+      const exit = yield* runReal({
         contract: "jsr",
         packagePath: nested,
         checkCommand: "printf ok > checked",
@@ -412,10 +407,8 @@ describe("validate-js-package trusted Bash", () => {
       });
 
       expect(exit._tag).toBe("Success");
-      expect(existsSync(join(root, "checked"))).toBe(false);
-      expect(readFileSync(join(nested, "checked"), "utf8")).toBe("ok");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+      expect(yield* fs.exists(join(root, "checked"))).toBe(false);
+      expect(yield* fs.readFileString(join(nested, "checked"))).toBe("ok");
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 });

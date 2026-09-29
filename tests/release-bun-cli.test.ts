@@ -1,18 +1,8 @@
-import { execFileSync } from "node:child_process";
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { layer } from "@timmo001/effect-gh";
-import { Effect, Layer } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
+import { Effect, Exit, FileSystem } from "effect";
 import { Annotations } from "../src/action/Annotations.js";
 import {
   architectureProfiles,
@@ -33,7 +23,16 @@ import {
   writeArchiveScript,
   run,
 } from "../src/actions/release-bun-cli/workflow.js";
-import { CommandExecutor } from "../src/services/CommandExecutor.js";
+import {
+  commandLayer,
+  exec,
+  git,
+  inDirectory,
+  initRepo,
+  platformLayer,
+  tempDirectory,
+  withEnv,
+} from "./support.js";
 
 const floatApp = {
   binaryName: "float-app",
@@ -42,33 +41,15 @@ const floatApp = {
   packageConfig: ".scripts/linux/nfpm.yaml",
 };
 
-const commandLayer = CommandExecutor.layer.pipe(
-  Layer.provide(NodeServices.layer),
-);
-
 const runStage = (inputs: Inputs) =>
-  Effect.runPromiseExit(
-    Effect.scoped(run(inputs)).pipe(
-      Effect.provide(layer()),
-      Effect.provide(commandLayer),
-      Effect.provide(NodeServices.layer),
-    ),
+  Effect.exit(Effect.scoped(run(inputs))).pipe(
+    Effect.provide(layer()),
+    Effect.provide(commandLayer),
+    Effect.provide(NodeServices.layer),
   );
 
 const messageOf = (result: ReturnType<typeof resolveReleaseVersion>) =>
   result instanceof Annotations.ActionFailure ? result.message : result;
-
-const git = (args: string[], cwd: string) =>
-  execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
-
-const initRepo = (root: string) => {
-  git(["init", "-b", "main"], root);
-  git(["config", "user.email", "test@example.com"], root);
-  git(["config", "user.name", "test"], root);
-  git(["commit", "--allow-empty", "-m", "init"], root);
-
-  return git(["rev-parse", "HEAD"], root);
-};
 
 describe("release-bun-cli architecture and assets", () => {
   it("maps both Linux architectures to the current workflow contract", () => {
@@ -221,139 +202,148 @@ describe("release-bun-cli version allocation", () => {
 });
 
 describe("release-bun-cli scripts", () => {
-  it.each([
+  it.effect.each([
     smokeTestScript,
     installNfpmScript,
     writeArchiveScript,
     packageAssetsScript,
     verifyAssetsScript,
     releaseTagScript,
-  ])("keeps a syntactically valid bash stage script %#", (script) => {
-    expect(() => execFileSync("bash", ["-n", "-c", script])).not.toThrow();
-  });
+  ])("keeps a syntactically valid bash stage script %#", (script) =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(exec("bash", ["-n", "-c", script]));
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+    }).pipe(Effect.provide(platformLayer)),
+  );
 });
 
-describe("release-bun-cli smoke tests and prepare", () => {
-  it("preserves line and argument splitting for Context-style smoke tests", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-smoke-"));
-    const previous = process.cwd();
+const writeExecutable = Effect.fn("ReleaseBunCliTest.writeExecutable")(
+  function* (path: string, content: string) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.writeFileString(path, content, { mode: 0o755 });
+    yield* fs.chmod(path, 0o755);
+  },
+);
 
-    try {
-      mkdirSync(join(root, "dist/release/root"), { recursive: true });
-      writeFileSync(
-        join(root, "dist/release/root/context"),
-        `#!/bin/bash
+describe("release-bun-cli smoke tests and prepare", () => {
+  it.effect(
+    "preserves line and argument splitting for Context-style smoke tests",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* tempDirectory("release-bun-cli-smoke-");
+        yield* fs.makeDirectory(join(root, "dist/release/root"), {
+          recursive: true,
+        });
+        yield* writeExecutable(
+          join(root, "dist/release/root/context"),
+          `#!/bin/bash
 printf '%s\\n' "$#" "$@" >> "$TRACE"
 `,
-      );
-      chmodSync(join(root, "dist/release/root/context"), 0o755);
-      const trace = join(root, "trace");
-      process.chdir(root);
-      process.env.TRACE = trace;
+        );
+        const trace = join(root, "trace");
+        yield* inDirectory(root);
+        yield* withEnv("TRACE", trace);
 
-      const exit = await runStage({
-        stage: "smoke-test",
-        binaryName: "context",
-        smokeTestArguments: "help\nstack --json\n",
-      });
+        const exit = yield* runStage({
+          stage: "smoke-test",
+          binaryName: "context",
+          smokeTestArguments: "help\nstack --json\n",
+        });
 
-      expect(exit._tag).toBe("Success");
-      expect(readFileSync(trace, "utf8")).toBe("1\nhelp\n2\nstack\n--json\n");
-    } finally {
-      process.chdir(previous);
-      delete process.env.TRACE;
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+        expect(exit._tag).toBe("Success");
+        expect(yield* fs.readFileString(trace)).toBe(
+          "1\nhelp\n2\nstack\n--json\n",
+        );
+      }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("runs package-prepare-command with trusted Bash semantics", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-prepare-"));
-    const previous = process.cwd();
+  it.effect("runs package-prepare-command with trusted Bash semantics", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("release-bun-cli-prepare-");
+      yield* inDirectory(root);
 
-    try {
-      process.chdir(root);
-
-      const exit = await runStage({
+      const exit = yield* runStage({
         stage: "prepare-package",
         packagePrepareCommand:
           "mkdir -p out && printf '%s' \"$HOME\" > out/home",
       });
 
       expect(exit._tag).toBe("Success");
-      expect(readFileSync(join(root, "out/home"), "utf8")).toBe(
+      expect(yield* fs.readFileString(join(root, "out/home"))).toBe(
         process.env.HOME ?? "",
       );
-    } finally {
-      process.chdir(previous);
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 });
 
 describe("release-bun-cli archives and checksums", () => {
-  it("writes deterministic archive metadata", () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-archive-"));
-
-    try {
-      mkdirSync(join(root, "dist/release/root"), { recursive: true });
-      writeFileSync(join(root, "dist/release/root/float-app"), "binary\n");
-      writeFileSync(join(root, "dist/release/root/sendspin-rs-cli"), "extra\n");
+  it.effect("writes deterministic archive metadata", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("release-bun-cli-archive-");
+      yield* fs.makeDirectory(join(root, "dist/release/root"), {
+        recursive: true,
+      });
+      yield* fs.writeFileString(
+        join(root, "dist/release/root/float-app"),
+        "binary\n",
+      );
+      yield* fs.writeFileString(
+        join(root, "dist/release/root/sendspin-rs-cli"),
+        "extra\n",
+      );
 
       const env = {
-        ...process.env,
         ARCHIVE_PATHS: "float-app\nsendspin-rs-cli",
         PACKAGE_NAME: "float-app",
         VERSION: "20260101.0",
         RELEASE_ARCHITECTURE: "x86_64",
       };
 
-      execFileSync("bash", ["-c", writeArchiveScript], { cwd: root, env });
-      execFileSync("bash", ["-c", writeArchiveScript], { cwd: root, env });
-
-      const first = readFileSync(
-        join(
-          root,
-          "dist/release/assets/float-app-20260101.0-linux-x86_64.tar.gz",
-        ),
+      const archive = join(
+        root,
+        "dist/release/assets/float-app-20260101.0-linux-x86_64.tar.gz",
       );
 
-      execFileSync("bash", ["-c", writeArchiveScript], { cwd: root, env });
+      yield* exec("bash", ["-c", writeArchiveScript], { cwd: root, env });
+      yield* exec("bash", ["-c", writeArchiveScript], { cwd: root, env });
 
-      const second = readFileSync(
-        join(
-          root,
-          "dist/release/assets/float-app-20260101.0-linux-x86_64.tar.gz",
-        ),
-      );
+      const first = yield* fs.readFile(archive);
 
-      expect(first.equals(second)).toBe(true);
+      yield* exec("bash", ["-c", writeArchiveScript], { cwd: root, env });
+
+      const second = yield* fs.readFile(archive);
+
+      expect(Buffer.from(first).equals(Buffer.from(second))).toBe(true);
       expect([first[0], first[1]]).toEqual([0x1f, 0x8b]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("creates SHA256SUMS after verifying six assets", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-verify-"));
+  it.effect("creates SHA256SUMS after verifying six assets", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("release-bun-cli-verify-");
 
-    try {
       const assets = [
         ...linuxAssetNames("float-app", "20260101.0", "x86_64"),
         ...linuxAssetNames("float-app", "20260101.0", "aarch64"),
       ];
 
       for (const asset of assets) {
-        writeFileSync(join(root, asset), `${asset}\n`);
+        yield* fs.writeFileString(join(root, asset), `${asset}\n`);
       }
 
-      const exit = await runStage({
+      const exit = yield* runStage({
         stage: "verify-assets",
         assetRoot: root,
       });
 
       expect(exit._tag).toBe("Success");
 
-      const sums = readFileSync(join(root, "SHA256SUMS"), "utf8")
+      const sums = (yield* fs.readFileString(join(root, "SHA256SUMS")))
         .trim()
         .split("\n");
 
@@ -361,42 +351,55 @@ describe("release-bun-cli archives and checksums", () => {
       expect(sums.map((line) => line.split("  ")[1])).toEqual(
         expect.arrayContaining(assets),
       );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("rejects the wrong number of release assets", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-verify-"));
+  it.effect("rejects the wrong number of release assets", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("release-bun-cli-verify-");
+      yield* fs.writeFileString(join(root, "only-one"), "nope\n");
 
-    try {
-      writeFileSync(join(root, "only-one"), "nope\n");
-
-      const exit = await runStage({
+      const exit = yield* runStage({
         stage: "verify-assets",
         assetRoot: root,
       });
 
       expect(exit._tag).toBe("Failure");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
+});
+
+const publishFixture = Effect.fn("ReleaseBunCliTest.publishFixture")(function* (
+  ghScript: string,
+  tag?: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const root = yield* tempDirectory("release-bun-cli-publish-");
+  const sha = yield* initRepo(root);
+
+  if (tag !== undefined) yield* git(["tag", tag], root);
+
+  const bin = join(root, "bin");
+  yield* fs.makeDirectory(bin);
+  const log = join(root, "gh.log");
+  yield* writeExecutable(join(bin, "gh"), ghScript);
+  const assets = join(root, "assets");
+  yield* fs.makeDirectory(assets);
+  yield* fs.writeFileString(join(assets, "asset.tar.gz"), "asset\n");
+  yield* inDirectory(root);
+  yield* withEnv("PATH", `${bin}:${process.env.PATH ?? ""}`);
+  yield* withEnv("GH_LOG", log);
+
+  return { root, sha, log, assets };
 });
 
 describe("release-bun-cli GitHub reconciliation", () => {
-  it("uploads to an existing release without editing it", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-publish-"));
-    const previous = process.cwd();
-    const previousPath = process.env.PATH;
+  it.effect("uploads to an existing release without editing it", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
 
-    try {
-      const sha = initRepo(root);
-      const bin = join(root, "bin");
-      mkdirSync(bin);
-      const log = join(root, "gh.log");
-      writeFileSync(
-        join(bin, "gh"),
+      const { sha, log, assets } = yield* publishFixture(
         `#!/bin/bash
 printf '%s\\n' "$*" >> "$GH_LOG"
 if [[ "$1" == "release" && "$2" == "view" ]]; then
@@ -404,15 +407,8 @@ if [[ "$1" == "release" && "$2" == "view" ]]; then
 fi
 `,
       );
-      chmodSync(join(bin, "gh"), 0o755);
-      const assets = join(root, "assets");
-      mkdirSync(assets);
-      writeFileSync(join(assets, "asset.tar.gz"), "asset\n");
-      process.chdir(root);
-      process.env.PATH = `${bin}:${previousPath}`;
-      process.env.GH_LOG = log;
 
-      const exit = await runStage({
+      const exit = yield* runStage({
         stage: "publish-release",
         assetRoot: assets,
         releaseVersion: "20260101.0",
@@ -422,42 +418,23 @@ fi
       });
 
       expect(exit._tag).toBe("Success");
-      expect(readFileSync(log, "utf8")).toBe(
+      expect(yield* fs.readFileString(log)).toBe(
         `release view 20260101.0\nrelease upload 20260101.0 ${assets}/asset.tar.gz --clobber\n`,
       );
-    } finally {
-      process.chdir(previous);
-      process.env.PATH = previousPath;
-      delete process.env.GH_LOG;
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("creates a prerelease when the tag is absent", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-publish-"));
-    const previous = process.cwd();
-    const previousPath = process.env.PATH;
+  it.effect("creates a prerelease when the tag is absent", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
 
-    try {
-      const sha = initRepo(root);
-      const bin = join(root, "bin");
-      mkdirSync(bin);
-      const log = join(root, "gh.log");
-      writeFileSync(
-        join(bin, "gh"),
+      const { sha, log, assets } = yield* publishFixture(
         `#!/bin/bash
 printf '%s\\n' "$*" >> "$GH_LOG"
 `,
       );
-      chmodSync(join(bin, "gh"), 0o755);
-      const assets = join(root, "assets");
-      mkdirSync(assets);
-      writeFileSync(join(assets, "asset.tar.gz"), "asset\n");
-      process.chdir(root);
-      process.env.PATH = `${bin}:${previousPath}`;
-      process.env.GH_LOG = log;
 
-      const exit = await runStage({
+      const exit = yield* runStage({
         stage: "publish-release",
         assetRoot: assets,
         releaseVersion: "20260101.0",
@@ -467,80 +444,57 @@ printf '%s\\n' "$*" >> "$GH_LOG"
       });
 
       expect(exit._tag).toBe("Success");
-      expect(readFileSync(log, "utf8")).toContain(
+      expect(yield* fs.readFileString(log)).toContain(
         `release create 20260101.0 ${assets}/asset.tar.gz --target ${sha} --title 20260101.0 --notes Rolling release 20260101.0 from commit ${sha}. --prerelease`,
       );
-    } finally {
-      process.chdir(previous);
-      process.env.PATH = previousPath;
-      delete process.env.GH_LOG;
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 
-  it("edits an existing same-commit release instead of creating it", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-publish-"));
-    const previous = process.cwd();
-    const previousPath = process.env.PATH;
+  it.effect(
+    "edits an existing same-commit release instead of creating it",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
 
-    try {
-      const sha = initRepo(root);
-      git(["tag", "20260101.0"], root);
-      const bin = join(root, "bin");
-      mkdirSync(bin);
-      const log = join(root, "gh.log");
-      writeFileSync(
-        join(bin, "gh"),
-        `#!/bin/bash
+        const { sha, log, assets } = yield* publishFixture(
+          `#!/bin/bash
 printf '%s\\n' "$*" >> "$GH_LOG"
 `,
-      );
-      chmodSync(join(bin, "gh"), 0o755);
+          "20260101.0",
+        );
+
+        const exit = yield* runStage({
+          stage: "publish-release",
+          assetRoot: assets,
+          releaseVersion: "20260101.0",
+          sourceSha: sha,
+          existingRelease: "false",
+          prerelease: "false",
+        });
+
+        expect(exit._tag).toBe("Success");
+        const logged = yield* fs.readFileString(log);
+        expect(logged).toContain("release view 20260101.0");
+        expect(logged).toContain("release edit 20260101.0");
+        expect(logged).toContain("--prerelease=false");
+        expect(logged).not.toContain("release create");
+      }).pipe(Effect.provide(platformLayer)),
+  );
+
+  it.effect("fails when an existing tag points at another commit", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("release-bun-cli-publish-");
+      yield* initRepo(root);
+      yield* git(["tag", "20260101.0"], root);
+      yield* git(["commit", "--allow-empty", "-m", "other"], root);
+      const other = yield* git(["rev-parse", "HEAD"], root);
       const assets = join(root, "assets");
-      mkdirSync(assets);
-      writeFileSync(join(assets, "asset.tar.gz"), "asset\n");
-      process.chdir(root);
-      process.env.PATH = `${bin}:${previousPath}`;
-      process.env.GH_LOG = log;
+      yield* fs.makeDirectory(assets);
+      yield* fs.writeFileString(join(assets, "asset.tar.gz"), "asset\n");
+      yield* inDirectory(root);
 
-      const exit = await runStage({
-        stage: "publish-release",
-        assetRoot: assets,
-        releaseVersion: "20260101.0",
-        sourceSha: sha,
-        existingRelease: "false",
-        prerelease: "false",
-      });
-
-      expect(exit._tag).toBe("Success");
-      const logged = readFileSync(log, "utf8");
-      expect(logged).toContain("release view 20260101.0");
-      expect(logged).toContain("release edit 20260101.0");
-      expect(logged).toContain("--prerelease=false");
-      expect(logged).not.toContain("release create");
-    } finally {
-      process.chdir(previous);
-      process.env.PATH = previousPath;
-      delete process.env.GH_LOG;
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it("fails when an existing tag points at another commit", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-publish-"));
-    const previous = process.cwd();
-
-    try {
-      initRepo(root);
-      git(["tag", "20260101.0"], root);
-      git(["commit", "--allow-empty", "-m", "other"], root);
-      const other = git(["rev-parse", "HEAD"], root);
-      const assets = join(root, "assets");
-      mkdirSync(assets);
-      writeFileSync(join(assets, "asset.tar.gz"), "asset\n");
-      process.chdir(root);
-
-      const exit = await runStage({
+      const exit = yield* runStage({
         stage: "publish-release",
         assetRoot: assets,
         releaseVersion: "20260101.0",
@@ -550,42 +504,34 @@ printf '%s\\n' "$*" >> "$GH_LOG"
       });
 
       expect(exit._tag).toBe("Failure");
-    } finally {
-      process.chdir(previous);
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 });
 
 describe("release-bun-cli version job", () => {
-  it("allocates a requested version and writes outputs", async () => {
-    const root = mkdtempSync(join(tmpdir(), "release-bun-cli-version-"));
-    const previous = process.cwd();
-    const output = join(root, "github-output");
-    writeFileSync(output, "");
+  it.effect("allocates a requested version and writes outputs", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* tempDirectory("release-bun-cli-version-");
+      const output = join(root, "github-output");
+      yield* fs.writeFileString(output, "");
+      const sha = yield* initRepo(root);
+      yield* inDirectory(root);
+      yield* withEnv("GITHUB_OUTPUT", output);
 
-    try {
-      const sha = initRepo(root);
-      process.chdir(root);
-      process.env.GITHUB_OUTPUT = output;
-
-      const exit = await runStage({
+      const exit = yield* runStage({
         stage: "allocate-version",
         releaseVersion: "20260101.7",
       });
 
       expect(exit._tag).toBe("Success");
-      const written = readFileSync(output, "utf8");
+      const written = yield* fs.readFileString(output);
       expect(written).toContain("release-version");
       expect(written).toContain("20260101.7");
       expect(written).toContain("source-sha");
       expect(written).toContain(sha);
-    } finally {
-      process.chdir(previous);
-      delete process.env.GITHUB_OUTPUT;
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    }).pipe(Effect.provide(platformLayer)),
+  );
 });
 
 describe("release-bun-cli newline lists", () => {
