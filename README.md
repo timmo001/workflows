@@ -60,10 +60,11 @@ These workflows reflect the requirements of my projects. Review the workflow
 contract and implementation before using one elsewhere, particularly its
 permissions, runner assumptions and expected project files.
 
-`lint-oxlint.yml` installs a Bun project's locked dependencies and runs its
-`lint` script. The caller owns its Oxlint config, rule packages and warning
-policy. The workflow sets up Node.js for JavaScript plugins and supports a
-package directory through `code-path`.
+`lint-oxlint.yml` installs a project's locked dependencies and runs its `lint`
+script. It uses Bun by default; set `package-manager: pnpm` for pnpm projects.
+The caller owns its Oxlint config, rule packages and warning policy. The
+workflow sets up Node.js for JavaScript plugins and supports a package
+directory through `code-path`.
 
 `build-python-pypi-release.yml` must be called from a workflow triggered by a
 published stable GitHub Release. The release tag must point to source that
