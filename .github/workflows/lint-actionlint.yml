@@ -21,6 +21,10 @@ on:
         default: "1.7.12"
   workflow_dispatch:
 
+env:
+  # renovate: datasource=github-releases depName=rhysd/actionlint
+  ACTIONLINT_VERSION: "1.7.12"
+
 jobs:
   lint-actionlint:
     name: 👕 ActionLint
@@ -31,6 +35,6 @@ jobs:
       - name: ⤵️ Set up actionlint
         uses: $/.github/actions/setup-actionlint
         with:
-          version: ${{ inputs.actionlint-version || '1.7.12' }}
+          version: ${{ inputs.actionlint-version || env.ACTIONLINT_VERSION }}
       - name: 🚀 Run actionlint
         run: actionlint
