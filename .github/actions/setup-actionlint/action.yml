@@ -1,0 +1,26 @@
+name: Set up actionlint
+description: >-
+  Download a Linux x86_64 actionlint release, verify its build provenance
+  attestation and add it to PATH
+inputs:
+  version:
+    description: actionlint version to install, without the leading v
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Download and verify actionlint
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        archive="actionlint_${VERSION}_linux_amd64.tar.gz"
+        install_dir="$RUNNER_TEMP/actionlint"
+        mkdir -p "$install_dir"
+        gh release download "v${VERSION}" --repo rhysd/actionlint \
+          --pattern "$archive" --dir "$RUNNER_TEMP"
+        gh attestation verify "$RUNNER_TEMP/$archive" --repo rhysd/actionlint
+        tar xzf "$RUNNER_TEMP/$archive" -C "$install_dir" actionlint
+        echo "$install_dir" >> "$GITHUB_PATH"
