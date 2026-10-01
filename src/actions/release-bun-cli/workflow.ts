@@ -65,6 +65,13 @@ export const expectedReleaseAssetCount = 6;
 
 export const VERSION_PATTERN = /^[0-9]{8}\.[0-9]+$/;
 
+// Callers that version with semver pass their tag; prerelease suffixes are not valid RPM versions.
+export const SEMVER_PATTERN =
+  /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+
+export const isReleaseVersion = (version: string) =>
+  VERSION_PATTERN.test(version) || SEMVER_PATTERN.test(version);
+
 export const DEFINE_KEY_PATTERN =
   /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
 
@@ -131,7 +138,7 @@ export const resolveReleaseVersion = (input: {
   readonly tagsForReleaseDate: readonly string[];
 }) => {
   if (input.requestedVersion !== undefined) {
-    if (!VERSION_PATTERN.test(input.requestedVersion)) {
+    if (!isReleaseVersion(input.requestedVersion)) {
       return failure(`Invalid release version: ${input.requestedVersion}`);
     }
 
@@ -345,7 +352,7 @@ const versionDefineEnv = Effect.fn("ReleaseBunCli.versionDefineEnv")(function* (
 
   const version = yield* requireInput(inputs.releaseVersion, "release-version");
 
-  if (!VERSION_PATTERN.test(version)) {
+  if (!isReleaseVersion(version)) {
     return yield* failure(`Invalid release version: ${version}`);
   }
 

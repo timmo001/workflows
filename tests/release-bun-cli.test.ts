@@ -141,6 +141,33 @@ describe("release-bun-cli version allocation", () => {
     ).toBe("20260101.4");
   });
 
+  it("uses a requested X.Y.Z version", () => {
+    expect(
+      resolveReleaseVersion({
+        requestedVersion: "0.1.0",
+        releaseDate: "20260102",
+        tagsPointingAtSource: ["20260101.0"],
+        tagsForReleaseDate: ["20260102.0"],
+      }),
+    ).toBe("0.1.0");
+  });
+
+  it.each(["1.2.3-beta.1", "01.2.3", "1.2"])(
+    "rejects requested version %s",
+    (requestedVersion) => {
+      expect(
+        messageOf(
+          resolveReleaseVersion({
+            requestedVersion,
+            releaseDate: "20260101",
+            tagsPointingAtSource: [],
+            tagsForReleaseDate: [],
+          }),
+        ),
+      ).toContain(`Invalid release version: ${requestedVersion}`);
+    },
+  );
+
   it("rejects an invalid requested version", () => {
     expect(
       messageOf(

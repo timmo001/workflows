@@ -33,7 +33,7 @@ inputs:
     description: Publish the GitHub release as a prerelease
     required: false
   releaseVersion:
-    description: Existing or allocated YYYYMMDD.N release version
+    description: Existing X.Y.Z or YYYYMMDD.N release version, or the allocated YYYYMMDD.N
     required: false
   sourceSha:
     description: Full source commit SHA used for the release

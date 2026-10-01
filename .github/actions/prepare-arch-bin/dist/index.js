@@ -12074,6 +12074,8 @@ var architectureProfiles = {
   }
 };
 var VERSION_PATTERN = /^[0-9]{8}\.[0-9]+$/;
+var SEMVER_PATTERN = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+var isReleaseVersion = (version) => VERSION_PATTERN.test(version) || SEMVER_PATTERN.test(version);
 var DEFINE_KEY_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
 var IDENTITY_PATTERN = /^[a-z0-9][a-z0-9._+-]*$/;
 var linuxAssetNames = (packageName, version, architecture) => {
@@ -12106,7 +12108,7 @@ var commandLines = (stdout) => {
 };
 var resolveReleaseVersion = (input) => {
   if (input.requestedVersion !== undefined) {
-    if (!VERSION_PATTERN.test(input.requestedVersion)) {
+    if (!isReleaseVersion(input.requestedVersion)) {
       return failure(`Invalid release version: ${input.requestedVersion}`);
     }
     return input.requestedVersion;
@@ -12246,7 +12248,7 @@ var versionDefineEnv = fn2("ReleaseBunCli.versionDefineEnv")(function* (inputs) 
     return yield* failure(`Invalid version define: ${key}`);
   }
   const version = yield* requireInput(inputs.releaseVersion, "release-version");
-  if (!VERSION_PATTERN.test(version)) {
+  if (!isReleaseVersion(version)) {
     return yield* failure(`Invalid release version: ${version}`);
   }
   return { VERSION_DEFINE: key, RELEASE_VERSION: version };
@@ -12486,7 +12488,7 @@ var validateInputs2 = (inputs) => {
   if (!REPOSITORY_PATTERN.test(inputs.repository)) {
     return failure2(`Invalid repository: ${inputs.repository}`);
   }
-  if (!VERSION_PATTERN.test(inputs.releaseVersion)) {
+  if (!isReleaseVersion(inputs.releaseVersion)) {
     return failure2(`Invalid release version: ${inputs.releaseVersion}`);
   }
   for (const name of [inputs.packageName, inputs.binaryName ?? ""]) {

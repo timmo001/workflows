@@ -51,7 +51,7 @@ on:
         type: boolean
         default: true
       release-version:
-        description: "Existing release tag; empty allocates YYYYMMDD.N"
+        description: "Existing YYYYMMDD.N or X.Y.Z release tag; empty allocates YYYYMMDD.N"
         required: false
         type: string
         default: ""
@@ -79,7 +79,7 @@ on:
         default: ""
     outputs:
       release-version:
-        description: "Allocated YYYYMMDD.N release version"
+        description: "Requested or allocated release version"
         value: ${{ jobs.release.outputs.release-version }}
       source-sha:
         description: "Full source commit SHA used for the release"
@@ -109,7 +109,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ inputs.source-ref || github.sha }}
-      - name: Allocate YYYYMMDD.N version
+      - name: Resolve release version
         id: version
         uses: $/.github/actions/release-bun-cli
         with:

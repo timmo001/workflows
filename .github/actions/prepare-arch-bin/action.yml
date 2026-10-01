@@ -9,7 +9,7 @@ inputs:
     required: false
     default: ${{ github.repository }}
   releaseVersion:
-    description: Release tag in YYYYMMDD.N form
+    description: Release tag in YYYYMMDD.N or X.Y.Z form
     required: true
   packageName:
     description: Release asset base name, as used in <name>-<version>-linux-<arch>.tar.gz

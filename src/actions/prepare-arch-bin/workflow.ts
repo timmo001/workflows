@@ -6,7 +6,7 @@ import { GitHubCommand } from "../../action/GitHubCommand.js";
 import { CommandExecutor } from "../../services/CommandExecutor.js";
 import {
   IDENTITY_PATTERN,
-  VERSION_PATTERN,
+  isReleaseVersion,
   isSafeRelativePath,
   linuxAssetNames,
   newlineValues,
@@ -112,7 +112,7 @@ export const validateInputs = (inputs: Inputs) => {
     return failure(`Invalid repository: ${inputs.repository}`);
   }
 
-  if (!VERSION_PATTERN.test(inputs.releaseVersion)) {
+  if (!isReleaseVersion(inputs.releaseVersion)) {
     return failure(`Invalid release version: ${inputs.releaseVersion}`);
   }
 
