@@ -1,0 +1,69 @@
+---
+name: Publish release assets
+description: >-
+  Attest an exact set of files and upload them, with their Sigstore bundle, to
+  an existing GitHub release
+inputs:
+  release-tag:
+    description: Existing release tag to upload to
+    required: true
+  subject-patterns:
+    description: >-
+      Newline-separated workspace-relative glob patterns. Each pattern must
+      match exactly one regular file, and file names must be unique.
+    required: true
+  bundle-path:
+    description: >-
+      Workspace-relative path for the Sigstore bundle, which is uploaded with
+      the files, for example dist/my-app-1.0.0.sigstore.json
+    required: true
+  clobber:
+    description: Replace release assets that already exist
+    required: false
+    default: "false"
+  repository:
+    description: Repository that owns the release, as owner/name
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: Token with contents write access to the release
+    required: false
+    default: ${{ github.token }}
+outputs:
+  subjects:
+    description: Newline-separated workspace-relative paths of the uploaded files
+    value: ${{ steps.attest.outputs.subjects }}
+  attestation-url:
+    description: URL of the attestation summary
+    value: ${{ steps.attest.outputs.attestation-url }}
+  bundle-path:
+    description: Workspace-relative path of the uploaded Sigstore bundle
+    value: ${{ steps.attest.outputs.bundle-path }}
+runs:
+  using: composite
+  steps:
+    - name: Attest release assets
+      id: attest
+      uses: $/.github/actions/attest-release-assets
+      with:
+        subject-patterns: ${{ inputs.subject-patterns }}
+        bundle-path: ${{ inputs.bundle-path }}
+
+    - name: Upload release assets
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ inputs.repository }}
+        RELEASE_TAG: ${{ inputs.release-tag }}
+        SUBJECTS: ${{ steps.attest.outputs.subjects }}
+        BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        CLOBBER: ${{ inputs.clobber }}
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_WORKSPACE"
+        mapfile -t assets < <(sed '/^$/d' <<< "$SUBJECTS")
+        flags=()
+        if [[ "$CLOBBER" == "true" ]]; then
+          flags+=(--clobber)
+        fi
+        gh release upload "$RELEASE_TAG" "${assets[@]}" "$BUNDLE_PATH" "${flags[@]}"

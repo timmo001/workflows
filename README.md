@@ -54,6 +54,7 @@ The collection includes reusable workflows for:
 - Preparing stable Python distributions from immutable release source
 - Building allowlisted Arch packages from exact source commits
 - Building and releasing Home Assistant cards and command-line tools
+- Building, linting and attaching Bun CLI and Arch package artefacts
 - Managing dependency updates, labels, stale items and releases
 
 These workflows reflect the requirements of my projects. Review the workflow
@@ -65,6 +66,36 @@ script. It uses Bun by default; set `package-manager: pnpm` for pnpm projects.
 The caller owns its Oxlint config, rule packages and warning policy. The
 workflow sets up Node.js for JavaScript plugins and supports a package
 directory through `code-path`.
+
+`build-bun-cli.yml` installs tools with mise, then runs `mise run check`,
+`mise run test` and `mise run build`, followed by the optional multi-line
+`smoke-test` input. Callers define those mise tasks and own their lockfile
+policy. The job is named `Build`; a reusable-workflow job appears
+in check contexts as `<caller job id> / Build`, so update required checks
+accordingly.
+
+`lint-arch-pkgbuild.yml` runs namcap in an Arch container over the files or
+directories listed in `pkgbuild-paths` (newline-separated, default `.scripts`).
+Directories are searched for `PKGBUILD*`. Paths must stay inside the workspace
+and the lint fails when nothing is found.
+
+`release-bun-cli-linux.yml` accepts two opt-in inputs. `attest: true` attests
+the release binaries and packages and uploads
+`<package-name or binary-name>-<version>.sigstore.json`; the calling job then
+needs `contents: write`, `id-token: write` and `attestations: write`.
+`version-define` names a `bun build --define` key that receives the release
+version.
+
+`attach-release-arch-package.yml` takes the artifact produced by
+`build-arch-package.yml`, attests the package and uploads it with its bundle to
+an existing release through the `publish-release-assets` action. Its caller
+needs the same permissions as above.
+
+The `prepare-arch-bin` action renders a `-bin` PKGBUILD from a release: it
+downloads `SHA256SUMS`, fills `pkgver` and the checksums in a template, and can
+generate shell completions from the released binary; completions download the
+x86_64 tarball, verify its checksum and run it, so they need an x86_64 runner. `publish-release-assets`
+attests files and uploads them to a release.
 
 `build-python-pypi-release.yml` must be called from a workflow triggered by a
 published stable GitHub Release. The release tag must point to source that

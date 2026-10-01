@@ -1,0 +1,50 @@
+---
+name: Attach release Arch package
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: "Validated package artifact, from the artifact-name output of build-arch-package.yml"
+        required: true
+        type: string
+      release-tag:
+        description: "Existing GitHub release tag to upload to"
+        required: true
+        type: string
+      package-name:
+        description: "Arch package name, used to name the Sigstore bundle"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  attach:
+    name: Attach Arch package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download validated Arch package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: arch-package-artifact
+      - name: Extract Arch package
+        run: |
+          mkdir -p arch-package
+          tar --extract --file arch-package-artifact/candidate.tar \
+            --directory arch-package --no-same-owner --no-same-permissions \
+            --wildcards '*.pkg.tar.zst'
+      - name: Attest and upload Arch package
+        uses: $/.github/actions/publish-release-assets
+        with:
+          release-tag: ${{ inputs.release-tag }}
+          subject-patterns: arch-package/*.pkg.tar.zst
+          bundle-path: arch-package/${{ inputs.package-name }}-${{ inputs.release-tag }}-arch.sigstore.json
