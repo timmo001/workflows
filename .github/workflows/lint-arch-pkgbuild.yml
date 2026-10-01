@@ -1,0 +1,74 @@
+---
+name: Lint Arch PKGBUILD
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      pkgbuild-paths:
+        description: >-
+          Newline-separated PKGBUILD files or directories; directories are searched for files named PKGBUILD*
+        required: false
+        type: string
+        default: ".scripts"
+
+permissions:
+  contents: read
+
+jobs:
+  lint-arch-pkgbuild:
+    name: Lint arch pkgbuild
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate PKGBUILDs with namcap
+        env:
+          PKGBUILD_PATHS: ${{ inputs.pkgbuild-paths }}
+          # renovate-container: datasource=docker depName=archlinux
+          ARCH_IMAGE: archlinux:latest@sha256:63c7b061c0c001cb7ce4f8d11b63d351c23e7f97121bc5c8bd5d9f431e615d7d
+        run: |
+          docker run --rm \
+            --env PKGBUILD_PATHS \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$ARCH_IMAGE" \
+            bash -euo pipefail -c '
+              pacman -Syu --noconfirm --needed namcap
+              cd /workspace
+              checked=0
+              failed=0
+              validate() {
+                echo "Validating $1"
+                local output
+                output="$(namcap "$1")"
+                if [[ -n "$output" ]]; then
+                  echo "$output" >&2
+                  failed=1
+                fi
+                checked=$((checked + 1))
+              }
+              while IFS= read -r path; do
+                [[ -n "$path" ]] || continue
+                [[ "$path" != /* && "$path" != ".." && "$path" != ../* && "$path" != */../* && "$path" != */.. ]] || {
+                  echo "Path must stay inside the workspace: $path" >&2
+                  exit 1
+                }
+                if [[ -f "$path" ]]; then
+                  validate "$path"
+                elif [[ -d "$path" ]]; then
+                  while IFS= read -r -d "" pkgbuild; do
+                    validate "$pkgbuild"
+                  done < <(find "$path" -type f -name "PKGBUILD*" -print0)
+                else
+                  echo "Path not found: $path" >&2
+                  exit 1
+                fi
+              done <<< "$PKGBUILD_PATHS"
+              (( failed == 0 )) || exit 1
+              (( checked > 0 )) || {
+                echo "No PKGBUILD files found" >&2
+                exit 1
+              }
+            '
