@@ -1,0 +1,36 @@
+---
+name: Arch source deployment
+description: Record a timmo pacman repository publication as a deployment on its source repository
+inputs:
+  stage:
+    description: start creates the deployment; finish records the publication result
+    required: true
+  sourceRepository:
+    description: Source owner and repository
+    required: true
+  sourceSha:
+    description: Full source commit SHA (start)
+    required: false
+  packageName:
+    description: Allowlisted Arch package name (start)
+    required: false
+  packageFile:
+    description: Published package file name (start)
+    required: false
+  deploymentId:
+    description: deployment-id output from the start stage (finish)
+    required: false
+  environmentUrl:
+    description: environment-url output from the start stage (finish)
+    required: false
+  jobStatus:
+    description: The publishing job's job.status (finish)
+    required: false
+outputs:
+  deployment-id:
+    description: Created deployment ID
+  environment-url:
+    description: Published package URL
+runs:
+  using: node24
+  main: dist/index.js
