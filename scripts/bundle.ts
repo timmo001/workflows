@@ -26,6 +26,11 @@ const actions = [
     outfile: ".github/actions/release-bun-cli/dist/index.js",
   },
   {
+    name: "prepare-arch-bin",
+    entry: "src/actions/prepare-arch-bin/main.ts",
+    outfile: ".github/actions/prepare-arch-bin/dist/index.js",
+  },
+  {
     name: "build-python-pypi-release",
     entry: "src/actions/build-python-pypi-release/main.ts",
     outfile: ".github/actions/build-python-pypi-release/dist/index.js",

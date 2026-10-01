@@ -1,0 +1,46 @@
+---
+name: Prepare Arch bin package
+description: >-
+  Render a PKGBUILD for a prebuilt Arch -bin package from a GitHub release,
+  with the release version and tarball checksums
+inputs:
+  repository:
+    description: Repository that owns the release, as owner/name
+    required: false
+    default: ${{ github.repository }}
+  releaseVersion:
+    description: Release tag in YYYYMMDD.N form
+    required: true
+  packageName:
+    description: Release asset base name, as used in <name>-<version>-linux-<arch>.tar.gz
+    required: true
+  binaryName:
+    description: Executable name inside the tarball; defaults to packageName
+    required: false
+  pkgbuildTemplate:
+    description: >-
+      Workspace-relative PKGBUILD template with pkgver, sha256sums_x86_64 and
+      sha256sums_aarch64 lines
+    required: true
+  outputDirectory:
+    description: Directory to write the PKGBUILD and auxiliary files to
+    required: true
+  completionsArguments:
+    description: >-
+      Executable arguments that print shell completions, with {shell} replaced
+      by bash, fish and zsh; writes <binary>.bash, <binary>.fish and _<binary>.
+      Downloads the x86_64 tarball, verifies its checksum and runs the binary,
+      so it needs an x86_64 runner
+    required: false
+  extraFiles:
+    description: >-
+      Newline-separated workspace-relative files copied into the output
+      directory, for example LICENSE
+    required: false
+  token:
+    description: GitHub token used to download release assets
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: node24
+  main: dist/index.js
