@@ -114,6 +114,16 @@ uses a separate `SOURCE_ARTIFACT_TOKEN`, selected only for source repositories
 and granted Actions read permission. Build jobs never receive either token or
 the publisher's signing and R2 credentials.
 
+`.github/actions/arch-source-deployment` lets the `timmo001/arch-repo`
+publisher record each publication as a deployment on the source repository at
+the published commit. The `start` stage creates the deployment and marks it in
+progress, linked to the publish run; the `finish` stage records success, with a
+link to the package file, or failure. Each package gets its own environment,
+`arch-git/<package>` for `-git` packages and `arch-bin/<package>` otherwise, so
+a new publish only supersedes earlier deployments of the same package. Pass a
+token with Deployments write permission on the source repositories as
+`GH_TOKEN`.
+
 `.github/actions/attest-release-assets` is a step-level action rather than a
 reusable workflow. Run it in the job that already holds the final files, before
 they are published:
