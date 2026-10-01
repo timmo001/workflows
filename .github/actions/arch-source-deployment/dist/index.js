@@ -2833,7 +2833,7 @@ var asyncFinalizer = /* @__PURE__ */ makePrimitive({
     }
   },
   [contE](cause, _fiber) {
-    return hasInterrupts(cause) ? flatMap2(this[args](), () => failCause(cause)) : failCause(cause);
+    return hasInterrupts(cause) ? flatMap2(combineFinalizerCause(exitFailCause(cause), this[args]()), () => failCause(cause)) : failCause(cause);
   }
 });
 var callback = (register) => callbackOptions(register, register.length >= 2);
@@ -3032,35 +3032,34 @@ var asSome = (self) => map2(self, some2);
 var andThen = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? returnPayload : andThenCont, f));
 var tap = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? tapEffectCont : tapCont, f));
 var asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
-var raceAllFirst = (all, options) => withFiber((parent) => callback((resume) => {
-  let done = false;
+var raceAllFirst = (all, options) => withFiber((parent) => {
   const fibers = new Set;
-  const onExit = (exit) => {
-    done = true;
-    resume(fibers.size === 0 ? exit : flatMap2(uninterruptible(fiberInterruptAll(fibers)), () => exit));
-  };
-  let i = 0;
-  for (const effect of all) {
-    if (done)
-      break;
-    const index = i++;
-    const fiber = forkUnsafe(parent, effect, true, true, false);
-    fibers.add(fiber);
-    fiber.addObserver((exit) => {
-      fibers.delete(fiber);
-      const isWinner = !done;
-      onExit(exit);
-      if (isWinner && options?.onWinner) {
-        options.onWinner({
-          fiber,
-          index,
-          parentFiber: parent
-        });
-      }
-    });
-  }
-  return fiberInterruptAll(fibers);
-}));
+  onExitUnsafe(parent, () => fibers.size === 0 ? undefined : fiberInterruptAll(fibers));
+  return callback((resume) => {
+    let done = false;
+    let i = 0;
+    for (const effect of all) {
+      if (done)
+        break;
+      const index = i++;
+      const fiber = forkUnsafe(parent, effect, true, true, false);
+      fibers.add(fiber);
+      fiber.addObserver((exit) => {
+        fibers.delete(fiber);
+        const isWinner = !done;
+        done = true;
+        resume(exit);
+        if (isWinner && options?.onWinner) {
+          options.onWinner({
+            fiber,
+            index,
+            parentFiber: parent
+          });
+        }
+      });
+    }
+  });
+});
 var raceFirst = /* @__PURE__ */ dual((args) => isEffect(args[1]), (self, that, options) => raceAllFirst([self, that], options));
 var flatMap2 = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, andThenCont, f));
 var effectIsExit = (effect) => effect[ExitTypeId] !== undefined;
@@ -3601,15 +3600,13 @@ var iterateConcurrentImpl = (options) => {
     let parentFiber;
     let fibers;
     let resume;
-    let interrupted = false;
     let terminal;
     let effect;
     const failDefect = (error) => {
       const defect = exitDie(error);
       terminal = defect;
       done = true;
-      interrupted = true;
-      return fibers && fibers.size > 0 ? flatMap2(uninterruptible(fiberInterruptAll(Array.from(fibers))), () => defect) : defect;
+      return fibers && fibers.size > 0 ? flatMap2(uninterruptible(fiberInterruptAll(Array.from(fibers))), () => terminal ?? defect) : defect;
     };
     const go = () => {
       let paused = false;
@@ -3635,9 +3632,8 @@ var iterateConcurrentImpl = (options) => {
             if (result)
               return cb(result);
             return suspend(() => {
-              terminal = exitVoid;
-              interrupted = true;
-              return fibers ? fiberInterruptAll(fibers) : void_;
+              terminal ??= exitVoid;
+              return flatMap2(fibers ? fiberInterruptAll(fibers) : void_, () => terminal?._tag === "Failure" ? terminal : void_);
             });
           });
         } else {
@@ -3655,21 +3651,17 @@ var iterateConcurrentImpl = (options) => {
             fibers.delete(fiber);
             try {
               if (terminal) {
-                if (!interrupted && exit._tag === "Failure") {
-                  for (const reason of exit.cause.reasons) {
-                    if (reason._tag === "Interrupt")
-                      continue;
-                    else if (terminal._tag === "Failure") {
-                      terminal.cause.reasons.push(reason);
-                    } else {
-                      terminal = exitFailCause(causeFromReasons([reason]));
-                    }
+                if (exit._tag === "Failure") {
+                  const reasons = exit.cause.reasons.filter((reason) => reason._tag !== "Interrupt");
+                  if (reasons.length > 0) {
+                    const cause = causeFromReasons(reasons);
+                    terminal = exitFailCause(terminal._tag === "Failure" ? causeCombine(terminal.cause, cause) : cause);
                   }
                 }
               } else {
                 const result = step(state, item, exit, currentIndex);
                 if (result) {
-                  terminal = result._tag === "Failure" ? exitFailCause(causeFromReasons(result.cause.reasons.slice())) : result;
+                  terminal = result;
                   go();
                 }
               }
@@ -6288,7 +6280,7 @@ var candidateIndexCache = /* @__PURE__ */ new WeakMap;
 var emptyCandidates = /* @__PURE__ */ Object.freeze([]);
 var getRuntimeType = (input) => input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
 var hasPropertySignature = (input, key) => key === "__proto__" ? Object.hasOwn(input, key) : (key in input);
-function getIndex(types) {
+function getCandidateIndex(types) {
   let index = candidateIndexCache.get(types);
   if (index)
     return index;
@@ -6297,6 +6289,7 @@ function getIndex(types) {
   let otherwise;
   let literalCandidates;
   let onlyLiterals = true;
+  const literalOf = [];
   for (let i = 0;i < types.length; i++) {
     const a = types[i];
     const encoded = toCandidate(a);
@@ -6305,10 +6298,11 @@ function getIndex(types) {
     if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
       literalCandidates ??= new Map;
       const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
+      literalOf[i] = literal;
       let arr = literalCandidates.get(literal);
       if (!arr)
         literalCandidates.set(literal, arr = []);
-      arr.push(a);
+      arr.push(i);
     } else {
       onlyLiterals = false;
     }
@@ -6337,23 +6331,24 @@ function getIndex(types) {
     }
   }
   const fallbacks = {};
-  const getFallback = (type) => fallbacks[type] ??= Object.freeze((otherwise?.[type] ?? emptyCandidates).map((i) => types[i]));
+  const getFallback = (type) => fallbacks[type] ??= Object.freeze(otherwise?.[type] ?? emptyCandidates);
   if (onlyLiterals && literalCandidates) {
     literalCandidates.forEach(Object.freeze);
     index = (input) => literalCandidates.get(input) ?? emptyCandidates;
   } else if (bySentinel?.size === 1 && !otherwise) {
     const [key, [byValue]] = bySentinel.entries().next().value;
-    const candidates = byValue;
+    const candidates = new Map;
     for (const [literal, indexes] of byValue) {
-      candidates.set(literal, Object.freeze(Array.from(indexes, (index) => types[index])));
+      candidates.set(literal, Object.freeze(Array.from(indexes)));
     }
+    const all = Object.freeze(types.map((_, i) => i));
     index = (input, isConstructor) => {
       if (isObjectKeyword(input)) {
         const value = hasPropertySignature(input, key) ? input[key] : undefined;
         if (value !== undefined)
           return candidates.get(value) ?? emptyCandidates;
         if (isConstructor)
-          return types;
+          return all;
       }
       return emptyCandidates;
     };
@@ -6412,25 +6407,16 @@ function getIndex(types) {
           }
         }
       }
-      return Array.from(selected).sort((a, b) => a - b).map((i) => types[i]);
+      return Array.from(selected).sort((a, b) => a - b);
     };
   } else {
     index = (input) => {
       const fallback = getFallback(getRuntimeType(input));
-      return literalCandidates ? fallback.filter(filterLiterals(input)) : fallback;
+      return literalCandidates ? fallback.filter((i) => literalOf[i] === undefined || literalOf[i] === input) : fallback;
     };
   }
   candidateIndexCache.set(types, index);
   return index;
-}
-function filterLiterals(input) {
-  return (ast) => {
-    const encoded = toCandidate(ast);
-    return encoded._tag === "Literal" ? encoded.literal === input : encoded._tag === "UniqueSymbol" ? encoded.symbol === input : true;
-  };
-}
-function getCandidates(input, types, isConstructor = false) {
-  return getIndex(types)(input, isConstructor);
 }
 var Union = class extends ASTNodeImpl {
   _tag = "Union";
@@ -6445,42 +6431,25 @@ var Union = class extends ASTNodeImpl {
   }
   getParser(compile, compileField) {
     const ast = this;
+    const isConstructor = compileField !== undefined;
+    const parsers = [];
+    const parser = (i) => parsers[i] ??= compile(ast.types[i]);
+    let index;
     return (input, options) => {
       if (input === missing) {
         return missingExit;
       }
-      const candidates = getCandidates(input, ast.types, compileField !== undefined);
+      const candidates = (index ??= getCandidateIndex(ast.types))(input, isConstructor);
       if (candidates.length === 0) {
         return fail6(new AnyOf(ast, [], input, options));
       }
       if (candidates.length === 1) {
-        const result = compile(candidates[0])(input, options);
+        const result = parser(candidates[0])(input, options);
         if (result._tag === "Success")
           return result;
-        return effectIsExit(result) ? failSingleUnionCandidate(ast, result.cause, input, options) : catchCause2(result, (cause) => failSingleUnionCandidate(ast, cause, input, options));
+        return effectIsExit(result) ? failSingleUnionCandidate(ast, result.cause, input, options) : catchSingleUnionCandidate(ast, result, input, options);
       }
-      const state = {
-        ast,
-        compile,
-        input,
-        out: undefined,
-        successes: ast.options?.mode === "oneOf" ? [] : undefined,
-        issues: undefined,
-        options
-      };
-      const eff = parseUnion(state, candidates);
-      if (!eff) {
-        if (state.out)
-          return state.out;
-        return fail6(new AnyOf(ast, state.issues ?? [], input, options));
-      }
-      return flatMapEager2(eff, (_) => {
-        if (state.out === sameExit)
-          return succeed6(input);
-        if (state.out)
-          return state.out;
-        return fail6(new AnyOf(ast, state.issues ?? [], input, options));
-      });
+      return parseUnionCandidates(ast, parser, candidates, input, options);
     };
   }
   _rebuild(recur, checks, encodingChecks) {
@@ -6536,12 +6505,41 @@ function failSingleUnionCandidate(ast, cause, input, options) {
     return failCause2(cause);
   return fail5(new AnyOf(ast, [issue], input, options));
 }
+function catchSingleUnionCandidate(ast, result, input, options) {
+  return catchCause2(result, (cause) => failSingleUnionCandidate(ast, cause, input, options));
+}
+function parseUnionCandidates(ast, parser, candidates, input, options) {
+  const state = {
+    ast,
+    parser,
+    input,
+    out: undefined,
+    successes: ast.options?.mode === "oneOf" ? [] : undefined,
+    issues: undefined,
+    options
+  };
+  const eff = parseUnion(state, candidates);
+  if (!eff) {
+    if (state.out)
+      return state.out;
+    return fail6(new AnyOf(ast, state.issues ?? [], input, options));
+  }
+  return resumeUnion(eff, state);
+}
+function resumeUnion(eff, state) {
+  return flatMapEager2(eff, (_) => {
+    if (state.out === sameExit)
+      return succeed6(state.input);
+    if (state.out)
+      return state.out;
+    return fail6(new AnyOf(state.ast, state.issues ?? [], state.input, state.options));
+  });
+}
 var parseUnion = /* @__PURE__ */ iterateEager()({
-  onItem(s, ast) {
-    const parser = s.compile(ast);
-    return parser(s.input, s.options);
+  onItem(s, i) {
+    return s.parser(i)(s.input, s.options);
   },
-  step(s, candidate, exit) {
+  step(s, i, exit) {
     if (exit._tag === "Failure") {
       const issue = getSchemaIssue(exit.cause);
       if (issue === undefined) {
@@ -6553,12 +6551,12 @@ var parseUnion = /* @__PURE__ */ iterateEager()({
         s.issues = [issue];
     } else {
       if (s.out && s.successes) {
-        s.successes.push(candidate);
+        s.successes.push(s.ast.types[i]);
         return fail5(new OneOf(s.ast, s.successes, s.input, s.options));
       }
       s.out = exit;
       if (s.successes) {
-        s.successes.push(candidate);
+        s.successes.push(s.ast.types[i]);
       } else {
         return void_2;
       }
@@ -6661,33 +6659,42 @@ function isPattern(regExp, annotations) {
     ...annotations
   });
 }
-function copy(ast) {
-  return Object.assign(Object.create(Object.getPrototypeOf(ast)), ast);
+var bodyOwners = /* @__PURE__ */ new WeakMap;
+function copy(ast, changes) {
+  const out = Object.assign(Object.create(Object.getPrototypeOf(ast)), ast, changes);
+  if (Reflect.ownKeys(changes).every((key) => key === "context" || key === "encoding")) {
+    bodyOwners.set(out, getContextOwner(ast));
+  }
+  return out;
 }
-var contextOwners = /* @__PURE__ */ new WeakMap;
 function getContextOwner(ast) {
-  return contextOwners.get(ast) ?? ast;
+  const existing = bodyOwners.get(ast);
+  if (existing !== undefined)
+    return existing;
+  if (ast.encoding === undefined)
+    return ast;
+  const owner = Object.assign(Object.create(Object.getPrototypeOf(ast)), ast, {
+    encoding: undefined
+  });
+  bodyOwners.set(ast, owner);
+  return owner;
 }
 function replaceEncoding(ast, encoding) {
-  if (ast.encoding === encoding) {
-    return ast;
-  }
-  const out = copy(ast);
-  out.encoding = encoding;
-  return out;
+  return ast.encoding === encoding ? ast : copy(ast, {
+    encoding
+  });
 }
 function replaceContext(ast, context) {
   if (ast.context === context) {
     return ast;
   }
   const owner = getContextOwner(ast);
-  if (owner.context === context) {
+  if (owner.context === context && owner.encoding === ast.encoding) {
     return owner;
   }
-  const out = copy(ast);
-  out.context = context;
-  contextOwners.set(out, owner);
-  return out;
+  return copy(ast, {
+    context
+  });
 }
 function getLastEncoding(ast) {
   return ast.encoding ? getLastEncoding(ast.encoding[ast.encoding.length - 1].to) : ast;
@@ -6697,12 +6704,12 @@ function annotate(ast, annotations) {
     const last = ast.checks[ast.checks.length - 1];
     return replaceChecks(ast, append(ast.checks.slice(0, -1), last.annotate(annotations)));
   }
-  const out = copy(ast);
-  out.annotations = {
-    ...ast.annotations,
-    ...annotations
-  };
-  return out;
+  return copy(ast, {
+    annotations: {
+      ...ast.annotations,
+      ...annotations
+    }
+  });
 }
 function replaceChecks(ast, checks) {
   if (ast._tag === "Suspend" && checks) {
@@ -6711,9 +6718,9 @@ function replaceChecks(ast, checks) {
   if (ast.checks === checks) {
     return ast;
   }
-  const out = copy(ast);
-  out.checks = checks;
-  return out;
+  return copy(ast, {
+    checks
+  });
 }
 function appendChecks(ast, checks) {
   return replaceChecks(ast, combineChecks(ast.checks, checks));
@@ -6844,19 +6851,33 @@ function extractStructuralChecks(checks) {
   const out = checks.flatMap(extract);
   return isArrayNonEmpty2(out) ? out : undefined;
 }
-var toType = /* @__PURE__ */ memoizeIdempotent((ast) => {
-  const out = ast;
-  const type = out.recur?.(toType) ?? out;
-  const encodingChecks = type.encodingChecks;
-  if (encodingChecks) {
-    const checks = type === ast ? encodingChecks : isArrays(type) || isObjects(type) || isDeclaration(type) && type.typeParameters.length > 0 ? extractStructuralChecks(encodingChecks) : undefined;
-    const copyOfType = copy(type);
-    copyOfType.encoding = undefined;
-    copyOfType.encodingChecks = undefined;
-    copyOfType.checks = combineChecks(type.checks, checks);
-    return copyOfType;
+function canPreserveEncodingChecks(ast) {
+  let preserve = true;
+  function visit(child) {
+    preserve = preserve && !child.encoding && !isSuspend(child);
+    if (preserve && "recur" in child)
+      child.recur(visit);
+    return child;
   }
-  return type.encoding ? replaceEncoding(type, undefined) : type;
+  if ("recur" in ast)
+    ast.recur(visit);
+  return preserve;
+}
+var toType = /* @__PURE__ */ memoizeIdempotent((ast) => {
+  const owner = getContextOwner(ast);
+  if (owner !== ast) {
+    const type = toType(owner);
+    return type === owner && ast.encoding === undefined ? ast : replaceContext(type, ast.context);
+  }
+  const type = "recur" in ast ? ast.recur(toType) : ast;
+  if ("encodingChecks" in type && type.encodingChecks) {
+    const checks = canPreserveEncodingChecks(ast) ? type.encodingChecks : isArrays(type) || isObjects(type) || isDeclaration(type) && type.typeParameters.length > 0 ? extractStructuralChecks(type.encodingChecks) : undefined;
+    return copy(type, {
+      encodingChecks: undefined,
+      checks: combineChecks(type.checks, checks)
+    });
+  }
+  return type;
 });
 var toEncoded = /* @__PURE__ */ memoizeIdempotent((ast) => {
   return toType(flip2(ast));
@@ -6880,8 +6901,12 @@ var flip2 = /* @__PURE__ */ memoize((ast) => {
   if (ast.encoding) {
     return flipEncoding(ast, ast.encoding);
   }
-  const out = ast;
-  return out.flip?.(flip2) ?? out.recur?.(flip2) ?? out;
+  const owner = getContextOwner(ast);
+  if (owner !== ast) {
+    const flipped = flip2(owner);
+    return flipped === owner ? ast : replaceContext(flipped, ast.context);
+  }
+  return "flip" in ast ? ast.flip(flip2) : ("recur" in ast) ? ast.recur(flip2) : ast;
 });
 function containsUndefined(ast) {
   switch (ast._tag) {
@@ -7557,19 +7582,7 @@ function validateCanonicalObjectPropertyNames(ast) {
 }
 function makeReorder(getPriority) {
   return (types) => {
-    const indexMap = new Map;
-    for (let i = 0;i < types.length; i++) {
-      indexMap.set(toEncoded(types[i]), i);
-    }
-    const sortedTypes = [...types].sort((a, b) => {
-      a = toEncoded(a);
-      b = toEncoded(b);
-      const pa = getPriority(a);
-      const pb = getPriority(b);
-      if (pa !== pb)
-        return pa - pb;
-      return indexMap.get(a) - indexMap.get(b);
-    });
+    const sortedTypes = [...types].sort((a, b) => getPriority(toEncoded(a)) - getPriority(toEncoded(b)));
     const orderChanged = sortedTypes.some((ast, index) => ast !== types[index]);
     if (!orderChanged)
       return types;
@@ -8632,8 +8645,10 @@ var releaseTakers = (self) => {
     return;
   }
   for (const taker of self.state.takers) {
+    if (!taker.ready())
+      continue;
     self.state.takers.delete(taker);
-    taker(exitVoid);
+    taker.resume(exitVoid);
     if (self.messages.length === 0) {
       break;
     }
@@ -8667,10 +8682,14 @@ var awaitTake = (self, ready) => callback((resume) => {
     return resume(self.state.exit);
   if (ready())
     return resume(exitVoid);
-  self.state.takers.add(resume);
+  const taker = {
+    ready,
+    resume
+  };
+  self.state.takers.add(taker);
   return sync(() => {
     if (self.state._tag !== "Done")
-      self.state.takers.delete(resume);
+      self.state.takers.delete(taker);
   });
 });
 var offerOrWait = (self, message) => callback((resume) => offerUnsafe(self, message) ? resume(exitTrue) : waitToOffer(self, {
@@ -8748,7 +8767,7 @@ var finalize = (self, exit) => {
     exit
   };
   for (const taker of openState.takers) {
-    taker(exit);
+    taker.resume(exit);
   }
   openState.takers.clear();
   for (const awaiter of openState.awaiters) {
