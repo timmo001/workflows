@@ -1,0 +1,39 @@
+---
+name: Build Bun CLI
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      smoke-test:
+        description: >-
+          Trusted multi-line shell commands run after the build; empty skips the smoke test
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up mise
+        uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492  # v5.0.1
+      - name: Check
+        run: mise run check
+      - name: Test
+        run: mise run test
+      - name: Build
+        run: mise run build
+      - name: Smoke test
+        if: inputs.smoke-test != ''
+        env:
+          SMOKE_TEST: ${{ inputs.smoke-test }}
+        run: bash -euo pipefail -c "$SMOKE_TEST"
