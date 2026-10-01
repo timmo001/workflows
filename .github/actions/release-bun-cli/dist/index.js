@@ -12050,7 +12050,8 @@ var Inputs = Struct({
   sourceSha: optionalKey2(String4),
   existingRelease: optionalKey2(GitHubBoolean),
   assetRoot: optionalKey2(String4),
-  nfpmVersion: optionalKey2(String4)
+  nfpmVersion: optionalKey2(String4),
+  versionDefine: optionalKey2(String4)
 });
 var architectureProfiles = {
   x86_64: {
@@ -12069,6 +12070,7 @@ var architectureProfiles = {
   }
 };
 var VERSION_PATTERN = /^[0-9]{8}\.[0-9]+$/;
+var DEFINE_KEY_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
 var IDENTITY_PATTERN = /^[a-z0-9][a-z0-9._+-]*$/;
 var isSafeRelativePath = (path) => path.length > 0 && !path.startsWith("/") && !/(^|\/)\.\.?(\/|$)/.test(path);
 var newlineValues = (value) => {
@@ -12123,6 +12125,13 @@ var validateIdentity = (input) => {
     }
   }
 };
+var compileScript = String.raw`set -euo pipefail
+mkdir -p dist/release/root
+define=()
+if [[ -n "$VERSION_DEFINE" ]]; then
+  define=(--define "$VERSION_DEFINE=\"$RELEASE_VERSION\"")
+fi
+bun build "$ENTRYPOINT" --compile --target="$BUN_TARGET" "\${define[@]}" --outfile "dist/release/root/$BINARY_NAME"`.replaceAll("\\${", "${");
 var smokeTestScript = String.raw`set -euo pipefail
 while IFS= read -r invocation || [[ -n "$invocation" ]]; do
   [[ -n "$invocation" ]] || continue
@@ -12217,22 +12226,31 @@ var allocateVersion = fn2("ReleaseBunCli.allocateVersion")(function* (inputs) {
 var validateInputs = fn2("ReleaseBunCli.validateInputs")(function* (inputs) {
   yield* requireIdentity(inputs);
 });
+var versionDefineEnv = fn2("ReleaseBunCli.versionDefineEnv")(function* (inputs) {
+  const key = inputs.versionDefine ?? "";
+  if (key === "")
+    return { VERSION_DEFINE: "", RELEASE_VERSION: "" };
+  if (!DEFINE_KEY_PATTERN.test(key)) {
+    return yield* failure(`Invalid version define: ${key}`);
+  }
+  const version = yield* requireInput(inputs.releaseVersion, "release-version");
+  if (!VERSION_PATTERN.test(version)) {
+    return yield* failure(`Invalid release version: ${version}`);
+  }
+  return { VERSION_DEFINE: key, RELEASE_VERSION: version };
+});
 var compile2 = fn2("ReleaseBunCli.compile")(function* (inputs) {
   const commands = yield* Service3;
   const identity = yield* requireIdentity(inputs);
   const architecture = yield* requireInput(inputs.architecture, "architecture");
   const bunTarget = architectureProfiles[architecture].bunTarget;
-  yield* commands.stream("bash", [
-    "-c",
-    `set -euo pipefail
-mkdir -p dist/release/root
-bun build "$ENTRYPOINT" --compile --target="$BUN_TARGET" --outfile "dist/release/root/$BINARY_NAME"`
-  ], {
+  yield* commands.stream("bash", ["-c", compileScript], {
     label: "compile executable",
     env: {
       BINARY_NAME: identity.binaryName,
       BUN_TARGET: bunTarget,
-      ENTRYPOINT: identity.entrypoint
+      ENTRYPOINT: identity.entrypoint,
+      ...yield* versionDefineEnv(inputs)
     }
   }).pipe(mapCommand);
 });
@@ -12413,7 +12431,8 @@ var program = gen2(function* () {
     "sourceSha",
     "existingRelease",
     "assetRoot",
-    "nfpmVersion"
+    "nfpmVersion",
+    "versionDefine"
   ]).pipe(mapError2(toActionFailure));
   yield* run3(inputs);
 });

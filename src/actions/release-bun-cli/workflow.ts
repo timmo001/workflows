@@ -39,6 +39,7 @@ export const Inputs = Schema.Struct({
   existingRelease: Schema.optionalKey(GitHubBoolean),
   assetRoot: Schema.optionalKey(Schema.String),
   nfpmVersion: Schema.optionalKey(Schema.String),
+  versionDefine: Schema.optionalKey(Schema.String),
 });
 
 export interface Inputs extends Schema.Schema.Type<typeof Inputs> {}
@@ -63,6 +64,9 @@ export const architectureProfiles = {
 export const expectedReleaseAssetCount = 6;
 
 export const VERSION_PATTERN = /^[0-9]{8}\.[0-9]+$/;
+
+export const DEFINE_KEY_PATTERN =
+  /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
 
 export const IDENTITY_PATTERN = /^[a-z0-9][a-z0-9._+-]*$/;
 
@@ -176,6 +180,17 @@ export const validateIdentity = (input: {
     }
   }
 };
+
+export const compileScript = String.raw`set -euo pipefail
+mkdir -p dist/release/root
+define=()
+if [[ -n "$VERSION_DEFINE" ]]; then
+  define=(--define "$VERSION_DEFINE=\"$RELEASE_VERSION\"")
+fi
+bun build "$ENTRYPOINT" --compile --target="$BUN_TARGET" "\${define[@]}" --outfile "dist/release/root/$BINARY_NAME"`.replaceAll(
+  "\\${",
+  "${",
+);
 
 export const smokeTestScript = String.raw`set -euo pipefail
 while IFS= read -r invocation || [[ -n "$invocation" ]]; do
@@ -317,27 +332,41 @@ const validateInputs = Effect.fn("ReleaseBunCli.validateInputs")(function* (
   yield* requireIdentity(inputs);
 });
 
+const versionDefineEnv = Effect.fn("ReleaseBunCli.versionDefineEnv")(function* (
+  inputs: Inputs,
+) {
+  const key = inputs.versionDefine ?? "";
+
+  if (key === "") return { VERSION_DEFINE: "", RELEASE_VERSION: "" };
+
+  if (!DEFINE_KEY_PATTERN.test(key)) {
+    return yield* failure(`Invalid version define: ${key}`);
+  }
+
+  const version = yield* requireInput(inputs.releaseVersion, "release-version");
+
+  if (!VERSION_PATTERN.test(version)) {
+    return yield* failure(`Invalid release version: ${version}`);
+  }
+
+  return { VERSION_DEFINE: key, RELEASE_VERSION: version };
+});
+
 const compile = Effect.fn("ReleaseBunCli.compile")(function* (inputs: Inputs) {
   const commands = yield* CommandExecutor.Service;
   const identity = yield* requireIdentity(inputs);
   const architecture = yield* requireInput(inputs.architecture, "architecture");
   const bunTarget = architectureProfiles[architecture].bunTarget;
   yield* commands
-    .stream(
-      "bash",
-      [
-        "-c",
-        'set -euo pipefail\nmkdir -p dist/release/root\nbun build "$ENTRYPOINT" --compile --target="$BUN_TARGET" --outfile "dist/release/root/$BINARY_NAME"',
-      ],
-      {
-        label: "compile executable",
-        env: {
-          BINARY_NAME: identity.binaryName,
-          BUN_TARGET: bunTarget,
-          ENTRYPOINT: identity.entrypoint,
-        },
+    .stream("bash", ["-c", compileScript], {
+      label: "compile executable",
+      env: {
+        BINARY_NAME: identity.binaryName,
+        BUN_TARGET: bunTarget,
+        ENTRYPOINT: identity.entrypoint,
+        ...(yield* versionDefineEnv(inputs)),
       },
-    )
+    })
     .pipe(mapCommand);
 });
 

@@ -21,6 +21,7 @@ const program = Effect.gen(function* () {
     "existingRelease",
     "assetRoot",
     "nfpmVersion",
+    "versionDefine",
   ]).pipe(Effect.mapError(ActionRuntime.toActionFailure));
 
   yield* run(inputs);
