@@ -111,8 +111,8 @@ public `timmo001/arch-repo` allowlist revision embedded in the workflow. Its
 `ARCH_REPO_DISPATCH_TOKEN` secret must be a fine-grained token selected only for
 `timmo001/arch-repo`, with Contents write permission. The protected publisher
 uses a separate `SOURCE_ARTIFACT_TOKEN`, selected only for source repositories
-and granted Actions read permission. Build jobs never receive either token or
-the publisher's signing and R2 credentials.
+and granted Actions read and Deployments read and write permissions. Build jobs
+never receive either token or the publisher's signing and R2 credentials.
 
 `.github/actions/arch-source-deployment` lets the `timmo001/arch-repo`
 publisher record each publication as a deployment on the source repository at
