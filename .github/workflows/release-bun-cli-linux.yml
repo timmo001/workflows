@@ -104,7 +104,7 @@ jobs:
       source-sha: ${{ steps.version.outputs.source-sha }}
     steps:
       - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -140,12 +140,12 @@ jobs:
           entrypoint: ${{ inputs.entrypoint }}
           packageConfig: ${{ inputs.package-config }}
       - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ inputs.source-ref || github.sha }}
       - name: Install Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ inputs.bun-version }}
       - name: Install dependencies
@@ -191,7 +191,7 @@ jobs:
           archiveExtraPaths: ${{ inputs.archive-extra-paths }}
           releaseVersion: ${{ needs.version.outputs.release-version }}
       - name: Upload release assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-${{ inputs.binary-name }}-${{ matrix.architecture }}-${{ github.run_id }}
           path: dist/release/assets
@@ -213,18 +213,18 @@ jobs:
       source-sha: ${{ needs.version.outputs.source-sha }}
     steps:
       - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ inputs.source-ref || github.sha }}
       - name: Download x86_64 assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-${{ inputs.binary-name }}-x86_64-${{ github.run_id }}
           path: ${{ github.workspace }}/.release-assets
       - name: Download aarch64 assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-${{ inputs.binary-name }}-aarch64-${{ github.run_id }}
           path: ${{ github.workspace }}/.release-assets
