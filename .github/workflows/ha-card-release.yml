@@ -12,7 +12,7 @@ on:
         # renovate: datasource=node-version depName=node versioning=node
         default: "26.10.0"
       dist-glob:
-        description: "Glob pattern for release assets"
+        description: "Glob pattern for release assets; with attest, newline-separated patterns that each match exactly one file"
         required: false
         type: string
         default: "dist/*.js"
@@ -21,9 +21,12 @@ on:
         required: false
         type: boolean
         default: false
-
-permissions:
-  contents: write
+      attest:
+        description: >-
+          Attest the release assets and upload the Sigstore bundle; the caller job must grant id-token and attestations write
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -33,6 +36,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    # No permissions block: the job inherits the caller's grant, so callers
+    # that enable attest can pass id-token and attestations write without
+    # breaking callers that only grant contents write.
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,7 +55,16 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm run build
+      - name: Attest release assets
+        id: attest
+        if: inputs.attest
+        uses: $/.github/actions/attest-release-assets
+        with:
+          subject-patterns: ${{ inputs.dist-glob }}
+          bundle-path: dist/${{ github.event.repository.name }}-${{ github.ref_name }}.sigstore.json
       - name: Upload release assets
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          files: ${{ inputs.dist-glob }}
+          files: |
+            ${{ inputs.attest && steps.attest.outputs.subjects || inputs.dist-glob }}
+            ${{ steps.attest.outputs.bundle-path }}
