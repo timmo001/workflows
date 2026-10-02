@@ -77,7 +77,9 @@ accordingly.
 `lint-arch-pkgbuild.yml` runs namcap in an Arch container over the files or
 directories listed in `pkgbuild-paths` (newline-separated, default `.scripts`).
 Directories are searched for `PKGBUILD*`. Paths must stay inside the workspace
-and the lint fails when nothing is found.
+and the lint fails when nothing is found. Any namcap output fails the lint;
+`exclude-rules` takes a comma-separated list of namcap rules to skip, for
+example `redundant_makedepends` when a VCS package also needs `git` at runtime.
 
 `release-bun-cli-linux.yml` accepts two opt-in inputs. `attest: true` attests
 the release binaries and packages and uploads

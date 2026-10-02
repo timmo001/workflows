@@ -11,6 +11,12 @@ on:
         required: false
         type: string
         default: ".scripts"
+      exclude-rules:
+        description: >-
+          Comma-separated namcap rules to skip, passed to namcap --exclude
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -27,11 +33,13 @@ jobs:
       - name: Validate PKGBUILDs with namcap
         env:
           PKGBUILD_PATHS: ${{ inputs.pkgbuild-paths }}
+          NAMCAP_EXCLUDE_RULES: ${{ inputs.exclude-rules }}
           # renovate-container: datasource=docker depName=archlinux
           ARCH_IMAGE: archlinux:latest@sha256:63c7b061c0c001cb7ce4f8d11b63d351c23e7f97121bc5c8bd5d9f431e615d7d
         run: |
           docker run --rm \
             --env PKGBUILD_PATHS \
+            --env NAMCAP_EXCLUDE_RULES \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$ARCH_IMAGE" \
             bash -euo pipefail -c '
@@ -39,10 +47,12 @@ jobs:
               cd /workspace
               checked=0
               failed=0
+              namcap_args=()
+              [[ -z "$NAMCAP_EXCLUDE_RULES" ]] || namcap_args=(--exclude "$NAMCAP_EXCLUDE_RULES")
               validate() {
                 echo "Validating $1"
                 local output
-                output="$(namcap "$1")"
+                output="$(namcap "${namcap_args[@]}" "$1")"
                 if [[ -n "$output" ]]; then
                   echo "$output" >&2
                   failed=1
