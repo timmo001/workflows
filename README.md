@@ -108,8 +108,9 @@ support reusable workflows, so the caller must download that artifact and
 publish it with `id-token: write`. The shared workflow does not accept package
 index credentials or modify the source repository.
 
-`build-arch-package.yml` builds only package and repository pairs pinned in the
-public `timmo001/arch-repo` allowlist revision embedded in the workflow. Its
+`build-arch-package.yml` builds only package and repository pairs listed in the
+public `timmo001/arch-repo` allowlist on its `main` branch, and the protected
+publisher checks them again before signing. Its
 `ARCH_REPO_DISPATCH_TOKEN` secret must be a fine-grained token selected only for
 `timmo001/arch-repo`, with Contents write permission. The protected publisher
 uses a separate `SOURCE_ARTIFACT_TOKEN`, selected only for source repositories
