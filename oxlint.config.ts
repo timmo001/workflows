@@ -5,6 +5,7 @@ export default defineConfig({
   extends: [effectRulesConfig],
   options: {
     typeAware: true,
+    maxWarnings: 0,
   },
   ignorePatterns: [".github/actions/**/dist/**"],
 });
