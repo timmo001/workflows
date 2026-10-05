@@ -100,4 +100,7 @@ jobs:
               --title "Rebuild action bundles" \
               --body "Rebuild committed Node action bundles so they match current TypeScript sources and lockfile.")"
           fi
+          gh pr edit "$pr_url" \
+            --add-assignee "$GITHUB_REPOSITORY_OWNER" \
+            --add-reviewer "$GITHUB_REPOSITORY_OWNER"
           gh pr merge --auto --squash "$pr_url"
