@@ -15,7 +15,7 @@
     "prepare": "effect-tsgo patch --force=false"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0",
+    "@effect/platform-node": "4.0.1",
     "@timmo001/effect-gh": "0.3.0",
     "effect": "4.0.1"
   },
