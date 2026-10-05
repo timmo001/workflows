@@ -905,6 +905,32 @@ class Fail extends ReasonBase {
   }
 }
 var causeFromReasons = (reasons) => new CauseImpl(reasons);
+var dedupeReasons = (self, that) => {
+  const buckets = new Map;
+  const out = [];
+  for (const reason of self.concat(that)) {
+    const hash2 = hash(reason);
+    const bucket = buckets.get(hash2);
+    if (bucket === undefined) {
+      buckets.set(hash2, [reason]);
+    } else if (bucket.some((previous) => equals(previous, reason))) {
+      continue;
+    } else {
+      bucket.push(reason);
+    }
+    out.push(reason);
+  }
+  return out;
+};
+var causeCombine = /* @__PURE__ */ dual(2, (self, that) => {
+  if (self.reasons.length === 0) {
+    return that;
+  } else if (that.reasons.length === 0) {
+    return self;
+  }
+  const newCause = new CauseImpl(dedupeReasons(self.reasons, that.reasons));
+  return equals(self, newCause) ? self : newCause;
+});
 var causeEmpty = /* @__PURE__ */ new CauseImpl([]);
 var causeFail = (error) => new CauseImpl([new Fail(error)]);
 
@@ -1019,8 +1045,18 @@ var exitFailCause = /* @__PURE__ */ makeExit({
       annotated = true;
     }
     let cont = fiber.getCont(contE);
-    while (fiber.interruptible && fiber._interruptedCause && cont) {
-      cont = fiber.getCont(contE);
+    const interruptedCause = fiber._interruptedCause;
+    if (interruptedCause && fiber.interruptible) {
+      let skippedHandler = false;
+      while (cont && fiber.interruptible) {
+        skippedHandler ||= identifier in cont;
+        cont = fiber.getCont(contE);
+      }
+      if (skippedHandler) {
+        cause = causeFromReasons(cause.reasons.filter((reason) => reason._tag !== "Fail"));
+      }
+      cause = causeCombine(cause, interruptedCause);
+      annotated = true;
     }
     return cont ? cont[contE](cause, fiber, annotated ? undefined : this) : fiber.yieldWith(annotated ? exitFailCause(cause) : this);
   }
@@ -2146,32 +2182,6 @@ var findError = (self) => {
 };
 var hasInterrupts = (self) => self.reasons.some(isInterruptReason);
 var hasInterruptsOnly = (self) => self.reasons.length > 0 && self.reasons.every(isInterruptReason);
-var dedupeReasons = (self, that) => {
-  const buckets = new Map;
-  const out = [];
-  for (const reason of self.concat(that)) {
-    const hash2 = hash(reason);
-    const bucket = buckets.get(hash2);
-    if (bucket === undefined) {
-      buckets.set(hash2, [reason]);
-    } else if (bucket.some((previous) => equals(previous, reason))) {
-      continue;
-    } else {
-      bucket.push(reason);
-    }
-    out.push(reason);
-  }
-  return out;
-};
-var causeCombine = /* @__PURE__ */ dual(2, (self, that) => {
-  if (self.reasons.length === 0) {
-    return that;
-  } else if (that.reasons.length === 0) {
-    return self;
-  }
-  const newCause = new CauseImpl(dedupeReasons(self.reasons, that.reasons));
-  return equals(self, newCause) ? self : newCause;
-});
 var causeMap = /* @__PURE__ */ dual(2, (self, f) => {
   let hasFail = false;
   const failures = self.reasons.map((failure) => {
@@ -2358,6 +2368,14 @@ var fiberVariance = {
 var fiberIdStore = {
   id: 0
 };
+var AsyncResource = /* @__PURE__ */ (() => {
+  try {
+    return globalThis.process?.getBuiltinModule?.("node:async_hooks")?.AsyncResource;
+  } catch {
+    return;
+  }
+})();
+var captureAsyncContext = () => AsyncResource === undefined ? undefined : new AsyncResource("effect/Fiber");
 var getCurrentFiber = () => globalThis[currentFiberTypeId];
 
 class FiberImpl {
@@ -2375,6 +2393,7 @@ class FiberImpl {
     this._running = false;
     this._deferredInterrupt = false;
     this._parent = undefined;
+    this._asyncContext = undefined;
     this.cache.runtimeMetrics?.recordFiberStart(this.context);
   }
   get [FiberTypeId]() {
@@ -2432,6 +2451,10 @@ class FiberImpl {
   evaluate(effect) {
     if (this._exit) {
       return;
+    } else if (this._asyncContext !== undefined) {
+      const asyncContext = this._asyncContext;
+      this._asyncContext = undefined;
+      return asyncContext.runInAsyncScope(this.evaluate, this, effect);
     } else if (this._yielded !== undefined) {
       const yielded = this._yielded;
       this._yielded = undefined;
@@ -2439,6 +2462,7 @@ class FiberImpl {
     }
     const exit = this.runLoop(effect);
     if (exit === Yield) {
+      this._asyncContext = captureAsyncContext();
       return;
     }
     const interruptChildren = fiberMiddleware.interruptChildren && fiberMiddleware.interruptChildren(this);
@@ -2631,6 +2655,16 @@ var fiberAwaitAll = (self) => callback((resume) => {
   loop();
   return sync(() => cancel?.());
 });
+var fiberJoin = (self) => {
+  const impl = self;
+  if (impl._exit)
+    return impl._exit;
+  return callback((resume) => {
+    if (impl._exit)
+      return resume(impl._exit);
+    return sync(self.addObserver(resume));
+  });
+};
 var fiberInterrupt = (self) => withFiber((fiber) => fiberInterruptAs(self, fiber.id));
 var fiberInterruptAs = /* @__PURE__ */ dual((args) => hasProperty(args[0], FiberTypeId), (self, fiberId, annotations) => withFiber((parent) => {
   let ann = fiberStackAnnotations(parent);
@@ -2683,7 +2717,6 @@ var yieldNowWith = /* @__PURE__ */ makePrimitive({
   }
 });
 var yieldNow = /* @__PURE__ */ yieldNowWith(0);
-var succeedNone = /* @__PURE__ */ succeed3(/* @__PURE__ */ none2());
 var failCauseSync = (evaluate) => suspend(() => failCause(evaluate()));
 var die = (defect) => exitDie(defect);
 var failSync = (error) => suspend(() => fail3(error()));
@@ -2703,17 +2736,17 @@ var tryPromise = (options) => {
   const f = typeof options === "function" ? options : options.try;
   const catcher = typeof options === "function" ? (cause) => new UnknownError(cause, "An error occurred in Effect.tryPromise") : options.catch;
   return callbackOptions(function(resume, signal) {
-    const failWithCatch = (cause) => {
+    const failWithCatch = (cause) => suspend(() => {
       try {
-        resume(fail3(internalCall(() => catcher(cause))));
+        return fail3(internalCall(() => catcher(cause)));
       } catch (err) {
-        resume(die(err));
+        return die(err);
       }
-    };
+    });
     try {
-      f(signal).then((a) => resume(succeed3(a)), failWithCatch);
+      f(signal).then((a) => resume(succeed3(a)), (e) => resume(failWithCatch(e)));
     } catch (err) {
-      failWithCatch(err);
+      resume(failWithCatch(err));
     }
   }, f.length !== 0);
 };
@@ -2965,7 +2998,6 @@ var tapCont = function(value) {
 var tapEffectCont = function(value) {
   return new ContImpl(this.payload, succeedPayload, value);
 };
-var asSome = (self) => map2(self, some2);
 var andThen = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? returnPayload : andThenCont, f));
 var tap = /* @__PURE__ */ dual(2, (self, f) => new ContImpl(self, isEffect(f) ? tapEffectCont : tapCont, f));
 var asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
@@ -3649,6 +3681,7 @@ var forkUnsafe = (parent, effect, immediate = false, daemon = false, uninterrupt
   if (immediate) {
     child.evaluate(effect);
   } else {
+    child._asyncContext = captureAsyncContext();
     parentRuntime.currentDispatcher.scheduleTask(() => child.evaluate(effect), 0);
   }
   if (!daemon && !child._exit) {
@@ -4720,7 +4753,9 @@ var systemError = (options) => new PlatformError(new SystemError(options));
 var badArgument = (options) => new PlatformError(new BadArgument(options));
 
 // node_modules/effect/dist/Fiber.js
+var join = fiberJoin;
 var interrupt3 = fiberInterrupt;
+var getCurrent = getCurrentFiber;
 var runIn = fiberRunIn;
 
 // node_modules/effect/dist/Latch.js
@@ -5101,109 +5136,6 @@ var finalize = (self, exit) => {
   openState.awaiters.clear();
 };
 
-// node_modules/effect/dist/Semaphore.js
-var makeUnsafe5 = (permits) => new SemaphoreImpl(permits);
-var waitForPermits = (self, n, effect) => callback((resume) => {
-  if (self.free >= n)
-    return resume(effect);
-  const observer = () => {
-    if (self.free < n)
-      return;
-    self.waiters.delete(observer);
-    resume(effect);
-  };
-  self.waiters.add(observer);
-  return sync(() => {
-    self.waiters.delete(observer);
-  });
-});
-
-class SemaphoreImpl {
-  waiters = /* @__PURE__ */ new Set;
-  taken = 0;
-  permits;
-  constructor(permits) {
-    this.permits = permits;
-  }
-  get free() {
-    return this.permits - this.taken;
-  }
-  take(n) {
-    const take = suspend(() => {
-      if (this.free < n) {
-        return waitForPermits(this, n, take);
-      }
-      this.taken += n;
-      return succeed3(n);
-    });
-    return take;
-  }
-  takeIfAvailable(n) {
-    return suspend(() => {
-      if (this.free < n)
-        return succeed3(false);
-      this.taken += n;
-      return succeed3(true);
-    });
-  }
-  releaseUnsafe(fiber, n) {
-    this.taken -= n;
-    if (this.waiters.size > 0) {
-      fiber.currentDispatcher.scheduleTask(() => {
-        for (const observer of this.waiters) {
-          if (this.free <= 0)
-            break;
-          observer();
-        }
-      }, 0);
-    }
-    return this.free;
-  }
-  resize(permits) {
-    return withFiber((fiber) => {
-      this.permits = permits;
-      if (this.free < 0)
-        return void_;
-      this.releaseUnsafe(fiber, 0);
-      return void_;
-    });
-  }
-  release(n) {
-    return withFiber((fiber) => succeed3(this.releaseUnsafe(fiber, n)));
-  }
-  get releaseAll() {
-    return withFiber((fiber) => succeed3(this.releaseUnsafe(fiber, this.taken)));
-  }
-  withPermits(n) {
-    return (self) => uninterruptibleMask((restore) => {
-      const acquire = suspend(() => {
-        if (this.free < n) {
-          const wait = waitForPermits(this, n, void_);
-          return flatMap2(restore(wait), () => acquire);
-        }
-        this.taken += n;
-        return onExitPrimitive(restore(self), () => {
-          this.releaseUnsafe(getCurrentFiber(), n);
-          return;
-        }, true);
-      });
-      return acquire;
-    });
-  }
-  withPermit = /* @__PURE__ */ this.withPermits(1);
-  withPermitsIfAvailable(n) {
-    return (self) => uninterruptibleMask((restore) => {
-      if (this.free < n)
-        return succeedNone;
-      this.taken += n;
-      return onExitPrimitive(restore(asSome(self)), () => {
-        this.releaseUnsafe(getCurrentFiber(), n);
-        return;
-      }, true);
-    });
-  }
-}
-
 // node_modules/effect/dist/Channel.js
 var TypeId10 = "~effect/Channel";
 var isChannel = (u) => hasProperty(u, TypeId10);
@@ -5456,7 +5388,6 @@ class RcRefImpl {
     return pipeArguments(this, arguments);
   }
   state = stateEmpty;
-  semaphore = /* @__PURE__ */ makeUnsafe5(1);
   acquire;
   context;
   scope;
@@ -5473,9 +5404,13 @@ var make9 = (options) => withFiber2((fiber) => {
   const scope = get(context, Scope);
   const ref = new RcRefImpl(options.acquire, context, scope, options.idleTimeToLive !== undefined ? fromInputUnsafe(options.idleTimeToLive) : undefined);
   return as2(addFinalizerExit(scope, () => {
-    const close2 = ref.state._tag === "Acquired" ? close(ref.state.scope, void_2) : void_3;
+    const state = ref.state;
     ref.state = stateClosed;
-    return close2;
+    if (state._tag === "Acquired")
+      return close(state.scope, void_2);
+    if (state._tag === "Acquiring")
+      return interrupt3(state.fiber);
+    return void_3;
   }), ref);
 });
 var getState = (self, restore) => {
@@ -5488,31 +5423,57 @@ var getState = (self, restore) => {
       state.refCount++;
       return state.fiber ? as2(interrupt3(state.fiber), state) : succeed6(state);
     }
+    case "Acquiring": {
+      const state = self.state;
+      state.awaiters++;
+      return awaitAcquiring(self, state, restore);
+    }
     case "Empty": {
-      return self.semaphore.withPermit(suspend2(() => {
-        if (self.state._tag !== "Empty") {
-          return getState(self, restore);
+      const acquiring = {
+        _tag: "Acquiring",
+        fiber: undefined,
+        awaiters: 1,
+        acquired: undefined
+      };
+      self.state = acquiring;
+      const scope = makeUnsafe3();
+      const acquire = provideContext2(self.acquire, add(self.context, Scope, scope)).pipe(flatMap3((value) => {
+        if (self.state !== acquiring) {
+          return interrupt2;
         }
-        const scope = makeUnsafe3();
-        return restore(provideContext2(self.acquire, add(self.context, Scope, scope))).pipe(flatMap3((value) => {
-          if (self.state._tag === "Closed") {
-            return interrupt2;
-          }
-          const state = {
-            _tag: "Acquired",
-            value,
-            scope,
-            fiber: undefined,
-            refCount: 1,
-            invalidated: false
-          };
-          self.state = state;
-          return succeed6(state);
-        }), onExit2((exit) => isFailure3(exit) ? close(scope, exit) : void_3));
+        const state = {
+          _tag: "Acquired",
+          value,
+          scope,
+          fiber: undefined,
+          refCount: acquiring.awaiters,
+          invalidated: false
+        };
+        self.state = state;
+        acquiring.acquired = state;
+        return succeed6(state);
+      }), onExit2((exit) => {
+        if (isSuccess3(exit))
+          return void_3;
+        if (self.state === acquiring)
+          self.state = stateEmpty;
+        return close(scope, exit);
       }));
+      acquiring.fiber = runForkWith2(getCurrent().context)(acquire);
+      return awaitAcquiring(self, acquiring, restore);
     }
   }
 };
+var awaitAcquiring = (self, acquiring, restore) => onExit2(restore(join(acquiring.fiber)), (exit) => {
+  const acquired = acquiring.acquired;
+  if (acquired !== undefined) {
+    return isFailure3(exit) ? release(self, acquired) : void_3;
+  }
+  if (--acquiring.awaiters > 0 || self.state !== acquiring)
+    return void_3;
+  self.state = stateEmpty;
+  return interrupt3(acquiring.fiber);
+});
 var get2 = (self_) => {
   const self = self_;
   return uninterruptibleMask2((restore) => flatMap3(scope2, (scope) => flatMap3(getState(self, restore), (state) => as2(addFinalizerExit(scope, () => release(self, state)), state.value))));
@@ -10744,12 +10705,12 @@ var RefProto = {
     };
   }
 };
-var makeUnsafe6 = (value) => {
+var makeUnsafe5 = (value) => {
   const self = Object.create(RefProto);
   self.ref = make6(value);
   return self;
 };
-var make23 = (value) => sync3(() => makeUnsafe6(value));
+var make23 = (value) => sync3(() => makeUnsafe5(value));
 var get4 = (self) => sync3(() => self.ref.current);
 var update = /* @__PURE__ */ dual(2, (self, f) => sync3(() => {
   self.ref.current = f(self.ref.current);
@@ -10922,7 +10883,7 @@ var runAction = (program, layer) => {
 };
 
 // src/actions/validate-json/workflow.ts
-import { join as join2 } from "node:path";
+import { join as join3 } from "node:path";
 var Json2 = String4.pipe(decodeTo2(Unknown2, fromJsonString()));
 var ValidationResult = taggedEnum();
 var parseLocation = (message) => {
@@ -10961,7 +10922,7 @@ var discoverJsonFiles = fn2("ValidateJson.discoverJsonFiles")(function* (root) {
   const visit = fn2("ValidateJson.discoverJsonFiles.visit")(function* (directory) {
     const entries = yield* fs.readDirectory(directory).pipe(mapError2((error) => fileFailure("read directory", directory, error)));
     for (const entry of entries.toSorted()) {
-      const path = join2(directory, entry);
+      const path = join3(directory, entry);
       const symbolicLink = yield* fs.readLink(path).pipe(as2(true), catch_2(() => succeed6(false)));
       if (symbolicLink)
         continue;
