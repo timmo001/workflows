@@ -26,12 +26,8 @@ jobs:
           persist-credentials: false
       - name: Set up mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
-      - name: Check
-        run: mise run check
-      - name: Test
-        run: mise run test
-      - name: Build
-        run: mise run build
+      - name: Check, test and build
+        run: "mise run check ::: test ::: build"
       - name: Smoke test
         if: inputs.smoke-test != ''
         env:

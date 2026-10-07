@@ -67,8 +67,9 @@ The caller owns its Oxlint config, rule packages and warning policy. The
 workflow sets up Node.js for JavaScript plugins and supports a package
 directory through `code-path`.
 
-`build-bun-cli.yml` installs tools with mise, then runs `mise run check`,
-`mise run test` and `mise run build`, followed by the optional multi-line
+`build-bun-cli.yml` installs tools with mise, then runs `mise run check ::: test ::: build`
+in one invocation, so independent tasks run in parallel and shared dependencies
+run once, followed by the optional multi-line
 `smoke-test` input. Callers define those mise tasks and own their lockfile
 policy. The job is named `Build`; a reusable-workflow job appears
 in check contexts as `<caller job id> / Build`, so update required checks
