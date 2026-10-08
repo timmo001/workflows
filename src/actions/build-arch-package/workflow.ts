@@ -77,6 +77,7 @@ export const provenance = (
 
 export const dispatchPayload = (
   artifactName: string,
+  packageName: string,
   sourceRepository: string,
   sourceRunId: string,
   sourceSha: string,
@@ -84,6 +85,7 @@ export const dispatchPayload = (
   event_type: "publish-package",
   client_payload: {
     artifact_name: artifactName,
+    package: packageName,
     source_repository: sourceRepository,
     source_run_id: sourceRunId,
     source_sha: sourceSha,
@@ -378,6 +380,7 @@ const dispatch = Effect.fn("BuildArchPackage.dispatch")(function* (
   const payload = JSON.stringify(
     dispatchPayload(
       artifactName,
+      inputs.packageName,
       inputs.sourceRepository,
       sourceRunId,
       inputs.sourceSha,

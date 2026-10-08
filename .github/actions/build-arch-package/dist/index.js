@@ -12188,10 +12188,11 @@ var provenance = (artifact, packageName, sourceRepository, sourceSha) => ({
   source_repository: sourceRepository,
   source_sha: sourceSha
 });
-var dispatchPayload = (artifactName, sourceRepository, sourceRunId, sourceSha) => ({
+var dispatchPayload = (artifactName, packageName, sourceRepository, sourceRunId, sourceSha) => ({
   event_type: "publish-package",
   client_payload: {
     artifact_name: artifactName,
+    package: packageName,
     source_repository: sourceRepository,
     source_run_id: sourceRunId,
     source_sha: sourceSha
@@ -12363,7 +12364,7 @@ var validate2 = fn2("BuildArchPackage.validate")(function* (inputs) {
 var dispatch = fn2("BuildArchPackage.dispatch")(function* (inputs) {
   const artifactName = yield* requireInput(inputs.artifactName, "artifact-name");
   const sourceRunId = yield* requireInput(inputs.sourceRunId, "source-run-id");
-  const payload = JSON.stringify(dispatchPayload(artifactName, inputs.sourceRepository, sourceRunId, inputs.sourceSha));
+  const payload = JSON.stringify(dispatchPayload(artifactName, inputs.packageName, inputs.sourceRepository, sourceRunId, inputs.sourceSha));
   const github = yield* make25('bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -');
   yield* github.stream([
     "api",

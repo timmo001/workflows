@@ -71,6 +71,7 @@ describe("build-arch-package contract", () => {
     expect(
       dispatchPayload(
         "arch-package-example-123-1",
+        "example-git",
         "timmo001/example",
         "123",
         validInputs.sourceSha,
@@ -79,6 +80,7 @@ describe("build-arch-package contract", () => {
       event_type: "publish-package",
       client_payload: {
         artifact_name: "arch-package-example-123-1",
+        package: "example-git",
         source_repository: "timmo001/example",
         source_run_id: "123",
         source_sha: validInputs.sourceSha,

@@ -333,6 +333,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
             event_type: "publish-package",
             client_payload: {
               artifact_name: env.INPUT_ARTIFACTNAME,
+              package: env.INPUT_PACKAGENAME,
               source_repository: env.INPUT_SOURCEREPOSITORY,
               source_run_id: env.INPUT_SOURCERUNID,
               source_sha: sha,
