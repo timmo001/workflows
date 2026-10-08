@@ -1,0 +1,47 @@
+[tools]
+bun = "1.4.2"
+node = "24.21.0"
+
+[tasks.install]
+description = "Install dependencies"
+run = "bun install --frozen-lockfile"
+sources = ["package.json", "bun.lock"]
+
+[tasks.bundle]
+description = "Rebuild the committed action bundles"
+depends = ["install"]
+run = "bun run bundle"
+
+[tasks."bundle:check"]
+description = "Check the action bundles match their sources"
+depends = ["install"]
+run = "bun run bundle:check"
+
+[tasks.lint]
+description = "Lint TypeScript with Oxlint"
+depends = ["install"]
+run = "bun run lint"
+
+[tasks.typecheck]
+description = "Type-check the action sources"
+depends = ["install"]
+run = "bun run typecheck"
+
+[tasks.test]
+description = "Run the action tests"
+depends = ["install"]
+run = "bun run test"
+
+[tasks.format]
+description = "Format sources with Prettier"
+depends = ["install"]
+run = "bun run format"
+
+[tasks."format:check"]
+description = "Check formatting without writing"
+depends = ["install"]
+run = "bun run format:check"
+
+[tasks.validate]
+description = "Run every check in parallel"
+depends = ["lint", "typecheck", "test", "format:check", "bundle:check"]
