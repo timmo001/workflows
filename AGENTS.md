@@ -57,6 +57,21 @@ The bundles are committed. After changing `src/`, `package.json`, `bun.lock` or
 - To add a check, add its `package.json` script, a mise task that runs it, and
   that task to `validate`.
 
+## Internal workflows
+
+Not called outside this repository:
+
+- `validate-actions.yml`: runs `mise run -c validate` and smoke-tests a
+  bundled action through `$/` syntax.
+- `sync-action-bundles.yml`: rebuilds the action bundles and commits them to
+  the pull request, or opens an automerging pull request for drift on `master`.
+- `renovate-automerge-any.yml`: enables automerge on Renovate pull requests
+  once `validate-actions.yml` passes.
+
+Other workflows are public. Code search
+`timmo001/workflows/.github/workflows/<name>` for callers before changing or
+removing one, and delete what nothing calls.
+
 ## Synced files
 
 `.agents/skills/` and `skills-lock.json` are synced from `timmo001/skills` and
