@@ -48,7 +48,7 @@ pull request or opens an automerging pull request on `master`.
 
 The collection includes reusable workflows for:
 
-- Building Node.js, Python, .NET and container projects
+- Building Node.js and Python projects
 - Linting source code, configuration and documentation
 - Running tests, dependency reviews and CodeQL analysis
 - Preparing stable Python distributions from immutable release source
