@@ -35,15 +35,7 @@ interface ChangedFile {
   readonly pins: number;
 }
 
-const plural = (count: number, noun: string, nouns = `${noun}s`) =>
-  `${count} ${count === 1 ? noun : nouns}`;
-
-const duration = (milliseconds: number) => {
-  const seconds = Math.round(milliseconds / 1000);
-  const minutes = Math.floor(seconds / 60);
-
-  return minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
-};
+const { plural } = TerminalStyle;
 
 const Release = Schema.Struct({ tagName: Schema.String });
 
@@ -221,7 +213,10 @@ const bumpRepository = Effect.fn("bumpRepository")(
       return {
         outcome: "skipped",
         lines: [
-          `  ${style.dim(`○ ${repo}  skipped, ${info.archived ? "archived" : "fork"}`)}`,
+          TerminalStyle.skip(
+            style,
+            `${repo}  skipped, ${info.archived ? "archived" : "fork"}`,
+          ),
         ],
       };
     }
@@ -235,7 +230,9 @@ const bumpRepository = Effect.fn("bumpRepository")(
     if (changed.length === 0) {
       return {
         outcome: "current",
-        lines: [`  ${style.dim(`○ ${repo}  already on ${options.tag}`)}`],
+        lines: [
+          TerminalStyle.skip(style, `${repo}  already on ${options.tag}`),
+        ],
       };
     }
 
@@ -306,7 +303,7 @@ const bumpRepository = Effect.fn("bumpRepository")(
           outcome: "failed",
           lines: [
             "",
-            `  ${style.error("[ERROR]")} ${style.label(repo)}  ${first}`,
+            TerminalStyle.failure(style, `${style.label(repo)}  ${first}`),
             ...rest.map((line) => `      ${style.dim(line)}`),
           ],
         });
@@ -358,17 +355,19 @@ const bumpConsumers = Command.make(
     );
 
     yield* Console.log(
-      `\n${style.heading(`Bump ${source} to ${tag}`)}  ${style.dim(sha.slice(0, 7))}`,
+      TerminalStyle.section(style, `Bump ${source} to ${tag}`, sha.slice(0, 7)),
     );
 
     yield* Console.log(
-      `  ${style.dim(
-        [
-          push ? "Pushing" : "Dry run",
-          plural(repos.length, "repository", "repositories"),
-          push ? "commits to each default branch" : "pass --push to commit",
-        ].join(" · "),
-      )}`,
+      TerminalStyle.info(
+        style.dim(
+          [
+            push ? "Pushing" : "Dry run",
+            plural(repos.length, "repository", "repositories"),
+            push ? "commits to each default branch" : "pass --push to commit",
+          ].join(" · "),
+        ),
+      ),
     );
 
     const outcomes = yield* Effect.forEach(
@@ -392,21 +391,21 @@ const bumpConsumers = Command.make(
 
     const summary = [
       count("updated") > 0 &&
-        `  ${style.success("✓")} ${push ? "Pushed" : "Would update"} ${plural(count("updated"), "repository", "repositories")}`,
+        TerminalStyle.success(
+          style,
+          `${push ? "Pushed" : "Would update"} ${plural(count("updated"), "repository", "repositories")}`,
+        ),
       count("current") > 0 &&
-        `  ${style.dim(`○ ${count("current")} already on ${tag}`)}`,
-      count("skipped") > 0 && `  ${style.dim(`○ ${count("skipped")} skipped`)}`,
+        TerminalStyle.skip(style, `${count("current")} already on ${tag}`),
+      count("skipped") > 0 &&
+        TerminalStyle.skip(style, `${count("skipped")} skipped`),
       count("failed") > 0 &&
-        `  ${style.error("[ERROR]")} ${count("failed")} failed`,
+        TerminalStyle.error(style, `${count("failed")} failed`),
     ].filter((line) => line !== false);
 
-    const finishedAt = yield* Clock.currentTimeMillis;
-
-    yield* Console.log(`\n${style.heading("Summary")}`);
+    yield* Console.log(TerminalStyle.section(style, "Summary"));
     yield* Console.log(summary.join("\n"));
-    yield* Console.log(
-      `\n  ${style.dim(`Completed in ${duration(finishedAt - startedAt)}`)}`,
-    );
+    yield* Console.log(yield* TerminalStyle.completedIn(style, startedAt));
 
     if (count("failed") > 0) {
       yield* Effect.sync(() => {

@@ -1,4 +1,4 @@
-import { Config, Effect } from "effect";
+import { Clock, Config, Effect } from "effect";
 
 export interface Style {
   readonly heading: (text: string) => string;
@@ -44,6 +44,41 @@ export const resolve = Effect.gen(function* () {
   const disabled = yield* noColour;
 
   return process.stdout.isTTY === true && !disabled ? colour : plain;
+});
+
+/** A blank line, then a bold cyan heading. */
+export const section = (style: Style, title: string, detail?: string) =>
+  `\n${style.heading(title)}${detail === undefined ? "" : `  ${style.dim(detail)}`}`;
+
+export const info = (message: string) => `  ${message}`;
+
+export const success = (style: Style, message: string) =>
+  `  ${style.success("✓")} ${message}`;
+
+/** A failed item in a list, aligned with {@link success} rows. */
+export const failure = (style: Style, message: string) =>
+  `  ${style.error("✗")} ${message}`;
+
+export const skip = (style: Style, message: string) =>
+  `  ${style.dim(`○ ${message}`)}`;
+
+export const error = (style: Style, message: string) =>
+  `  ${style.error("[ERROR]")} ${message}`;
+
+export const plural = (count: number, noun: string, nouns = `${noun}s`) =>
+  `${count} ${count === 1 ? noun : nouns}`;
+
+/** The dimmed closing line, timed from `startedAt` in epoch milliseconds. */
+export const completedIn = Effect.fn("TerminalStyle.completedIn")(function* (
+  style: Style,
+  startedAt: number,
+) {
+  const elapsed = (yield* Clock.currentTimeMillis) - startedAt;
+  const seconds = Math.round(elapsed / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const time = minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+
+  return `\n  ${style.dim(`Completed in ${time}`)}`;
 });
 
 export * as TerminalStyle from "./TerminalStyle.js";
