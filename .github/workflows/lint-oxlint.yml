@@ -35,6 +35,7 @@ jobs:
   lint:
     name: Oxlint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check package manager
         if: ${{ inputs.package-manager != 'bun' && inputs.package-manager != 'pnpm' }}

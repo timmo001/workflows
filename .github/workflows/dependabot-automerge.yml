@@ -17,6 +17,7 @@ concurrency:
 jobs:
   dependabot-automerge:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: ${{ github.actor == 'dependabot[bot]' }}
     steps:
       - name: Dependabot metadata

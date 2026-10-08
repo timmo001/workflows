@@ -16,6 +16,7 @@ concurrency:
 jobs:
   renovate-automerge:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: ${{ github.actor == 'renovate[bot]' || github.actor == 'renovate-bot' }}
     steps:
       - name: Enable auto-merge for Renovate PRs

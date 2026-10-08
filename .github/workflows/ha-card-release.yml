@@ -36,6 +36,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # No permissions block: the job inherits the caller's grant, so callers
     # that enable attest can pass id-token and attestations write without
     # breaking callers that only grant contents write.

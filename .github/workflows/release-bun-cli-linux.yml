@@ -97,6 +97,7 @@ jobs:
   version:
     name: Allocate release version
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -128,6 +129,7 @@ jobs:
           - architecture: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -205,6 +207,7 @@ jobs:
       - version
       - build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # No permissions block: the job inherits the caller's grant, so callers
     # that enable attest can pass id-token and attestations write without
     # breaking callers that only grant contents write.
