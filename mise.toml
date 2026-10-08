@@ -45,3 +45,7 @@ run = "bun run format:check"
 [tasks.validate]
 description = "Run every check in parallel"
 depends = ["lint", "typecheck", "test", "format:check", "bundle:check"]
+
+[tasks."bump-consumers"]
+description = "Bump timmo001/workflows pins in consuming repositories"
+run = "bun run scripts/bump-consumers.ts"
