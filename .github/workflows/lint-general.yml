@@ -26,46 +26,86 @@ on:
         required: false
         type: boolean
         default: true
+      lint-shell:
+        description: "Run ShellCheck"
+        required: false
+        type: boolean
+        default: false
+      shellcheck-scandir:
+        description: "Directory to scan for shell scripts"
+        required: false
+        type: string
+        default: "."
+      shellcheck-severity:
+        description: "Minimum ShellCheck severity to report (style, info, warning, error)"
+        required: false
+        type: string
+        default: ""
+      lint-skills:
+        description: "Validate Agent Skills"
+        required: false
+        type: boolean
+        default: false
+      skill-roots:
+        description: "Space-separated directories containing Agent Skills"
+        required: false
+        type: string
+        default: ".agents/skills .opencode/skills"
+      python-version:
+        description: "Python version to use for Agent Skills validation"
+        required: false
+        type: string
+        # renovate: datasource=python-version depName=python versioning=python
+        default: "3.14.8"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint-markdown:
-    if: ${{ inputs.lint-markdown }}
-    name: Lint markdown
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup bun
+        if: ${{ inputs.lint-markdown || inputs.lint-yaml }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      - name: Lint markdown
-        run: bunx markdownlint-cli .
-
-  lint-yaml:
-    if: ${{ inputs.lint-yaml }}
-    name: Lint YAML
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      - name: Lint YAML
-        run: bunx yamllint .
-
-  lint-github-actions:
-    if: ${{ inputs.lint-actions }}
-    name: Lint GitHub Actions
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up actionlint
+        if: ${{ inputs.lint-actions }}
         uses: $/.github/actions/setup-actionlint
         with:
           version: ${{ inputs.actionlint-version }}
+      - name: Set up Python
+        if: ${{ inputs.lint-skills }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Install skills-ref
+        if: ${{ inputs.lint-skills }}
+        run: python -m pip install --disable-pip-version-check --quiet "skills-ref==0.1.1"
+
+      # Each linter runs even when an earlier one fails, so one run reports
+      # every problem.
+      - name: Lint markdown
+        if: ${{ !cancelled() && inputs.lint-markdown }}
+        run: bunx markdownlint-cli .
+      - name: Lint YAML
+        if: ${{ !cancelled() && inputs.lint-yaml }}
+        run: bunx yamllint .
       - name: Lint GitHub Actions workflows
+        if: ${{ !cancelled() && inputs.lint-actions }}
         run: actionlint -shellcheck= -pyflakes=
+      - name: Lint shell scripts
+        if: ${{ !cancelled() && inputs.lint-shell }}
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        with:
+          severity: ${{ inputs.shellcheck-severity }}
+          scandir: ${{ inputs.shellcheck-scandir }}
+      - name: Validate Agent Skills
+        if: ${{ !cancelled() && inputs.lint-skills }}
+        uses: $/.github/actions/validate-agent-skills
+        with:
+          skillRoots: ${{ inputs.skill-roots }}

@@ -67,6 +67,15 @@ The caller owns its Oxlint config, rule packages and warning policy. The
 workflow sets up Node.js for JavaScript plugins and supports a package
 directory through `code-path`.
 
+`lint-general.yml` runs markdownlint, yamllint and actionlint as steps of one
+`Lint` job, so a run bills one job instead of one per linter. ShellCheck
+(`lint-shell`) and Agent Skills validation (`lint-skills`) are opt-in. Every
+enabled linter runs even when an earlier one fails. The check context is
+`<caller job id> / Lint`.
+
+Every job sets `timeout-minutes`, so a hung step fails within minutes instead
+of running to GitHub's six-hour default.
+
 `build-bun-cli.yml` installs tools with mise, then runs `mise run check ::: test ::: build`
 in one invocation, so independent tasks run in parallel and shared dependencies
 run once, followed by the optional multi-line
