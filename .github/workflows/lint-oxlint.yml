@@ -21,7 +21,7 @@ on:
         required: false
         type: string
         # renovate: datasource=node-version depName=node versioning=node
-        default: "26.10.0"
+        default: "26.11.1"
       code-path:
         description: "Directory containing the lockfile and the lint script"
         required: false

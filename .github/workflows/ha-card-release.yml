@@ -10,7 +10,7 @@ on:
         required: false
         type: string
         # renovate: datasource=node-version depName=node versioning=node
-        default: "26.10.0"
+        default: "26.11.1"
       dist-glob:
         description: "Glob pattern for release assets; with attest, newline-separated patterns that each match exactly one file"
         required: false
