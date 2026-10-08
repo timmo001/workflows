@@ -444,6 +444,7 @@ function compareRecords(self, that) {
 }
 function compareHashed(self, that, hashOf, equivalent) {
   const groups = new Map;
+  let remaining = 0;
   for (const item of that) {
     const h = hashOf(item);
     const group = groups.get(h);
@@ -451,6 +452,7 @@ function compareHashed(self, that, hashOf, equivalent) {
       group.push(item);
     else
       groups.set(h, [item]);
+    remaining++;
   }
   outer:
     for (const item of self) {
@@ -460,13 +462,14 @@ function compareHashed(self, that, hashOf, equivalent) {
           if (equivalent(item, group[i])) {
             group[i] = group[group.length - 1];
             group.pop();
+            remaining--;
             continue outer;
           }
         }
       }
       return false;
     }
-  return true;
+  return remaining === 0;
 }
 var entryHash = (entry) => hash(entry[0]);
 var equalEntries = (self, that) => compareBoth(self[0], that[0]) && compareBoth(self[1], that[1]);
@@ -622,8 +625,35 @@ function formatJson(input, options) {
     if (current !== redacted) {
       ancestors.push(current);
     }
-    return current;
+    if (!hasGetter(current) || isJsonPrimitiveWrapper(current)) {
+      return current;
+    }
+    const serialized = new Proxy(current, {
+      get(target, key) {
+        const value = Reflect.get(target, key, target);
+        return Object.getOwnPropertyDescriptor(target, key)?.get !== undefined ? redact(value) : value;
+      }
+    });
+    ancestors.push(serialized);
+    return serialized;
   }, options?.space) ?? "null";
+}
+function hasGetter(object) {
+  for (const key of Object.getOwnPropertyNames(object)) {
+    if (Object.getOwnPropertyDescriptor(object, key)?.get !== undefined) {
+      return true;
+    }
+  }
+  return false;
+}
+function isJsonPrimitiveWrapper(object) {
+  for (const valueOf of [Number.prototype.valueOf, Boolean.prototype.valueOf, String.prototype.valueOf]) {
+    try {
+      Reflect.apply(valueOf, object, []);
+      return true;
+    } catch {}
+  }
+  return false;
 }
 
 // node_modules/effect/dist/Inspectable.js
@@ -2242,6 +2272,8 @@ var causePrettyError = (original, annotations, options) => {
     }
   } else {
     error = new globalThis.Error(!original ? `Unknown error: ${original}` : kind === "string" ? original : formatJson(original));
+    const stack = `${error.name}: ${error.message}`;
+    error.stack = annotations ? addStackAnnotations(stack, annotations) : stack;
   }
   return error;
 };
@@ -2472,37 +2504,39 @@ class FiberImpl {
     this.currentOpCount = 0;
     try {
       while (true) {
-        if (this._deferredInterrupt) {
-          this._deferredInterrupt = false;
-          current = failCause(this._interruptedCause);
-        }
-        this.currentOpCount++;
-        const cache = this.cache;
-        if (!yielding && !cache.preventYield && cache.scheduler.shouldYield(this)) {
-          yielding = true;
-          const prev = current;
-          current = flatMap2(yieldNow, () => prev);
-        }
-        current = cache.tracerContext ? cache.tracerContext(current, this) : current[evaluate](this);
-        if (current === Yield) {
-          const yielded = this._yielded;
-          if (ExitTypeId in yielded) {
+        try {
+          if (this._deferredInterrupt) {
             this._deferredInterrupt = false;
-            this._yielded = undefined;
-            return yielded;
-          } else if (this._deferredInterrupt) {
-            this._yielded = undefined;
-            yielded();
-            continue;
+            current = failCause(this._interruptedCause);
           }
-          return Yield;
+          this.currentOpCount++;
+          const cache = this.cache;
+          if (!yielding && !cache.preventYield && cache.scheduler.shouldYield(this)) {
+            yielding = true;
+            const prev = current;
+            current = flatMap2(yieldNow, () => prev);
+          }
+          current = cache.tracerContext ? cache.tracerContext(current, this) : current[evaluate](this);
+          if (current === Yield) {
+            const yielded = this._yielded;
+            if (ExitTypeId in yielded) {
+              this._deferredInterrupt = false;
+              this._yielded = undefined;
+              return yielded;
+            } else if (this._deferredInterrupt) {
+              this._yielded = undefined;
+              yielded();
+              continue;
+            }
+            return Yield;
+          }
+        } catch (error) {
+          if (!hasProperty(current, evaluate)) {
+            return exitDie(`Fiber.runLoop: Not a valid effect: ${String(current)}`);
+          }
+          current = exitDie(error);
         }
       }
-    } catch (error) {
-      if (!hasProperty(current, evaluate)) {
-        return exitDie(`Fiber.runLoop: Not a valid effect: ${String(current)}`);
-      }
-      return this.runLoop(exitDie(error));
     } finally {
       this._running = prevRunning;
       globalThis[currentFiberTypeId] = prevFiber;
@@ -3203,11 +3237,8 @@ var ScopeTypeId = "~effect/Scope";
 var ScopeCloseableTypeId = "~effect/Scope/Closeable";
 var scopeTag = /* @__PURE__ */ Service("effect/Scope");
 var scopeClose = (self, exit_) => withFiber((fiber) => {
-  const close = scopeCloseUnsafe(self, exit_);
-  if (close === undefined)
-    return void_;
   fiberEnterUninterruptibleUnsafe(fiber);
-  return close;
+  return scopeCloseUnsafe(self, exit_) ?? void_;
 });
 var scopeCloseUnsafe = (self, exit_) => {
   const state = self.state;
@@ -3654,15 +3685,15 @@ var forkUnsafe = (parent, effect, immediate = false, daemon = false, uninterrupt
   const parentRuntime = parent;
   const interruptible = uninterruptible === "inherit" ? parentRuntime.interruptible : !uninterruptible;
   const child = new FiberImpl(parentRuntime.context, interruptible);
+  if (!daemon) {
+    parentRuntime.children().add(child);
+    child._parent = parentRuntime;
+  }
   if (immediate) {
     child.evaluate(effect);
   } else {
     child._asyncContext = captureAsyncContext();
     parentRuntime.currentDispatcher.scheduleTask(() => child.evaluate(effect), 0);
-  }
-  if (!daemon && !child._exit) {
-    parentRuntime.children().add(child);
-    child._parent = parentRuntime;
   }
   return child;
 };
@@ -3709,9 +3740,9 @@ var fiberRunIn = /* @__PURE__ */ dual(2, (self, scope) => {
     self.interruptUnsafe(self.id);
     return self;
   }
-  const key = {};
-  scopeAddFinalizerUnsafe(scope, key, () => fiberInterrupt(self));
-  self.addObserver(() => scopeRemoveFinalizerUnsafe(scope, key));
+  scopeRemoveFinalizerUnsafe(scope, self);
+  scopeAddFinalizerUnsafe(scope, self, () => fiberInterrupt(self));
+  self.addObserver(() => scopeRemoveFinalizerUnsafe(scope, self));
   return self;
 });
 var runFork = /* @__PURE__ */ runForkWith(/* @__PURE__ */ empty());
@@ -3866,7 +3897,7 @@ var makeSpanUnsafe = (fiber, name, options) => {
       links,
       startTime: timingEnabled ? clock.currentTimeNanosUnsafe() : bigint02,
       kind: options?.kind ?? "internal",
-      root: options?.root ?? isNone2(parent),
+      root: options?.root ?? false,
       sampled: options?.sampled ?? (isSome2(parent) && parent.value.sampled === false ? false : !isLogLevelGreaterThan(fiber.getRef(MinimumTraceLevel), level))
     });
     for (const key in annotationsFromEnv) {
@@ -4319,7 +4350,7 @@ class CurrentMemoMap extends (/* @__PURE__ */ Service()("effect/Layer/CurrentMem
     return current ? forkMemoMapUnsafe(current) : makeMemoMapUnsafe();
   }
 }
-var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope) => provideService(map2(self.build(memoMap, scope), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
+var buildWithMemoMap = /* @__PURE__ */ dual(3, (self, memoMap, scope) => provideService(map2(suspend(() => self.build(memoMap, scope)), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
 var buildWithScope = /* @__PURE__ */ dual(2, (self, scope) => withFiber((fiber) => buildWithMemoMap(self, CurrentMemoMap.forkOrCreate(fiber.context), scope)));
 var succeed5 = function() {
   if (arguments.length === 1) {
@@ -4442,6 +4473,7 @@ var tapCause2 = tapCause;
 var ignore2 = ignore;
 var sleep2 = sleep;
 var raceFirst2 = raceFirst;
+var matchCauseEffect2 = matchCauseEffect;
 var matchEffect3 = matchEffect;
 var provide4 = provide3;
 var provideContext2 = provideContext;
@@ -4453,6 +4485,7 @@ var acquireRelease2 = acquireRelease;
 var addFinalizer3 = addFinalizer;
 var ensuring2 = ensuring;
 var onError2 = onError;
+var onExitPrimitive2 = onExitPrimitive;
 var onExit2 = onExit;
 var interrupt2 = interrupt;
 var uninterruptible2 = uninterruptible;
@@ -4471,7 +4504,7 @@ var effectify = (fn, onError, onSyncError) => (...args) => callback2((resume) =>
   try {
     fn(...args, (err, result) => {
       if (err) {
-        resume(fail6(onError ? onError(err, args) : err));
+        resume(onError ? suspend2(() => fail6(onError(err, args))) : fail6(err));
       } else {
         resume(succeed6(result));
       }
@@ -6155,7 +6188,15 @@ function parseUnionCandidates(ast, parser, candidates, input, options) {
       return state.out;
     return fail6(new AnyOf(ast, state.issues ?? [], input, options));
   }
-  return resumeUnion(eff, state);
+  if (effectIsExit(eff))
+    return resumeUnion(eff, state);
+  let first = true;
+  return suspend2(() => {
+    if (!first)
+      return parseUnionCandidates(ast, parser, candidates, input, options);
+    first = false;
+    return resumeUnion(eff, state);
+  });
 }
 function resumeUnion(eff, state) {
   return flatMapEager2(eff, (_) => {
@@ -7748,10 +7789,10 @@ var takeAll2 = (self) => takeBetween(self, 1, Number.POSITIVE_INFINITY);
 var takeBetween = /* @__PURE__ */ dual(3, (self, min, max) => {
   min = normalize(min);
   max = normalize(max);
-  return suspend(() => takeBetweenUnsafe(self, min, max) ?? andThen(awaitTake(self, () => canTake(self, min)), takeBetween(self, min, max)));
+  return suspendTake(() => takeBetweenUnsafe(self, min, max) ?? andThen(awaitTake(self, () => canTake(self, min)), takeBetween(self, min, max)));
 });
-var take2 = (self) => suspend(() => takeUnsafe(self) ?? andThen(awaitTake(self, () => canTake(self, 1)), take2(self)));
-var poll = (self) => suspend(() => {
+var take2 = (self) => suspendTake(() => takeUnsafe(self) ?? andThen(awaitTake(self, () => canTake(self, 1)), take2(self)));
+var poll = (self) => suspendTake(() => {
   const result = takeUnsafe(self);
   if (result === undefined) {
     return succeed3(none2());
@@ -7817,6 +7858,13 @@ var takeBetweenUnsafe = (self, min, max) => {
   releaseCapacity(self);
   return exitSucceed(messages);
 };
+var suspendTake = /* @__PURE__ */ makePrimitive({
+  op: "QueueTake",
+  [evaluate](fiber) {
+    const effect = this[args]();
+    return isExit(effect) ? effect[evaluate](fiber) : effect;
+  }
+});
 var canTake = (self, min) => self.messages.length >= (self.state._tag === "Closing" ? 1 : Math.min(min, self.capacity || 1)) || self.capacity <= 0 && self.state._tag !== "Done" && self.state.offers.size > 0;
 var awaitTake = (self, ready) => callback((resume) => {
   if (self.state._tag === "Done")
@@ -7895,6 +7943,10 @@ var releaseCapacity = (self) => {
       self.state.offers.delete(entry);
       entry.resume(exitSucceed([]));
     }
+    const state = self.state;
+    if (state._tag === "Done") {
+      return isDoneCause(state.exit.cause);
+    }
   }
   return false;
 };
@@ -7949,7 +8001,7 @@ var toTransform = (channel) => channel.transform;
 var asyncQueue = (scope, f, options) => make11({
   capacity: options?.bufferSize,
   strategy: options?.strategy
-}).pipe(tap2((queue) => addFinalizer2(scope, shutdown(queue))), tap2((queue) => forkIn2(provide(f(queue), scope), scope)));
+}).pipe(tap2((queue) => addFinalizer2(scope, shutdown(queue))), tap2((queue) => provide(f(queue), scope).pipe(catchCause2((cause) => failCause4(queue, cause)), forkIn2(scope))));
 var callbackArray = (f, options) => fromTransform((_, scope) => map4(asyncQueue(scope, f, options), takeAll2));
 var suspend3 = (evaluate) => fromTransform((upstream, scope) => suspend2(() => toTransform(evaluate())(upstream, scope)));
 var empty3 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done2()));
@@ -7982,7 +8034,10 @@ var merge2 = /* @__PURE__ */ dual((args) => isChannel(args[0]) && isChannel(args
       }
     }
   }
-  const runSide = (side, channel, scope) => toTransform(channel)(upstream, scope).pipe(flatMap3((pull) => pull.pipe(flatMap3((value) => offer(queue, value)), forever2)), onError2((cause) => andThen2(close(scope, doneExitFromCause(cause)), onExit(side, cause))), forkIn2(forkedScope));
+  const runSide = (side, channel, scope) => toTransform(channel)(upstream, scope).pipe(flatMap3((pull) => pull.pipe(flatMap3((value) => offer(queue, value)), forever2)), onError2((cause) => onExitPrimitive2(doneExitFromCause(cause), (exit) => close(scope, exit)).pipe(matchCauseEffect2({
+    onFailure: (cause) => onExit(side, cause),
+    onSuccess: () => onExit(side, cause)
+  }))), forkIn2(forkedScope));
   yield* runSide("left", left, forkUnsafe2(forkedScope));
   yield* runSide("right", right, forkUnsafe2(forkedScope));
   return take2(queue);
