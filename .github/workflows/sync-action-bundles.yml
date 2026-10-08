@@ -13,6 +13,7 @@ on:
       - scripts/bundle.ts
       - package.json
       - bun.lock
+      - mise.toml
       - tsconfig.json
       - .github/actions/**/action.yml
   push:
@@ -23,6 +24,7 @@ on:
       - scripts/bundle.ts
       - package.json
       - bun.lock
+      - mise.toml
       - tsconfig.json
       - .github/actions/**/action.yml
   workflow_dispatch:
@@ -49,14 +51,10 @@ jobs:
         with:
           ref: ${{ github.head_ref || github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.4.2"
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Set up mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - name: Rebuild action bundles
-        run: bun run bundle
+        run: mise run bundle
       - name: Detect bundle changes
         id: changes
         run: |
