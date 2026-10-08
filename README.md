@@ -76,12 +76,12 @@ enabled linter runs even when an earlier one fails. The check context is
 Every job sets `timeout-minutes`, so a hung step fails within minutes instead
 of running to GitHub's six-hour default.
 
-`build-bun-cli.yml` installs tools with mise, then runs `mise run check ::: test ::: build`
-in one invocation, so independent tasks run in parallel and shared dependencies
-run once, followed by the optional multi-line
-`smoke-test` input. Callers define those mise tasks and own their lockfile
-policy. The job is named `Build`; a reusable-workflow job appears
-in check contexts as `<caller job id> / Build`, so update required checks
+`build-bun-cli.yml` installs tools with mise, then runs
+`mise run check ::: test ::: build` in one invocation, so independent tasks run
+in parallel and shared dependencies run once, followed by the optional
+multi-line `smoke-test` input. Callers define those mise tasks and own their
+lockfile policy. The job is named `Build`; a reusable-workflow job appears in
+check contexts as `<caller job id> / Build`, so update required checks
 accordingly.
 
 `lint-arch-pkgbuild.yml` runs namcap in an Arch container over the files or
