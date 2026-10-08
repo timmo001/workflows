@@ -75,4 +75,5 @@ removing one, and delete what nothing calls.
 ## Synced files
 
 `.agents/skills/` and `skills-lock.json` are synced from `timmo001/skills` and
-other skill sources. Don't edit them here; change the source repository.
+other skill sources. Don't edit them here; change the source repository. The
+exception is `workflows-*` skills, which this repository owns.
