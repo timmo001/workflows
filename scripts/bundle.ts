@@ -1,99 +1,140 @@
 #!/usr/bin/env bun
-import { $ } from "bun";
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { Clock, Console, Effect, FileSystem, Layer, Path } from "effect";
+import { Command, Flag } from "effect/cli";
+import { TerminalStyle } from "../src/cli/TerminalStyle.js";
+import { CommandExecutor } from "../src/services/CommandExecutor.js";
 
 const actions = [
-  {
-    name: "foundation-smoke",
-    entry: "src/actions/foundation-smoke/main.ts",
-    outfile: ".github/actions/foundation-smoke/dist/index.js",
-  },
-  {
-    name: "build-arch-package",
-    entry: "src/actions/build-arch-package/main.ts",
-    outfile: ".github/actions/build-arch-package/dist/index.js",
-  },
-  {
-    name: "publish-aur",
-    entry: "src/actions/publish-aur/main.ts",
-    outfile: ".github/actions/publish-aur/dist/index.js",
-  },
-  {
-    name: "release-bun-cli",
-    entry: "src/actions/release-bun-cli/main.ts",
-    outfile: ".github/actions/release-bun-cli/dist/index.js",
-  },
-  {
-    name: "prepare-arch-bin",
-    entry: "src/actions/prepare-arch-bin/main.ts",
-    outfile: ".github/actions/prepare-arch-bin/dist/index.js",
-  },
-  {
-    name: "build-python-pypi-release",
-    entry: "src/actions/build-python-pypi-release/main.ts",
-    outfile: ".github/actions/build-python-pypi-release/dist/index.js",
-  },
-  {
-    name: "validate-js-package",
-    entry: "src/actions/validate-js-package/main.ts",
-    outfile: ".github/actions/validate-js-package/dist/index.js",
-  },
-  {
-    name: "validate-agent-skills",
-    entry: "src/actions/validate-agent-skills/main.ts",
-    outfile: ".github/actions/validate-agent-skills/dist/index.js",
-  },
-  {
-    name: "validate-json",
-    entry: "src/actions/validate-json/main.ts",
-    outfile: ".github/actions/validate-json/dist/index.js",
-  },
-  {
-    name: "arch-source-deployment",
-    entry: "src/actions/arch-source-deployment/main.ts",
-    outfile: ".github/actions/arch-source-deployment/dist/index.js",
-  },
+  "foundation-smoke",
+  "build-arch-package",
+  "publish-aur",
+  "release-bun-cli",
+  "prepare-arch-bin",
+  "build-python-pypi-release",
+  "validate-js-package",
+  "validate-agent-skills",
+  "validate-json",
+  "arch-source-deployment",
 ] as const;
 
-const check = process.argv.includes("--check");
+type Outcome = "written" | "current" | "stale";
 
-const digest = (bytes: Uint8Array) =>
-  createHash("sha256").update(bytes).digest("hex");
+const bundleAction = Effect.fn("bundleAction")(function* (
+  name: string,
+  check: boolean,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const executor = yield* CommandExecutor.Service;
+  const outfile = path.join(".github", "actions", name, "dist", "index.js");
+  const temporary = `${outfile}.tmp`;
 
-for (const action of actions) {
-  const absoluteOut = join(process.cwd(), action.outfile);
-  await mkdir(dirname(absoluteOut), { recursive: true });
-  const temporary = `${absoluteOut}.tmp`;
+  yield* fs.makeDirectory(path.dirname(outfile), { recursive: true });
+
   // The Git-pinned SDK exposes TypeScript through its bun export; output stays Node ESM.
-  await $`bun build ${action.entry} --target=node --conditions=bun --format=esm --outfile=${temporary}`;
-  const next = await readFile(temporary);
+  yield* executor.run("bun", [
+    "build",
+    path.join("src", "actions", name, "main.ts"),
+    "--target=node",
+    "--conditions=bun",
+    "--format=esm",
+    `--outfile=${temporary}`,
+  ]);
 
-  if (check) {
-    let current: Uint8Array | undefined;
+  const next = yield* fs.readFileString(temporary);
 
-    try {
-      current = await readFile(absoluteOut);
-    } catch {
-      current = undefined;
-    }
+  yield* fs.remove(temporary);
 
-    await $`rm -f ${temporary}`;
+  if (!check) {
+    yield* fs.writeFileString(outfile, next);
 
-    if (current === undefined || digest(current) !== digest(next)) {
-      console.error(
-        `Bundled action is out of date: ${action.outfile}\nRun: bun run bundle`,
-      );
-      process.exitCode = 1;
-      continue;
-    }
-
-    console.log(`Bundle up to date: ${action.outfile}`);
-    continue;
+    return "written" satisfies Outcome;
   }
 
-  await writeFile(absoluteOut, next);
-  await $`rm -f ${temporary}`;
-  console.log(`Wrote ${action.outfile}`);
-}
+  const current = yield* fs
+    .readFileString(outfile)
+    .pipe(Effect.orElseSucceed(() => undefined));
+
+  return current === next
+    ? ("current" satisfies Outcome)
+    : ("stale" satisfies Outcome);
+});
+
+const bundle = Command.make(
+  "bundle",
+  {
+    check: Flag.Boolean("check").pipe(
+      Flag.withDescription("Fail when a committed bundle is out of date"),
+      Flag.withDefault(false),
+    ),
+  },
+  Effect.fn("bundle")(function* ({ check }) {
+    const startedAt = yield* Clock.currentTimeMillis;
+    const style = yield* TerminalStyle.resolve;
+    const width = Math.max(...actions.map((name) => name.length));
+
+    yield* Console.log(
+      TerminalStyle.section(
+        style,
+        check ? "Check action bundles" : "Bundle actions",
+        TerminalStyle.plural(actions.length, "action"),
+      ),
+    );
+
+    const outcomes = yield* Effect.forEach(
+      actions,
+      (name) => bundleAction(name, check),
+      { concurrency: 4 },
+    );
+
+    for (const [index, name] of actions.entries()) {
+      const label = style.accent(name.padEnd(width));
+
+      yield* Console.log(
+        outcomes[index] === "stale"
+          ? TerminalStyle.failure(style, `${label}  out of date`)
+          : TerminalStyle.success(
+              style,
+              `${label}  ${style.dim(outcomes[index] === "written" ? "written" : "up to date")}`,
+            ),
+      );
+    }
+
+    const stale = outcomes.filter((outcome) => outcome === "stale").length;
+    const fresh = outcomes.length - stale;
+
+    const summary = [
+      fresh > 0 &&
+        TerminalStyle.success(
+          style,
+          check
+            ? `${TerminalStyle.plural(fresh, "bundle")} up to date`
+            : `Wrote ${TerminalStyle.plural(fresh, "bundle")}`,
+        ),
+      stale > 0 &&
+        TerminalStyle.error(
+          style,
+          `${TerminalStyle.plural(stale, "bundle")} out of date, run ${style.success("mise run bundle")}`,
+        ),
+    ].filter((line) => line !== false);
+
+    yield* Console.log(TerminalStyle.section(style, "Summary"));
+    yield* Console.log(summary.join("\n"));
+    yield* Console.log(yield* TerminalStyle.completedIn(style, startedAt));
+
+    if (stale > 0) {
+      yield* Effect.sync(() => {
+        process.exitCode = 1;
+      });
+    }
+  }),
+).pipe(Command.withDescription("Build the committed action bundles"));
+
+bundle.pipe(
+  Command.run({ version: "0.0.0" }),
+  Effect.provide(
+    CommandExecutor.layer.pipe(Layer.provideMerge(NodeServices.layer)),
+  ),
+  NodeRuntime.runMain,
+);
