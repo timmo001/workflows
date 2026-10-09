@@ -77,5 +77,7 @@ jobs:
       - name: Publish package
         env:
           JSR_CLI_VERSION: ${{ inputs.jsr-cli-version }}
-        run: bunx "jsr@$JSR_CLI_VERSION" publish
+          # The version step leaves the manifests modified, which JSR rejects
+          ALLOW_DIRTY: ${{ inputs.version-from-release-tag && '--allow-dirty' || '' }}
+        run: bunx "jsr@$JSR_CLI_VERSION" publish ${ALLOW_DIRTY:+"$ALLOW_DIRTY"}
         working-directory: ${{ inputs.package-path }}

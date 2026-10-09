@@ -101,7 +101,9 @@ version.
 `publish-npm-package.yml` and `publish-jsr-package.yml` check that the release
 tag matches the committed `package.json` and `jsr.json` versions. For a package
 that commits a placeholder version and takes its version from the tag, set
-`version-from-release-tag: true` to write the tag into both files first.
+`version-from-release-tag: true` to write the tag into both files first. The JSR
+workflow then publishes with `--allow-dirty`, since those files are left
+modified.
 
 `attach-release-arch-package.yml` takes the artifact produced by
 `build-arch-package.yml`, attests the package and uploads it with its bundle to
