@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: "bun run check"
+      version-from-release-tag:
+        description: "Write the release tag into package.json and jsr.json before validating"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,6 +55,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
         working-directory: ${{ inputs.package-path }}
+      - name: Set version from release tag
+        if: ${{ inputs.version-from-release-tag }}
+        working-directory: ${{ inputs.package-path }}
+        env:
+          VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          for manifest in package.json jsr.json; do
+            if [ -f "$manifest" ]; then
+              jq --arg version "$VERSION" '.version = $version' "$manifest" > "$manifest.tmp"
+              mv "$manifest.tmp" "$manifest"
+            fi
+          done
       - name: Validate release
         uses: $/.github/actions/validate-js-package
         with:

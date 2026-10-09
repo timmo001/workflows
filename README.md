@@ -98,6 +98,11 @@ needs `contents: write`, `id-token: write` and `attestations: write`.
 `version-define` names a `bun build --define` key that receives the release
 version.
 
+`publish-npm-package.yml` and `publish-jsr-package.yml` check that the release
+tag matches the committed `package.json` and `jsr.json` versions. For a package
+that commits a placeholder version and takes its version from the tag, set
+`version-from-release-tag: true` to write the tag into both files first.
+
 `attach-release-arch-package.yml` takes the artifact produced by
 `build-arch-package.yml`, attests the package and uploads it with its bundle to
 an existing release through the `publish-release-assets` action. Its caller
