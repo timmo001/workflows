@@ -1,6 +1,14 @@
 #!/usr/bin/env bun
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Api, Gh, layer as ghLayer, type GhError } from "@timmo001/effect-gh";
+import {
+  Api,
+  Release,
+  Repository,
+  Search,
+  layer as ghLayer,
+  type Gh,
+  type GhError,
+} from "@timmo001/effect-gh";
 import {
   Clock,
   Config,
@@ -37,8 +45,6 @@ interface ChangedFile {
 
 const { plural } = TerminalStyle;
 
-const Release = Schema.Struct({ tagName: Schema.String });
-
 const Commit = Schema.Struct({ sha: Schema.String });
 
 const RepositoryInfo = Schema.Struct({
@@ -46,12 +52,6 @@ const RepositoryInfo = Schema.Struct({
   fork: Schema.Boolean,
   default_branch: Schema.String,
 });
-
-const CodeSearchResults = Schema.Array(
-  Schema.Struct({
-    repository: Schema.Struct({ nameWithOwner: Schema.String }),
-  }),
-);
 
 const cacheRoot = Config.String("XDG_CACHE_HOME").pipe(
   Config.orElse(() =>
@@ -71,14 +71,9 @@ const describeError = (
 const resolveRelease = Effect.fn("resolveRelease")(function* (
   to: Option.Option<string>,
 ) {
-  const gh = yield* Gh;
-
   const tag = Option.isSome(to)
     ? to.value
-    : (yield* gh.json(
-        ["release", "view", "--repo", source, "--json", "tagName"],
-        Release,
-      )).tagName;
+    : (yield* Release.view({ repo: source, fields: ["tagName"] })).tagName;
 
   const commit = yield* Api.json(
     { endpoint: `repos/${source}/commits/${tag}`, method: "GET" },
@@ -89,22 +84,11 @@ const resolveRelease = Effect.fn("resolveRelease")(function* (
 });
 
 const discover = Effect.fn("discover")(function* (owner: string) {
-  const gh = yield* Gh;
-
-  const results = yield* gh.json(
-    [
-      "search",
-      "code",
-      `${source}/.github/`,
-      "--owner",
-      owner,
-      "--limit",
-      "1000",
-      "--json",
-      "repository",
-    ],
-    CodeSearchResults,
-  );
+  const results = yield* Search.code({
+    query: `${source}/.github/`,
+    owner,
+    limit: 1000,
+  });
 
   const repos = new Set(
     results.map((result) => result.repository.nameWithOwner),
@@ -121,19 +105,14 @@ const prepareClone = Effect.fn("prepareClone")(function* (
   branch: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const gh = yield* Gh;
   const executor = yield* CommandExecutor.Service;
 
   if (!(yield* fs.exists(directory))) {
-    yield* gh.execute([
-      "repo",
-      "clone",
-      repo,
+    yield* Repository.clone({
+      repository: repo,
       directory,
-      "--",
-      "--quiet",
-      "--filter=blob:none",
-    ]);
+      gitArgs: ["--quiet", "--filter=blob:none"],
+    });
 
     return;
   }

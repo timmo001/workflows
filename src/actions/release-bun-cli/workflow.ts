@@ -1,5 +1,5 @@
-import { Gh } from "@timmo001/effect-gh";
-import { Effect, FileSystem, Schema, Stream } from "effect";
+import { Release } from "@timmo001/effect-gh";
+import { Effect, FileSystem, Schema } from "effect";
 import { ActionOutputs } from "../../action/ActionOutputs.js";
 import { Annotations } from "../../action/Annotations.js";
 import { GitHubCommand } from "../../action/GitHubCommand.js";
@@ -509,9 +509,7 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
   );
 
   const sourceSha = yield* requireInput(inputs.sourceSha, "source-sha");
-  const gh = yield* Gh;
   const label = "publish GitHub release";
-  const github = yield* GitHubCommand.make(label);
 
   const env = {
     ASSET_ROOT: assetRoot,
@@ -530,15 +528,22 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
       Effect.map((stdout) => stdout.split("\0").slice(0, -1)),
     );
 
-  if (env.EXISTING_RELEASE === "true") {
-    yield* github.stream(["release", "view", releaseVersion], {
-      env,
-      suppressStdout: true,
-    });
-    yield* github.stream(
-      ["release", "upload", releaseVersion, ...(yield* assets), "--clobber"],
-      { env },
+  const upload = Effect.gen(function* () {
+    yield* GitHubCommand.run(
+      label,
+      Release.upload(
+        { tag: releaseVersion, assets: yield* assets, clobber: true },
+        { env },
+      ),
     );
+  });
+
+  if (env.EXISTING_RELEASE === "true") {
+    yield* GitHubCommand.run(
+      label,
+      Release.view({ tag: releaseVersion, fields: ["tagName"] }, { env }),
+    );
+    yield* upload;
 
     return;
   }
@@ -547,7 +552,7 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
     .capture("bash", ["-c", releaseTagScript], { env })
     .pipe(mapCommand);
 
-  if (tag.stderr !== "") yield* github.writeStderr(`${tag.stderr}\n`);
+  if (tag.stderr !== "") yield* GitHubCommand.writeStderr(`${tag.stderr}\n`);
 
   if (tag.exitCode !== 0) {
     return yield* failure(
@@ -559,48 +564,29 @@ const publishRelease = Effect.fn("ReleaseBunCli.publishRelease")(function* (
 
   const releaseExists =
     tag.stdout === "true" &&
-    (yield* gh.stream(["release", "view", releaseVersion], { env }).pipe(
-      Stream.runDrain,
-      Effect.as(true),
-      Effect.catchTag("GhCommandError", () => Effect.succeed(false)),
-      github.mapError,
+    // Any failed probe means "create it": a real problem fails the create.
+    (yield* GitHubCommand.run(
+      label,
+      Release.exists({ tag: releaseVersion }, { env }).pipe(
+        Effect.catchTag("GhCommandError", () => Effect.succeed(false)),
+      ),
     ));
 
-  const flags = [
-    "--target",
-    sourceSha,
-    "--title",
-    releaseVersion,
-    "--notes",
-    `Rolling release ${releaseVersion} from commit ${sourceSha}.`,
-  ];
+  const settings = {
+    tag: releaseVersion,
+    target: sourceSha,
+    title: releaseVersion,
+    notes: `Rolling release ${releaseVersion} from commit ${sourceSha}.`,
+    prerelease: env.PRERELEASE === "true",
+  };
 
   if (releaseExists) {
-    yield* github.stream(
-      [
-        "release",
-        "edit",
-        releaseVersion,
-        ...flags,
-        `--prerelease=${env.PRERELEASE}`,
-      ],
-      { env },
-    );
-    yield* github.stream(
-      ["release", "upload", releaseVersion, ...(yield* assets), "--clobber"],
-      { env },
-    );
+    yield* GitHubCommand.run(label, Release.edit(settings, { env }));
+    yield* upload;
   } else {
-    yield* github.stream(
-      [
-        "release",
-        "create",
-        releaseVersion,
-        ...(yield* assets),
-        ...flags,
-        ...(env.PRERELEASE === "true" ? ["--prerelease"] : []),
-      ],
-      { env },
+    yield* GitHubCommand.run(
+      label,
+      Release.create({ ...settings, assets: yield* assets }, { env }),
     );
   }
 });

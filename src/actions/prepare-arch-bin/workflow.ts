@@ -1,3 +1,4 @@
+import { Release } from "@timmo001/effect-gh";
 import { Effect, FileSystem, Schema } from "effect";
 import { createHash } from "node:crypto";
 import { basename, join } from "node:path";
@@ -166,25 +167,24 @@ export const run = Effect.fn("PrepareArchBin.run")(function* (inputs: Inputs) {
   );
 
   const completionsRequested = inputs.completionsArguments !== undefined;
-  const github = yield* GitHubCommand.make("download release assets");
   const ghEnv: Record<string, string> = {};
 
   if (inputs.token !== undefined) ghEnv.GH_TOKEN = inputs.token;
 
-  yield* github.stream(
-    [
-      "release",
-      "download",
-      version,
-      "--repo",
-      inputs.repository,
-      "--pattern",
-      "SHA256SUMS",
-      ...(completionsRequested ? ["--pattern", x86_64Archive] : []),
-      "--dir",
-      download,
-    ],
-    { env: ghEnv, suppressStdout: true },
+  yield* GitHubCommand.run(
+    "download release assets",
+    Release.download(
+      {
+        repo: inputs.repository,
+        tag: version,
+        patterns: [
+          "SHA256SUMS",
+          ...(completionsRequested ? [x86_64Archive] : []),
+        ],
+        directory: download,
+      },
+      { env: ghEnv },
+    ),
   );
 
   const checksums = yield* fs

@@ -182,6 +182,9 @@ function isNullish(input) {
 function isNotNullish(input) {
   return input != null;
 }
+function isNever(_) {
+  return false;
+}
 function isUnknown(_) {
   return true;
 }
@@ -3197,6 +3200,14 @@ var catchCauseFilter = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause(s
 }));
 var catch_ = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
 var tapCause = /* @__PURE__ */ dual(2, (self, f) => catchCause(self, (cause) => andThen(f(cause), failCause(cause))));
+var tapCauseFilter = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause(self, (cause) => {
+  const result = filter(cause);
+  if (isFailure2(result)) {
+    return failCause(cause);
+  }
+  return andThen(f(result.success, cause), failCause(cause));
+}));
+var tapError = /* @__PURE__ */ dual(2, (self, f) => tapCauseFilter(self, findError, (e) => f(e)));
 var catchIf = /* @__PURE__ */ dual((args) => isEffect(args[0]), (self, predicate, f, orElse) => catchCause(self, (cause) => {
   const error = findError(cause);
   if (isFailure2(error))
@@ -3301,6 +3312,8 @@ var exitPrimitive = /* @__PURE__ */ makePrimitive({
     return fiber.succeedWith(exit ?? exitFailCause(cause));
   }
 });
+var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => flatMap2(timeoutOption(self, options.duration), (option) => isNone2(option) ? options.orElse() : succeed3(option.value)));
+var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as(sleep(duration), none2())));
 var ScopeTypeId = "~effect/Scope";
 var ScopeCloseableTypeId = "~effect/Scope/Closeable";
 var scopeTag = /* @__PURE__ */ Service("effect/Scope");
@@ -4738,9 +4751,11 @@ var catchTag2 = catchTag;
 var catchCause2 = catchCause;
 var mapError2 = mapError;
 var orDie2 = orDie;
+var tapError2 = tapError;
 var tapCause2 = tapCause;
 var retry2 = retry;
 var ignore2 = ignore;
+var timeoutOrElse2 = timeoutOrElse;
 var sleep2 = sleep;
 var raceFirst2 = raceFirst;
 var matchCauseEffect2 = matchCauseEffect;
@@ -5534,6 +5549,16 @@ var Declaration = class extends ASTNodeImpl {
     return "<Declaration>";
   }
 };
+var Never = class extends ASTNodeImpl {
+  _tag = "Never";
+  getParser() {
+    return fromRefinement(this, isNever);
+  }
+  getExpected() {
+    return "never";
+  }
+};
+var never3 = /* @__PURE__ */ new Never;
 var Unknown = class extends ASTNodeImpl {
   _tag = "Unknown";
   getParser() {
@@ -6821,6 +6846,45 @@ function withConstructorDefault(ast, defaultValue) {
 function decodeTo(from, to, transformation) {
   return appendTransformation(from, transformation, to);
 }
+function parseParameter(ast) {
+  const literals = [];
+  const parameters = [];
+  function go(ast) {
+    switch (ast._tag) {
+      case "Literal":
+        if (isPropertyKey(ast.literal) && !literals.includes(ast.literal)) {
+          literals.push(ast.literal);
+        }
+        return;
+      case "UniqueSymbol":
+        if (!literals.includes(ast.symbol)) {
+          literals.push(ast.symbol);
+        }
+        return;
+      case "Never":
+        return;
+      case "Union":
+        for (let i = 0;i < ast.types.length; i++) {
+          go(ast.types[i]);
+        }
+        return;
+      default:
+        parameters.push(ast);
+    }
+  }
+  go(ast);
+  return {
+    literals,
+    parameters
+  };
+}
+function record(key, value) {
+  const {
+    literals,
+    parameters: indexSignatures
+  } = parseParameter(key);
+  return new Objects(literals.map((literal) => new PropertySignature(literal, value)), indexSignatures.map((parameter) => new IndexSignature(parameter, value)));
+}
 function isOptional(ast) {
   return ast.context?.isOptional ?? false;
 }
@@ -7401,6 +7465,10 @@ function decodeUnknownEffect(schema, options) {
   const parser = run(schema.ast);
   return options === undefined ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
 }
+function encodeUnknownEffect(schema, options) {
+  const parser = run(flip2(schema.ast));
+  return options === undefined ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
+}
 var mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
   ...options,
   ...overrideOptions
@@ -7597,6 +7665,13 @@ function decodeUnknownEffect2(schema, options) {
   };
 }
 var decodeEffect2 = decodeUnknownEffect2;
+function encodeUnknownEffect2(schema, options) {
+  const parser = encodeUnknownEffect(schema, options);
+  return (input, options) => {
+    return fromIssueEffect(parser(input, options));
+  };
+}
+var encodeEffect = encodeUnknownEffect2;
 var make8 = make7;
 function isSchema(u) {
   return hasProperty(u, TypeId12) && u[TypeId12] === TypeId12;
@@ -7619,6 +7694,7 @@ function Literal2(literal) {
   });
   return out;
 }
+var Never2 = /* @__PURE__ */ make8(never3);
 var Unknown2 = /* @__PURE__ */ make8(unknown);
 var String4 = /* @__PURE__ */ make8(string2);
 var Number5 = /* @__PURE__ */ make8(number2);
@@ -7634,6 +7710,12 @@ function makeStruct(ast, fields) {
 }
 function Struct(fields) {
   return makeStruct(struct(fields, undefined), fields);
+}
+function Record(key, value) {
+  return make8(record(key.ast, value.ast), {
+    key,
+    value
+  });
 }
 function makeTuple(ast, elements) {
   return make8(ast, {
@@ -7860,6 +7942,41 @@ function isInt(annotations) {
   });
 }
 var Int = /* @__PURE__ */ Number5.check(/* @__PURE__ */ isInt());
+function makeIsMinLength(minLength, minCodePoints, annotations) {
+  return makeFilter2((input) => input.length >= minLength, {
+    expected: `a value with a length of at least ${minLength}`,
+    representation: {
+      id: "effect/schema/isMinLength",
+      payload: {
+        minLength
+      }
+    },
+    toJsonSchema: ({
+      type
+    }) => type === "string" ? minLength <= 1 ? {
+      minLength: minCodePoints
+    } : [{
+      minLength: minCodePoints
+    }, true] : type === "array" ? {
+      minItems: minLength
+    } : type === undefined ? [{
+      minLength: minCodePoints,
+      minItems: minLength
+    }, true] : [{}, true],
+    toCode: () => ({
+      runtime: `Schema.isMinLength(${minLength})`
+    }),
+    [STRUCTURAL_ANNOTATION_KEY]: true,
+    arbitraryConstraint: {
+      minLength
+    },
+    ...annotations
+  });
+}
+function isNonEmpty(annotations) {
+  return makeIsMinLength(1, 1, annotations);
+}
+var NonEmptyString = /* @__PURE__ */ String4.check(/* @__PURE__ */ isNonEmpty());
 var getErrorOptionsKey = (options) => (options?.includeStack === true ? 1 : 0) | (options?.excludeCause === true ? 2 : 0);
 var getErrorOptions = (key) => {
   switch (key) {
@@ -8797,8 +8914,75 @@ var flatMapSequential = (self, f) => fromTransform((upstream, scope) => map4(toT
 }));
 var flatMapConcurrent = (self, f, options) => self.pipe(map6(f), mergeAll3(options));
 var flatten4 = (channels) => flatMap4(channels, identity);
+var flattenArray = (self) => transformPull(self, (pull) => {
+  let array;
+  let index = 0;
+  const pump = suspend2(function loop() {
+    if (array === undefined) {
+      return flatMap3(pull, (array_) => {
+        switch (array_.length) {
+          case 0:
+            return loop();
+          case 1:
+            return succeed6(array_[0]);
+          default: {
+            array = array_;
+            return succeed6(array_[index++]);
+          }
+        }
+      });
+    }
+    const next = array[index++];
+    if (index >= array.length) {
+      array = undefined;
+      index = 0;
+    }
+    return succeed6(next);
+  });
+  return succeed6(pump);
+});
 var drain = (self) => transformPull(self, (pull) => succeed6(forever3(pull, {
   disableYield: true
+})));
+var mapAccum = /* @__PURE__ */ dual((args) => isChannel(args[0]), (self, initial, f, options) => fromTransform((upstream, scope) => map4(toTransform(self)(upstream, scope), (pull) => {
+  let state = initial();
+  let current;
+  let index = 0;
+  let cause;
+  const pullNext = matchCauseEffect2(pull, {
+    onFailure(cause_) {
+      cause = cause_;
+      const b = options?.onHalt && options.onHalt(state);
+      return b && b.length > 0 ? succeed6([state, b]) : failCause3(cause_);
+    },
+    onSuccess(a) {
+      const b = f(state, a);
+      return isArray(b) ? succeed6(b) : b;
+    }
+  });
+  const pump = suspend2(function loop() {
+    if (current === undefined) {
+      if (cause)
+        return failCause3(cause);
+      return flatMap3(pullNext, ([newState, values]) => {
+        state = newState;
+        if (values.length === 0) {
+          return loop();
+        } else if (values.length === 1) {
+          return succeed6(values[0]);
+        }
+        current = values;
+        return loop();
+      });
+    }
+    const next = current[index++];
+    if (index >= current.length) {
+      current = undefined;
+      index = 0;
+    }
+    return succeed6(next);
+  });
+  return pump;
 })));
 var catchCause3 = /* @__PURE__ */ dual(2, (self, f) => fromTransform((upstream, scope) => {
   let forkedScope = forkUnsafe2(scope);
@@ -9293,6 +9477,13 @@ function* concatChannels(self, that) {
 var merge3 = /* @__PURE__ */ dual((args) => isStream(args[0]) && isStream(args[1]), (self, that, options) => fromChannel3(merge2(toChannel2(self), toChannel2(that), options)));
 var mergeEffect2 = /* @__PURE__ */ dual(2, (self, effect) => self.channel.pipe(mergeEffect(effect), fromChannel3));
 var mapError5 = /* @__PURE__ */ dual(2, (self, f) => fromChannel3(mapError4(self.channel, f)));
+var emptyArr = /* @__PURE__ */ empty2();
+var mapAccumEffect = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, initial, f, options) => self.channel.pipe(flattenArray, mapAccum(initial, (state, a) => map4(f(state, a), ([state, values]) => [state, isReadonlyArrayNonEmpty(values) ? of(values) : empty2()]), options?.onHalt ? {
+  onHalt(state) {
+    const arr = options.onHalt(state);
+    return isReadonlyArrayNonEmpty(arr) ? of(arr) : emptyArr;
+  }
+} : undefined), fromChannel3));
 var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (upstream, scope) => sync3(() => {
   let done;
   let leftover;
@@ -10411,6 +10602,9 @@ class GhTimeoutError extends TaggedError3()("GhTimeoutError", { executable: Stri
 class GhDecodeError extends TaggedError3()("GhDecodeError", { cause: Defect() }) {
 }
 
+class GhOutputLimitError extends TaggedError3()("GhOutputLimitError", { executable: String4, limitBytes: Int }) {
+}
+
 // node_modules/@timmo001/effect-gh/src/transient.ts
 var statusPattern = /\b(?:HTTP|status(?: code)?)\s*(\d{3})\b/i;
 var transientStatuses = new Set([
@@ -10497,6 +10691,11 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
       stderr = (stderr + text).slice(-outputLimit);
       return GhChunk.cases.Stderr.make({ text });
     }))).pipe(mapError5((cause) => new GhPlatformError({ executable, cause })));
+    const limitBytes = options.maxOutputBytes;
+    const limited = limitBytes === undefined ? output : output.pipe(mapAccumEffect(() => 0, (bytes, chunk) => {
+      const total = isTagged(chunk, "Stdout") ? bytes + new TextEncoder().encode(chunk.text).byteLength : bytes;
+      return total > limitBytes ? fail6(new GhOutputLimitError({ executable, limitBytes })) : succeed6([total, [chunk]]);
+    }));
     const completion = gen2(function* () {
       const exitCode = yield* handle.exitCode.pipe(mapError2((cause) => new GhPlatformError({ executable, cause })));
       if (exitCode !== 0) {
@@ -10510,7 +10709,7 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
         });
       }
     });
-    const completed = output.pipe(concat(fromEffect2(completion).pipe(drain3)));
+    const completed = limited.pipe(concat(fromEffect2(completion).pipe(drain3)));
     if (options.stdin === undefined)
       return completed;
     const input = isString(options.stdin) ? new TextEncoder().encode(options.stdin) : options.stdin;
@@ -10542,8 +10741,134 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
     const output = yield* execute(args, options);
     return yield* decodeEffect2(fromJsonString2(schema))(output.stdout).pipe(mapError2((cause) => new GhDecodeError({ cause })));
   });
-  return Gh.of({ execute, json, stream });
+  const interactive = fn2("Gh.interactive")(function* (args, overrides) {
+    const options = { ...defaults, ...overrides };
+    const executable = options.executable ?? "gh";
+    const run = scoped2(gen2(function* () {
+      const handle = yield* spawner.spawn(make21(executable, args, {
+        cwd: options.cwd,
+        env: { ...defaults.env, ...options.env },
+        extendEnv: true,
+        shell: false,
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+        forceKillAfter: "1 second"
+      }));
+      return yield* handle.exitCode;
+    })).pipe(mapError2((cause) => new GhPlatformError({ executable, cause })), flatMap3((exitCode) => exitCode === 0 ? void_3 : fail6(new GhCommandError({
+      executable,
+      exitCode,
+      stdout: "",
+      stdoutTruncated: false,
+      stderr: "",
+      stderrTruncated: false
+    }))));
+    if (options.timeout == null || !isFinite(fromInputUnsafe(options.timeout)))
+      return yield* run;
+    const timeoutMs = toMillis(options.timeout);
+    return yield* run.pipe(timeoutOrElse2({
+      duration: options.timeout,
+      orElse: () => fail6(new GhTimeoutError({ executable, timeoutMs }))
+    }));
+  });
+  return Gh.of({ execute, json, stream, interactive });
 }));
+// node_modules/@timmo001/effect-gh/src/api.ts
+var Method = Literals([
+  "GET",
+  "HEAD",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "OPTIONS",
+  "TRACE",
+  "CONNECT"
+]);
+var queryValue = Union2([String4, Finite, Boolean3]);
+var requestSchema = Struct({
+  endpoint: NonEmptyString,
+  method: Method,
+  hostname: optionalKey2(NonEmptyString),
+  query: optionalKey2(Record(String4, Union2([queryValue, ArraySchema(queryValue)]))),
+  headers: optionalKey2(Record(String4, String4)),
+  body: optionalKey2(Json2)
+});
+var pageRequestSchema = Struct({
+  ...requestSchema.fields,
+  endpoint: NonEmptyString.check(isPattern2(/^(?!\/?graphql(?:[?#]|$))/)),
+  method: Literal2("GET"),
+  body: optionalKey2(Never2)
+});
+var prepare = fn2("Api.prepare")(function* (request) {
+  const input = yield* decodeEffect2(requestSchema)(request).pipe(mapError2((cause) => new GhDecodeError({ cause })));
+  const endpoint = yield* try_2({
+    try: () => {
+      const query = [];
+      for (const [key, value] of Object.entries(input.query ?? {})) {
+        for (const item of Array.isArray(value) ? value : [value]) {
+          query.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(item))}`);
+        }
+      }
+      if (query.length === 0)
+        return input.endpoint;
+      const fragmentIndex = input.endpoint.indexOf("#");
+      const path = fragmentIndex === -1 ? input.endpoint : input.endpoint.slice(0, fragmentIndex);
+      const fragment = fragmentIndex === -1 ? "" : input.endpoint.slice(fragmentIndex);
+      const separator = !path.includes("?") ? "?" : path.endsWith("?") || path.endsWith("&") ? "" : "&";
+      return `${path}${separator}${query.join("&")}${fragment}`;
+    },
+    catch: (cause) => new GhDecodeError({ cause })
+  });
+  const args = ["api", "--method", input.method];
+  if (input.hostname !== undefined)
+    args.push(`--hostname=${input.hostname}`);
+  for (const [name, value] of Object.entries(input.headers ?? {})) {
+    args.push(`--header=${name}: ${value}`);
+  }
+  let stdin;
+  if (input.body !== undefined) {
+    stdin = yield* encodeEffect(fromJsonString2(Json2))(input.body).pipe(mapError2((cause) => new GhDecodeError({ cause })));
+    args.push("--input", "-");
+  }
+  return { args, endpoint, options: { ...request.options, stdin } };
+});
+var raw = fn2("Api.raw")(function* (request) {
+  const command = yield* prepare(request);
+  const gh = yield* Gh;
+  return yield* gh.execute([...command.args, "--", command.endpoint], command.options);
+});
+var empty5 = fn2("Api.empty")(function* (request) {
+  yield* raw(request);
+});
+var text = fn2("Api.text")(function* (request) {
+  return (yield* raw(request)).stdout;
+});
+var headers = fn2("Api.headers")(function* (request) {
+  const command = yield* prepare(request);
+  const gh = yield* Gh;
+  const output = yield* gh.execute([...command.args, "--include", "--", command.endpoint], command.options);
+  const head = output.stdout.split(/\r?\n\r?\n/, 1)[0] ?? "";
+  const result = {};
+  for (const line of head.split(/\r?\n/).slice(1)) {
+    const separator = line.indexOf(":");
+    if (separator > 0)
+      result[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim();
+  }
+  return result;
+});
+var json = fn2("Api.json")(function* (request, schema) {
+  const command = yield* prepare(request);
+  const gh = yield* Gh;
+  return yield* gh.json([...command.args, "--", command.endpoint], schema, command.options);
+});
+var pages = fn2("Api.pages")(function* (request, schema) {
+  yield* decodeEffect2(pageRequestSchema)(request).pipe(mapError2((cause) => new GhDecodeError({ cause })));
+  const command = yield* prepare(request);
+  const gh = yield* Gh;
+  return yield* gh.json([...command.args, "--paginate", "--slurp", "--", command.endpoint], ArraySchema(schema), command.options);
+});
 // src/action/ActionInputs.ts
 var inputEnvName = (name) => `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
 var readRawInput = (name) => {
@@ -12121,24 +12446,15 @@ var runAction = (program, layer) => {
 };
 
 // src/action/GitHubCommand.ts
-var make25 = fn2("GitHubCommand.make")(function* (label) {
-  const gh = yield* Gh;
-  let stderrTail = "";
-  const writeStderr = (text) => sync3(() => {
-    process.stderr.write(text);
-    stderrTail = `${stderrTail}${text}`.slice(-16 * 1024);
-  });
-  const mapError = mapError2((error) => new ActionFailure({
-    title: "Command failed",
-    message: value2(error).pipe(tag3("GhCommandError", (error) => stderrTail.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
-  }));
-  const stream = fn2("GitHubCommand.stream")(function* (args, options = {}) {
-    yield* gh.stream(args, options).pipe(runForEach2((chunk) => isTagged(chunk, "Stderr") ? writeStderr(chunk.text) : sync3(() => {
-      if (!options.suppressStdout)
-        process.stdout.write(chunk.text);
-    })), mapError);
-  });
-  return { stream, writeStderr, mapError };
+var mapError6 = (label) => mapError2((error) => new ActionFailure({
+  title: "Command failed",
+  message: value2(error).pipe(tag3("GhCommandError", (error) => error.stderr.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhOutputLimitError", (error) => `Command output passed ${error.limitBytes} bytes: ${label}`), tag3("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
+}));
+var run3 = (label, operation) => operation.pipe(tapError2((error) => error instanceof GhCommandError && error.stderr !== "" ? writeStderr(error.stderr.endsWith(`
+`) ? error.stderr : `${error.stderr}
+`) : void_3), mapError6(label));
+var writeStderr = (text) => sync3(() => {
+  process.stderr.write(text);
 });
 
 // src/actions/build-arch-package/workflow.ts
@@ -12364,21 +12680,13 @@ var validate2 = fn2("BuildArchPackage.validate")(function* (inputs) {
 var dispatch = fn2("BuildArchPackage.dispatch")(function* (inputs) {
   const artifactName = yield* requireInput(inputs.artifactName, "artifact-name");
   const sourceRunId = yield* requireInput(inputs.sourceRunId, "source-run-id");
-  const payload = JSON.stringify(dispatchPayload(artifactName, inputs.packageName, inputs.sourceRepository, sourceRunId, inputs.sourceSha));
-  const github = yield* make25('bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -');
-  yield* github.stream([
-    "api",
-    "--method",
-    "POST",
-    "repos/timmo001/arch-repo/dispatches",
-    "--input",
-    "-"
-  ], {
-    env: { DISPATCH_PAYLOAD: payload },
-    stdin: payload
-  });
+  yield* run3("dispatch the arch-repo build", empty5({
+    endpoint: "repos/timmo001/arch-repo/dispatches",
+    method: "POST",
+    body: dispatchPayload(artifactName, inputs.packageName, inputs.sourceRepository, sourceRunId, inputs.sourceSha)
+  }));
 });
-var run3 = fn2("BuildArchPackage.run")(function* (inputs) {
+var run4 = fn2("BuildArchPackage.run")(function* (inputs) {
   const invalid = validateIdentity(inputs);
   if (invalid !== undefined)
     return yield* invalid;
@@ -12407,6 +12715,6 @@ var program = gen2(function* () {
     "artifactName",
     "sourceRunId"
   ]).pipe(mapError2(toActionFailure));
-  yield* run3(inputs);
+  yield* run4(inputs);
 });
 runAction(program.pipe(provide4(layer())), platformLayer);

@@ -39,6 +39,7 @@ printf '\\0' >> "$GH_TRACE"
 printf '%s\\n' "$PWD" "$GH_TOKEN" "$GITHUB_TOKEN" "$INHERITED_VALUE" >> "$GH_CONTEXT"
 if [[ "$1" == api ]]; then cat > "$GH_BODY"; fi
 if [[ "$1" == api && "$GH_FAIL" != api ]]; then exit 0; fi
+if [[ "$2" == view && "$GH_FAIL" != view ]]; then printf '{"tagName":"%s"}\\n' "$3"; exit 0; fi
 printf '%s stdout\\n' "$2"
 printf '%s stderr\\n' "$2" >&2
 if [[ "$2" == "$GH_FAIL" || "$1" == "$GH_FAIL" ]]; then exit 17; fi
@@ -127,17 +128,18 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
             "assets/SHA256SUMS",
             "assets/asset with spaces.tar.gz",
             "assets/newline\nasset",
-            "--target",
-            test.env.INPUT_SOURCESHA,
             "--title",
             version,
             "--notes",
             `Rolling release ${version} from commit ${test.env.INPUT_SOURCESHA}.`,
-            ...(prerelease === "true" ? ["--prerelease"] : []),
+            "--target",
+            test.env.INPUT_SOURCESHA,
+            `--prerelease=${prerelease}`,
           ],
         ]);
-        expect(result.stdout).toBe("create stdout\n");
-        expect(result.stderr).toBe("create stderr\n");
+        // Successful gh output is captured, not echoed.
+        expect(result.stdout).toBe("");
+        expect(result.stderr).toBe("");
         expect(readFileSync(test.env.GH_CONTEXT, "utf8")).toBe(
           `${test.root}\nfixture-gh-token\nfixture-github-token\ninherited\n`,
         );
@@ -155,7 +157,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
       const result = test.run(runtime, releaseBundle);
       expect(result.status).toBe(0);
       expect(test.calls()).toEqual([
-        ["release", "view", version],
+        ["release", "view", version, "--json", "tagName"],
         [
           "release",
           "upload",
@@ -165,8 +167,8 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
           "--clobber",
         ],
       ]);
-      expect(result.stdout).toBe("upload stdout\n");
-      expect(result.stderr).toBe("view stderr\nupload stderr\n");
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("");
     } finally {
       test.cleanup();
     }
@@ -183,17 +185,17 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
       const result = test.run(runtime, releaseBundle);
       expect(result.status).toBe(0);
       expect(test.calls()).toEqual([
-        ["release", "view", version],
+        ["release", "view", version, "--json", "tagName"],
         [
           "release",
           "edit",
           version,
-          "--target",
-          test.env.INPUT_SOURCESHA,
           "--title",
           version,
           "--notes",
           `Rolling release ${version} from commit ${test.env.INPUT_SOURCESHA}.`,
+          "--target",
+          test.env.INPUT_SOURCESHA,
           "--prerelease=false",
         ],
         [
@@ -206,8 +208,8 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
           "--clobber",
         ],
       ]);
-      expect(result.stdout).toBe("edit stdout\nupload stdout\n");
-      expect(result.stderr).toBe("edit stderr\nupload stderr\n");
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("");
     } finally {
       test.cleanup();
     }
@@ -223,8 +225,8 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
       const result = test.run(runtime, releaseBundle);
       expect(result.status).toBe(0);
       expect(test.calls().map((call) => call[1])).toEqual(["view", "create"]);
-      expect(result.stdout).toBe("create stdout\n");
-      expect(result.stderr).toBe("create stderr\n");
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("");
     } finally {
       test.cleanup();
     }
@@ -323,9 +325,10 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
             "api",
             "--method",
             "POST",
-            "repos/timmo001/arch-repo/dispatches",
             "--input",
             "-",
+            "--",
+            "repos/timmo001/arch-repo/dispatches",
           ],
         ]);
         expect(readFileSync(env.GH_BODY, "utf8")).toBe(
@@ -344,7 +347,6 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
         expect(result.stderr).toBe(fail ? "--method stderr\n" : "");
 
         if (fail) {
-          expect(result.stdout).toContain("--method stdout\n");
           expect(result.stdout).toContain(
             "::error title=Command failed::--method stderr",
           );

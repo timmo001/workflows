@@ -79,6 +79,10 @@ const toActionFailure = (error: GhError) =>
         "GhTimeoutError",
         (error) => `gh timed out after ${error.timeoutMs}ms`,
       ),
+      Match.tag(
+        "GhOutputLimitError",
+        (error) => `gh output passed ${error.limitBytes} bytes`,
+      ),
       Match.tag("GhPlatformError", "GhDecodeError", (error) =>
         String(error.cause),
       ),
@@ -99,7 +103,7 @@ const postStatus = (
   deploymentId: string | number,
   body: Readonly<Record<string, string>>,
 ) =>
-  Api.raw({
+  Api.empty({
     method: "POST",
     endpoint: `repos/${sourceRepository}/deployments/${deploymentId}/statuses`,
     body,

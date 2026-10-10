@@ -1,5 +1,5 @@
 import { it } from "@effect/vitest";
-import { layer } from "@timmo001/effect-gh";
+import { Api, Release, layer } from "@timmo001/effect-gh";
 import { Deferred, Effect, Fiber, Layer, Sink, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
@@ -60,52 +60,40 @@ const text = (value: string) => Stream.succeed(new TextEncoder().encode(value));
 afterEach(() => vi.restoreAllMocks());
 
 it.effect(
-  "retains the action's stderr tail across commands, streams output, and does not retry",
+  "reports gh's stderr as the action failure, passes options through, and does not retry",
   () =>
     Effect.gen(function* () {
-      const stdout = vi
-        .spyOn(process.stdout, "write")
-        .mockImplementation(() => true);
+      const warning = "upload failed: asset already exists\n";
 
-      const stderr = vi
-        .spyOn(process.stderr, "write")
-        .mockImplementation(() => true);
+      const fake = yield* fakeSpawner(() => ({
+        stdout: text("upload output"),
+        stderr: text(warning),
+        exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(17)),
+      }));
 
-      const warning = `${"e".repeat(20_000)} last warning\n`;
-
-      const fake = yield* fakeSpawner((index) =>
-        index === 0
-          ? { stdout: text("hidden"), stderr: text(warning) }
-          : {
-              stdout: text("upload output"),
-              exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(17)),
-            },
-      );
-
-      const github = yield* GitHubCommand.make("publish GitHub release").pipe(
+      const failure = yield* GitHubCommand.run(
+        "publish GitHub release",
+        Release.upload(
+          { tag: "literal $(touch nope)", assets: ["asset with spaces"] },
+          { cwd: "/work", env: { GH_TOKEN: "fixture-token" } },
+        ),
+      ).pipe(
         Effect.provide(layer().pipe(Layer.provide(fake.layer))),
+        Effect.flip,
       );
-
-      const args = ["release", "view", "literal $(touch nope)"];
-      yield* github.stream(args, {
-        suppressStdout: true,
-        cwd: "/work",
-        env: { GH_TOKEN: "fixture-token" },
-      });
-
-      const failure = yield* github
-        .stream(["release", "upload", "tag", "asset with spaces"])
-        .pipe(Effect.flip);
 
       expect(failure.title).toBe("Command failed");
-      expect(failure.message).toBe(warning.slice(-16 * 1024).trim());
-      expect(stdout.mock.calls).toEqual([["upload output"]]);
-      expect(stderr.mock.calls).toEqual([[warning]]);
-      expect(fake.releases()).toBe(2);
-      expect(fake.commands).toHaveLength(2);
+      expect(failure.message).toBe(warning.trim());
+      expect(fake.releases()).toBe(1);
+      expect(fake.commands).toHaveLength(1);
       expect(fake.commands[0]).toMatchObject({
         command: "gh",
-        args,
+        args: [
+          "release",
+          "upload",
+          "literal $(touch nope)",
+          "asset with spaces",
+        ],
         options: {
           cwd: "/work",
           extendEnv: true,
@@ -122,13 +110,13 @@ it.effect("keeps the exit-code fallback when gh fails silently", () =>
       exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(7)),
     }));
 
-    const github = yield* GitHubCommand.make("publish GitHub release").pipe(
+    const failure = yield* GitHubCommand.run(
+      "publish GitHub release",
+      Release.create({ tag: "tag" }),
+    ).pipe(
       Effect.provide(layer().pipe(Layer.provide(fake.layer))),
+      Effect.flip,
     );
-
-    const failure = yield* github
-      .stream(["release", "create", "tag"])
-      .pipe(Effect.flip);
 
     expect(failure.message).toBe(
       "Command failed with exit code 7: publish GitHub release",
@@ -145,13 +133,18 @@ it.effect("closes the SDK child scope on timeout without retrying", () =>
       exitCode: Effect.never,
     }));
 
-    const github = yield* GitHubCommand.make("dispatch").pipe(
+    const fiber = yield* GitHubCommand.run(
+      "dispatch",
+      Api.empty({
+        endpoint: "endpoint",
+        method: "POST",
+        options: { timeout: "5 seconds" },
+      }),
+    ).pipe(
       Effect.provide(layer().pipe(Layer.provide(fake.layer))),
+      Effect.flip,
+      Effect.forkChild,
     );
-
-    const fiber = yield* github
-      .stream(["api", "endpoint"], { timeout: "5 seconds" })
-      .pipe(Effect.flip, Effect.forkChild);
 
     yield* Deferred.await(fake.spawned);
     yield* TestClock.adjust("5 seconds");
@@ -172,22 +165,20 @@ it.effect(
         exitCode: Effect.never,
       }));
 
-      const github = yield* GitHubCommand.make("publish GitHub release").pipe(
-        Effect.provide(layer().pipe(Layer.provide(fake.layer))),
-      );
-
       let failed = false;
 
-      const fiber = yield* github
-        .stream(["release", "upload", "tag", "asset"])
-        .pipe(
-          Effect.tapError(() =>
-            Effect.sync(() => {
-              failed = true;
-            }),
-          ),
-          Effect.forkChild,
-        );
+      const fiber = yield* GitHubCommand.run(
+        "publish GitHub release",
+        Release.upload({ tag: "tag", assets: ["asset"] }),
+      ).pipe(
+        Effect.provide(layer().pipe(Layer.provide(fake.layer))),
+        Effect.tapError(() =>
+          Effect.sync(() => {
+            failed = true;
+          }),
+        ),
+        Effect.forkChild,
+      );
 
       yield* Deferred.await(fake.spawned);
       yield* Fiber.interrupt(fiber);

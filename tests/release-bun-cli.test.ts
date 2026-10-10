@@ -430,7 +430,7 @@ describe("release-bun-cli GitHub reconciliation", () => {
         `#!/bin/bash
 printf '%s\\n' "$*" >> "$GH_LOG"
 if [[ "$1" == "release" && "$2" == "view" ]]; then
-  exit 0
+  printf '{"tagName":"%s"}\\n' "$3"
 fi
 `,
       );
@@ -446,7 +446,7 @@ fi
 
       expect(exit._tag).toBe("Success");
       expect(yield* fs.readFileString(log)).toBe(
-        `release view 20260101.0\nrelease upload 20260101.0 ${assets}/asset.tar.gz --clobber\n`,
+        `release view 20260101.0 --json tagName\nrelease upload 20260101.0 ${assets}/asset.tar.gz --clobber\n`,
       );
     }).pipe(Effect.provide(platformLayer)),
   );
@@ -472,7 +472,7 @@ printf '%s\\n' "$*" >> "$GH_LOG"
 
       expect(exit._tag).toBe("Success");
       expect(yield* fs.readFileString(log)).toContain(
-        `release create 20260101.0 ${assets}/asset.tar.gz --target ${sha} --title 20260101.0 --notes Rolling release 20260101.0 from commit ${sha}. --prerelease`,
+        `release create 20260101.0 ${assets}/asset.tar.gz --title 20260101.0 --notes Rolling release 20260101.0 from commit ${sha}. --target ${sha} --prerelease=true`,
       );
     }).pipe(Effect.provide(platformLayer)),
   );
@@ -486,6 +486,9 @@ printf '%s\\n' "$*" >> "$GH_LOG"
         const { sha, log, assets } = yield* publishFixture(
           `#!/bin/bash
 printf '%s\\n' "$*" >> "$GH_LOG"
+if [[ "$1" == "release" && "$2" == "view" ]]; then
+  printf '{"tagName":"%s"}\\n' "$3"
+fi
 `,
           "20260101.0",
         );

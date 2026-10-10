@@ -1,18 +1,10 @@
-import { Gh, type GhError, type GhOptions } from "@timmo001/effect-gh";
-import { Effect, Match, Predicate, Stream } from "effect";
+import { GhCommandError, type GhError } from "@timmo001/effect-gh";
+import { Effect, Match } from "effect";
 import { Annotations } from "./Annotations.js";
 
-export const make = Effect.fn("GitHubCommand.make")(function* (label: string) {
-  const gh = yield* Gh;
-  let stderrTail = "";
-
-  const writeStderr = (text: string) =>
-    Effect.sync(() => {
-      process.stderr.write(text);
-      stderrTail = `${stderrTail}${text}`.slice(-16 * 1024);
-    });
-
-  const mapError = Effect.mapError(
+/** Map a failed effect-gh operation to an action failure that shows gh's stderr. */
+export const mapError = (label: string) =>
+  Effect.mapError(
     (error: GhError) =>
       new Annotations.ActionFailure({
         title: "Command failed",
@@ -20,12 +12,17 @@ export const make = Effect.fn("GitHubCommand.make")(function* (label: string) {
           Match.tag(
             "GhCommandError",
             (error) =>
-              stderrTail.trim() ||
+              error.stderr.trim() ||
               `Command failed with exit code ${error.exitCode}: ${label}`,
           ),
           Match.tag(
             "GhTimeoutError",
             (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`,
+          ),
+          Match.tag(
+            "GhOutputLimitError",
+            (error) =>
+              `Command output passed ${error.limitBytes} bytes: ${label}`,
           ),
           Match.tag("GhPlatformError", "GhDecodeError", (error) =>
             String(error.cause),
@@ -35,23 +32,30 @@ export const make = Effect.fn("GitHubCommand.make")(function* (label: string) {
       }),
   );
 
-  const stream = Effect.fn("GitHubCommand.stream")(function* (
-    args: readonly string[],
-    options: GhOptions & { readonly suppressStdout?: boolean } = {},
-  ) {
-    yield* gh.stream(args, options).pipe(
-      Stream.runForEach((chunk) =>
-        Predicate.isTagged(chunk, "Stderr")
-          ? writeStderr(chunk.text)
-          : Effect.sync(() => {
-              if (!options.suppressStdout) process.stdout.write(chunk.text);
-            }),
-      ),
-      mapError,
-    );
-  });
+/**
+ * Run a typed effect-gh operation as an action step. A failure writes gh's
+ * stderr to the action log before it becomes the action failure. Failures are
+ * never retried.
+ */
+export const run = <A, R>(
+  label: string,
+  operation: Effect.Effect<A, GhError, R>,
+) =>
+  operation.pipe(
+    Effect.tapError((error) =>
+      error instanceof GhCommandError && error.stderr !== ""
+        ? writeStderr(
+            error.stderr.endsWith("\n") ? error.stderr : `${error.stderr}\n`,
+          )
+        : Effect.void,
+    ),
+    mapError(label),
+  );
 
-  return { stream, writeStderr, mapError };
-});
+/** Write diagnostic text to the action log. */
+export const writeStderr = (text: string) =>
+  Effect.sync(() => {
+    process.stderr.write(text);
+  });
 
 export * as GitHubCommand from "./GitHubCommand.js";

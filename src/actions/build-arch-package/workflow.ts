@@ -1,3 +1,4 @@
+import { Api } from "@timmo001/effect-gh";
 import { Effect, FileSystem, Schema } from "effect";
 import { Annotations } from "../../action/Annotations.js";
 import { GitHubCommand } from "../../action/GitHubCommand.js";
@@ -377,33 +378,19 @@ const dispatch = Effect.fn("BuildArchPackage.dispatch")(function* (
 
   const sourceRunId = yield* requireInput(inputs.sourceRunId, "source-run-id");
 
-  const payload = JSON.stringify(
-    dispatchPayload(
-      artifactName,
-      inputs.packageName,
-      inputs.sourceRepository,
-      sourceRunId,
-      inputs.sourceSha,
-    ),
-  );
-
-  const github = yield* GitHubCommand.make(
-    'bash -c printf %s "$DISPATCH_PAYLOAD" | gh api --method POST repos/timmo001/arch-repo/dispatches --input -',
-  );
-
-  yield* github.stream(
-    [
-      "api",
-      "--method",
-      "POST",
-      "repos/timmo001/arch-repo/dispatches",
-      "--input",
-      "-",
-    ],
-    {
-      env: { DISPATCH_PAYLOAD: payload },
-      stdin: payload,
-    },
+  yield* GitHubCommand.run(
+    "dispatch the arch-repo build",
+    Api.empty({
+      endpoint: "repos/timmo001/arch-repo/dispatches",
+      method: "POST",
+      body: dispatchPayload(
+        artifactName,
+        inputs.packageName,
+        inputs.sourceRepository,
+        sourceRunId,
+        inputs.sourceSha,
+      ),
+    }),
   );
 });
 

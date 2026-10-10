@@ -3197,6 +3197,14 @@ var catchCauseFilter = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause(s
 }));
 var catch_ = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
 var tapCause = /* @__PURE__ */ dual(2, (self, f) => catchCause(self, (cause) => andThen(f(cause), failCause(cause))));
+var tapCauseFilter = /* @__PURE__ */ dual(3, (self, filter, f) => catchCause(self, (cause) => {
+  const result = filter(cause);
+  if (isFailure2(result)) {
+    return failCause(cause);
+  }
+  return andThen(f(result.success, cause), failCause(cause));
+}));
+var tapError = /* @__PURE__ */ dual(2, (self, f) => tapCauseFilter(self, findError, (e) => f(e)));
 var catchIf = /* @__PURE__ */ dual((args) => isEffect(args[0]), (self, predicate, f, orElse) => catchCause(self, (cause) => {
   const error = findError(cause);
   if (isFailure2(error))
@@ -3301,6 +3309,8 @@ var exitPrimitive = /* @__PURE__ */ makePrimitive({
     return fiber.succeedWith(exit ?? exitFailCause(cause));
   }
 });
+var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => flatMap2(timeoutOption(self, options.duration), (option) => isNone2(option) ? options.orElse() : succeed3(option.value)));
+var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as(sleep(duration), none2())));
 var ScopeTypeId = "~effect/Scope";
 var ScopeCloseableTypeId = "~effect/Scope/Closeable";
 var scopeTag = /* @__PURE__ */ Service("effect/Scope");
@@ -4738,9 +4748,11 @@ var catchTag2 = catchTag;
 var catchCause2 = catchCause;
 var mapError2 = mapError;
 var orDie2 = orDie;
+var tapError2 = tapError;
 var tapCause2 = tapCause;
 var retry2 = retry;
 var ignore2 = ignore;
+var timeoutOrElse2 = timeoutOrElse;
 var sleep2 = sleep;
 var raceFirst2 = raceFirst;
 var matchCauseEffect2 = matchCauseEffect;
@@ -5534,6 +5546,16 @@ var Declaration = class extends ASTNodeImpl {
     return "<Declaration>";
   }
 };
+var Null = class extends ASTNodeImpl {
+  _tag = "Null";
+  getParser() {
+    return fromConst(this, null);
+  }
+  getExpected() {
+    return "null";
+  }
+};
+var null_ = /* @__PURE__ */ new Null;
 var Unknown = class extends ASTNodeImpl {
   _tag = "Unknown";
   getParser() {
@@ -7540,7 +7562,26 @@ function make7(ast, options) {
 }
 
 // node_modules/effect/dist/Struct.js
+var pick = /* @__PURE__ */ dual(2, (self, keys) => {
+  return buildStruct(self, (k, v) => hasPropertyKey(keys, k) ? [k, v] : undefined);
+});
 var lambda = (f) => f;
+function hasPropertyKey(keys, key) {
+  return keys.some((candidate) => candidate === key || typeof candidate === "number" && String(candidate) === key);
+}
+function buildStruct(source, f) {
+  const out = {};
+  for (const k of Reflect.ownKeys(source)) {
+    if (!Object.prototype.propertyIsEnumerable.call(source, k))
+      continue;
+    const res = f(k, source[k]);
+    if (res) {
+      const [nk, nv] = res;
+      assignProperty(out, nk, nv);
+    }
+  }
+  return out;
+}
 
 // node_modules/effect/dist/internal/schemaError.js
 var SchemaErrorTypeId = "~effect/Schema/SchemaError";
@@ -7620,6 +7661,7 @@ function Literal2(literal) {
   return out;
 }
 var Unknown2 = /* @__PURE__ */ make8(unknown);
+var Null2 = /* @__PURE__ */ make8(null_);
 var String4 = /* @__PURE__ */ make8(string2);
 var Number5 = /* @__PURE__ */ make8(number2);
 var Boolean3 = /* @__PURE__ */ make8(boolean);
@@ -7678,6 +7720,7 @@ function Literals(literals) {
     }
   });
 }
+var NullOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2]));
 function decodeTo2(to, transformation) {
   return (from) => {
     return make8(decodeTo(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough3()), {
@@ -8797,8 +8840,75 @@ var flatMapSequential = (self, f) => fromTransform((upstream, scope) => map4(toT
 }));
 var flatMapConcurrent = (self, f, options) => self.pipe(map6(f), mergeAll3(options));
 var flatten4 = (channels) => flatMap4(channels, identity);
+var flattenArray = (self) => transformPull(self, (pull) => {
+  let array;
+  let index = 0;
+  const pump = suspend2(function loop() {
+    if (array === undefined) {
+      return flatMap3(pull, (array_) => {
+        switch (array_.length) {
+          case 0:
+            return loop();
+          case 1:
+            return succeed6(array_[0]);
+          default: {
+            array = array_;
+            return succeed6(array_[index++]);
+          }
+        }
+      });
+    }
+    const next = array[index++];
+    if (index >= array.length) {
+      array = undefined;
+      index = 0;
+    }
+    return succeed6(next);
+  });
+  return succeed6(pump);
+});
 var drain = (self) => transformPull(self, (pull) => succeed6(forever3(pull, {
   disableYield: true
+})));
+var mapAccum = /* @__PURE__ */ dual((args) => isChannel(args[0]), (self, initial, f, options) => fromTransform((upstream, scope) => map4(toTransform(self)(upstream, scope), (pull) => {
+  let state = initial();
+  let current;
+  let index = 0;
+  let cause;
+  const pullNext = matchCauseEffect2(pull, {
+    onFailure(cause_) {
+      cause = cause_;
+      const b = options?.onHalt && options.onHalt(state);
+      return b && b.length > 0 ? succeed6([state, b]) : failCause3(cause_);
+    },
+    onSuccess(a) {
+      const b = f(state, a);
+      return isArray(b) ? succeed6(b) : b;
+    }
+  });
+  const pump = suspend2(function loop() {
+    if (current === undefined) {
+      if (cause)
+        return failCause3(cause);
+      return flatMap3(pullNext, ([newState, values]) => {
+        state = newState;
+        if (values.length === 0) {
+          return loop();
+        } else if (values.length === 1) {
+          return succeed6(values[0]);
+        }
+        current = values;
+        return loop();
+      });
+    }
+    const next = current[index++];
+    if (index >= current.length) {
+      current = undefined;
+      index = 0;
+    }
+    return succeed6(next);
+  });
+  return pump;
 })));
 var catchCause3 = /* @__PURE__ */ dual(2, (self, f) => fromTransform((upstream, scope) => {
   let forkedScope = forkUnsafe2(scope);
@@ -9011,9 +9121,6 @@ var runWith = (self, f, onHalt) => suspend2(() => {
   const makePull = toTransform(self)(done2(), scope);
   return catchDone(flatMap3(makePull, f), onHalt ? onHalt : succeed6).pipe(onExit2((exit) => close(scope, exit)));
 });
-var runDrain = (self) => runWith(self, (pull) => forever3(pull, {
-  disableYield: true
-}));
 var runForEach = /* @__PURE__ */ dual(2, (self, f) => runWith(self, (pull) => forever3(flatMap3(pull, f), {
   disableYield: true
 })));
@@ -9296,6 +9403,13 @@ function* concatChannels(self, that) {
 var merge3 = /* @__PURE__ */ dual((args) => isStream(args[0]) && isStream(args[1]), (self, that, options) => fromChannel3(merge2(toChannel2(self), toChannel2(that), options)));
 var mergeEffect2 = /* @__PURE__ */ dual(2, (self, effect) => self.channel.pipe(mergeEffect(effect), fromChannel3));
 var mapError5 = /* @__PURE__ */ dual(2, (self, f) => fromChannel3(mapError4(self.channel, f)));
+var emptyArr = /* @__PURE__ */ empty2();
+var mapAccumEffect = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, initial, f, options) => self.channel.pipe(flattenArray, mapAccum(initial, (state, a) => map4(f(state, a), ([state, values]) => [state, isReadonlyArrayNonEmpty(values) ? of(values) : empty2()]), options?.onHalt ? {
+  onHalt(state) {
+    const arr = options.onHalt(state);
+    return isReadonlyArrayNonEmpty(arr) ? of(arr) : emptyArr;
+  }
+} : undefined), fromChannel3));
 var transduce = /* @__PURE__ */ dual(2, (self, sink) => transformPull2(self, (upstream, scope) => sync3(() => {
   let done;
   let leftover;
@@ -9344,7 +9458,6 @@ var runForEach2 = /* @__PURE__ */ dual(2, (self, f) => runForEach(self.channel, 
     step: constVoid
   });
 }));
-var runDrain2 = (self) => runDrain(self.channel);
 var mkString = (self) => runFold(self.channel, () => "", (acc, chunk) => acc + chunk.join(""));
 
 // node_modules/effect/dist/FileSystem.js
@@ -10415,6 +10528,9 @@ class GhTimeoutError extends TaggedError3()("GhTimeoutError", { executable: Stri
 class GhDecodeError extends TaggedError3()("GhDecodeError", { cause: Defect() }) {
 }
 
+class GhOutputLimitError extends TaggedError3()("GhOutputLimitError", { executable: String4, limitBytes: Int }) {
+}
+
 // node_modules/@timmo001/effect-gh/src/transient.ts
 var statusPattern = /\b(?:HTTP|status(?: code)?)\s*(\d{3})\b/i;
 var transientStatuses = new Set([
@@ -10501,6 +10617,11 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
       stderr = (stderr + text).slice(-outputLimit);
       return GhChunk.cases.Stderr.make({ text });
     }))).pipe(mapError5((cause) => new GhPlatformError({ executable, cause })));
+    const limitBytes = options.maxOutputBytes;
+    const limited = limitBytes === undefined ? output : output.pipe(mapAccumEffect(() => 0, (bytes, chunk) => {
+      const total = isTagged(chunk, "Stdout") ? bytes + new TextEncoder().encode(chunk.text).byteLength : bytes;
+      return total > limitBytes ? fail6(new GhOutputLimitError({ executable, limitBytes })) : succeed6([total, [chunk]]);
+    }));
     const completion = gen2(function* () {
       const exitCode = yield* handle.exitCode.pipe(mapError2((cause) => new GhPlatformError({ executable, cause })));
       if (exitCode !== 0) {
@@ -10514,7 +10635,7 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
         });
       }
     });
-    const completed = output.pipe(concat(fromEffect2(completion).pipe(drain3)));
+    const completed = limited.pipe(concat(fromEffect2(completion).pipe(drain3)));
     if (options.stdin === undefined)
       return completed;
     const input = isString(options.stdin) ? new TextEncoder().encode(options.stdin) : options.stdin;
@@ -10546,8 +10667,123 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
     const output = yield* execute(args, options);
     return yield* decodeEffect2(fromJsonString2(schema))(output.stdout).pipe(mapError2((cause) => new GhDecodeError({ cause })));
   });
-  return Gh.of({ execute, json, stream });
+  const interactive = fn2("Gh.interactive")(function* (args, overrides) {
+    const options = { ...defaults, ...overrides };
+    const executable = options.executable ?? "gh";
+    const run = scoped2(gen2(function* () {
+      const handle = yield* spawner.spawn(make21(executable, args, {
+        cwd: options.cwd,
+        env: { ...defaults.env, ...options.env },
+        extendEnv: true,
+        shell: false,
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+        forceKillAfter: "1 second"
+      }));
+      return yield* handle.exitCode;
+    })).pipe(mapError2((cause) => new GhPlatformError({ executable, cause })), flatMap3((exitCode) => exitCode === 0 ? void_3 : fail6(new GhCommandError({
+      executable,
+      exitCode,
+      stdout: "",
+      stdoutTruncated: false,
+      stderr: "",
+      stderrTruncated: false
+    }))));
+    if (options.timeout == null || !isFinite(fromInputUnsafe(options.timeout)))
+      return yield* run;
+    const timeoutMs = toMillis(options.timeout);
+    return yield* run.pipe(timeoutOrElse2({
+      duration: options.timeout,
+      orElse: () => fail6(new GhTimeoutError({ executable, timeoutMs }))
+    }));
+  });
+  return Gh.of({ execute, json, stream, interactive });
 }));
+// node_modules/@timmo001/effect-gh/src/release.ts
+var Fields = Struct({
+  tagName: String4,
+  name: String4,
+  url: String4,
+  body: String4,
+  isDraft: Boolean3,
+  isPrerelease: Boolean3,
+  targetCommitish: String4,
+  publishedAt: NullOr(String4),
+  assets: ArraySchema(Struct({ name: String4, url: String4 }))
+});
+var repoArgs = (repo) => repo === undefined ? [] : ["--repo", repo];
+var view = fn2("Release.view")(function* (input, options) {
+  const gh = yield* Gh;
+  return yield* gh.json([
+    "release",
+    "view",
+    ...input.tag === undefined ? [] : [input.tag],
+    ...repoArgs(input.repo),
+    "--json",
+    input.fields.join(",")
+  ], Fields.mapFields(pick(input.fields)), options);
+});
+var exists2 = fn2("Release.exists")(function* (input, options) {
+  return yield* view({ ...input, fields: ["tagName"] }, options).pipe(as2(true), catchTag2("GhCommandError", (error) => /release not found/i.test(error.stderr) ? succeed6(false) : fail6(error)));
+});
+var settingArgs = (settings) => [
+  ...settings.title === undefined ? [] : ["--title", settings.title],
+  ...settings.notes === undefined ? [] : ["--notes", settings.notes],
+  ...settings.notesFile === undefined ? [] : ["--notes-file", settings.notesFile],
+  ...settings.target === undefined ? [] : ["--target", settings.target],
+  ...settings.prerelease === undefined ? [] : [`--prerelease=${settings.prerelease}`],
+  ...settings.draft === undefined ? [] : [`--draft=${settings.draft}`]
+];
+var create = fn2("Release.create")(function* (input, options) {
+  const gh = yield* Gh;
+  const output = yield* gh.execute([
+    "release",
+    "create",
+    input.tag,
+    ...input.assets ?? [],
+    ...repoArgs(input.repo),
+    ...settingArgs(input),
+    ...input.verifyTag ? ["--verify-tag"] : [],
+    ...input.generateNotes ? ["--generate-notes"] : [],
+    ...input.notesStartTag === undefined ? [] : ["--notes-start-tag", input.notesStartTag]
+  ], options);
+  return { url: output.stdout.trim().split(`
+`).at(-1) ?? "" };
+});
+var edit = fn2("Release.edit")(function* (input, options) {
+  const gh = yield* Gh;
+  yield* gh.execute([
+    "release",
+    "edit",
+    input.tag,
+    ...repoArgs(input.repo),
+    ...settingArgs(input)
+  ], options);
+});
+var upload = fn2("Release.upload")(function* (input, options) {
+  const gh = yield* Gh;
+  yield* gh.execute([
+    "release",
+    "upload",
+    input.tag,
+    ...input.assets,
+    ...repoArgs(input.repo),
+    ...input.clobber ? ["--clobber"] : []
+  ], options);
+});
+var download = fn2("Release.download")(function* (input, options) {
+  const gh = yield* Gh;
+  yield* gh.execute([
+    "release",
+    "download",
+    input.tag,
+    ...repoArgs(input.repo),
+    ...input.patterns.flatMap((pattern) => ["--pattern", pattern]),
+    "--dir",
+    input.directory
+  ], options);
+});
 // src/action/ActionInputs.ts
 var inputEnvName = (name) => `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
 var readRawInput = (name) => {
@@ -12147,24 +12383,15 @@ ${delimiter}
 });
 
 // src/action/GitHubCommand.ts
-var make25 = fn2("GitHubCommand.make")(function* (label) {
-  const gh = yield* Gh;
-  let stderrTail = "";
-  const writeStderr = (text) => sync3(() => {
-    process.stderr.write(text);
-    stderrTail = `${stderrTail}${text}`.slice(-16 * 1024);
-  });
-  const mapError = mapError2((error) => new ActionFailure({
-    title: "Command failed",
-    message: value2(error).pipe(tag3("GhCommandError", (error) => stderrTail.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
-  }));
-  const stream = fn2("GitHubCommand.stream")(function* (args, options = {}) {
-    yield* gh.stream(args, options).pipe(runForEach2((chunk) => isTagged(chunk, "Stderr") ? writeStderr(chunk.text) : sync3(() => {
-      if (!options.suppressStdout)
-        process.stdout.write(chunk.text);
-    })), mapError);
-  });
-  return { stream, writeStderr, mapError };
+var mapError6 = (label) => mapError2((error) => new ActionFailure({
+  title: "Command failed",
+  message: value2(error).pipe(tag3("GhCommandError", (error) => error.stderr.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhOutputLimitError", (error) => `Command output passed ${error.limitBytes} bytes: ${label}`), tag3("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
+}));
+var run3 = (label, operation) => operation.pipe(tapError2((error) => error instanceof GhCommandError && error.stderr !== "" ? writeStderr(error.stderr.endsWith(`
+`) ? error.stderr : `${error.stderr}
+`) : void_3), mapError6(label));
+var writeStderr = (text) => sync3(() => {
+  process.stderr.write(text);
 });
 
 // src/actions/release-bun-cli/workflow.ts
@@ -12481,9 +12708,7 @@ var publishRelease = fn2("ReleaseBunCli.publishRelease")(function* (inputs) {
   const assetRoot = yield* requireInput(inputs.assetRoot, "asset-root");
   const releaseVersion = yield* requireInput(inputs.releaseVersion, "release-version");
   const sourceSha = yield* requireInput(inputs.sourceSha, "source-sha");
-  const gh = yield* Gh;
   const label = "publish GitHub release";
-  const github = yield* make25(label);
   const env = {
     ASSET_ROOT: assetRoot,
     EXISTING_RELEASE: inputs.existingRelease ?? "false",
@@ -12495,51 +12720,37 @@ var publishRelease = fn2("ReleaseBunCli.publishRelease")(function* (inputs) {
 printf "%s\\0" "$ASSET_ROOT"/*`], {
     env
   }).pipe(mapCommand, map4((stdout) => stdout.split("\x00").slice(0, -1)));
+  const upload2 = gen2(function* () {
+    yield* run3(label, upload({ tag: releaseVersion, assets: yield* assets, clobber: true }, { env }));
+  });
   if (env.EXISTING_RELEASE === "true") {
-    yield* github.stream(["release", "view", releaseVersion], {
-      env,
-      suppressStdout: true
-    });
-    yield* github.stream(["release", "upload", releaseVersion, ...yield* assets, "--clobber"], { env });
+    yield* run3(label, view({ tag: releaseVersion, fields: ["tagName"] }, { env }));
+    yield* upload2;
     return;
   }
   const tag = yield* commands.capture("bash", ["-c", releaseTagScript], { env }).pipe(mapCommand);
   if (tag.stderr !== "")
-    yield* github.writeStderr(`${tag.stderr}
+    yield* writeStderr(`${tag.stderr}
 `);
   if (tag.exitCode !== 0) {
     return yield* failure(tag.stderr.slice(-16 * 1024).trim() || `Command failed with exit code ${tag.exitCode}: ${label}`, "Command failed");
   }
-  const releaseExists = tag.stdout === "true" && (yield* gh.stream(["release", "view", releaseVersion], { env }).pipe(runDrain2, as2(true), catchTag2("GhCommandError", () => succeed6(false)), github.mapError));
-  const flags = [
-    "--target",
-    sourceSha,
-    "--title",
-    releaseVersion,
-    "--notes",
-    `Rolling release ${releaseVersion} from commit ${sourceSha}.`
-  ];
+  const releaseExists = tag.stdout === "true" && (yield* run3(label, exists2({ tag: releaseVersion }, { env }).pipe(catchTag2("GhCommandError", () => succeed6(false)))));
+  const settings = {
+    tag: releaseVersion,
+    target: sourceSha,
+    title: releaseVersion,
+    notes: `Rolling release ${releaseVersion} from commit ${sourceSha}.`,
+    prerelease: env.PRERELEASE === "true"
+  };
   if (releaseExists) {
-    yield* github.stream([
-      "release",
-      "edit",
-      releaseVersion,
-      ...flags,
-      `--prerelease=${env.PRERELEASE}`
-    ], { env });
-    yield* github.stream(["release", "upload", releaseVersion, ...yield* assets, "--clobber"], { env });
+    yield* run3(label, edit(settings, { env }));
+    yield* upload2;
   } else {
-    yield* github.stream([
-      "release",
-      "create",
-      releaseVersion,
-      ...yield* assets,
-      ...flags,
-      ...env.PRERELEASE === "true" ? ["--prerelease"] : []
-    ], { env });
+    yield* run3(label, create({ ...settings, assets: yield* assets }, { env }));
   }
 });
-var run3 = fn2("ReleaseBunCli.run")(function* (inputs) {
+var run4 = fn2("ReleaseBunCli.run")(function* (inputs) {
   switch (inputs.stage) {
     case "allocate-version":
       return yield* allocateVersion(inputs);
@@ -12582,6 +12793,6 @@ var program = gen2(function* () {
     "nfpmVersion",
     "versionDefine"
   ]).pipe(mapError2(toActionFailure));
-  yield* run3(inputs);
+  yield* run4(inputs);
 });
 runAction(program.pipe(provide4(layer())), platformLayer);
