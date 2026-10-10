@@ -242,7 +242,8 @@ const bumpRepository = Effect.fn("bumpRepository")(
       yield* executor.run(
         "dot",
         [
-          "git-commit",
+          "git",
+          "commit",
           "-m",
           `Update ${source} to ${options.tag}`,
           ...changed.flatMap((file) => ["--path", file.path]),
@@ -327,7 +328,7 @@ const bumpConsumers = Command.make(
       Flag.atLeast(0),
     ),
     push: Flag.Boolean("push").pipe(
-      Flag.withDescription("Commit and push through dot git-commit"),
+      Flag.withDescription("Commit and push through dot git commit"),
       Flag.withDefault(false),
     ),
     concurrency: Flag.Int("concurrency").pipe(

@@ -33,7 +33,7 @@ those afterwards.
    through the GitHub API.
 2. Dry run and report which repositories would change.
 3. Run with `--push` only when the user has asked for the push. It commits
-   through `dot git-commit` with `Update timmo001/workflows to <tag>` and pushes
+   through `dot git commit` with `Update timmo001/workflows to <tag>` and pushes
    to each default branch.
 4. A failed repository doesn't stop the run; the summary counts it and the
    command exits non-zero. Rerun with `--repo` for just the failures.
