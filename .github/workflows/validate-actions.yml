@@ -31,7 +31,9 @@ jobs:
       - name: Set up mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - name: Install test system dependencies
-        run: sudo apt-get install --yes libarchive-tools python3-packaging
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libarchive-tools python3-packaging
       - name: Validate
         run: mise run -c validate
 
