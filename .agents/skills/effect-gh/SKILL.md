@@ -34,9 +34,14 @@ have a different transport contract.
 ## Use the package
 
 1. Choose the smallest public operation that fits. Use `Repository`, `Issue`,
-   `PullRequest` and `Workflow` for their typed operations; use `Api` for other
-   endpoints. Use the `Gh` service's raw execution or stream methods when a CLI
-   command has no wrapper. Confirm signatures from the current exports.
+   `PullRequest`, `Workflow`, `Release`, `Label`, `Auth`, `Extension`, `Search`
+   and `Cli` for their typed operations, selecting `fields` where the operation
+   takes them. Use `Api.json`, `Api.pages`, `Api.empty`, `Api.text` or
+   `Api.headers` with a response schema for other endpoints. When a CLI command
+   has no typed operation, add one to effect-gh rather than calling the `Gh`
+   service's raw `execute`, `json` or `stream` methods from the consumer; the
+   `timmo-effect/no-raw-gh` lint rule flags those calls and direct `gh` spawns.
+   Confirm signatures from the current exports.
 2. Provide the SDK layer with the consumer's `ChildProcessSpawner`. Keep runtime
    execution at the application boundary. A Node consumer can compose it like this:
 
