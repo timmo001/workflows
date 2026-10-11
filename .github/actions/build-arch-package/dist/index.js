@@ -1514,7 +1514,9 @@ var addUnsafe = (self, key, service) => {
   const impl = self;
   const cacheRoot = cacheKeys.has(key) ? undefined : impl.cacheRoot;
   if (impl.depth >= MaxDepth) {
-    const map = new Map(impl.mapUnsafe);
+    const map = new Map(impl._flat ?? impl.base);
+    if (!impl._flat)
+      applyOverlays(map, impl.overlay);
     map.set(key, service);
     return makeImpl(cacheRoot, map, undefined, 0);
   }
@@ -1638,8 +1640,9 @@ var bigint1 = /* @__PURE__ */ BigInt(1);
 var bigint2 = /* @__PURE__ */ BigInt(2);
 var bigint10 = /* @__PURE__ */ BigInt(10);
 var bigint1e3 = /* @__PURE__ */ BigInt(1000);
-var roundTiesAwayFromZero = (input) => BigInt(input < 0 ? Math.ceil(input - 0.5) : Math.floor(input + 0.5));
+var roundTiesAwayFromZero = (input) => BigInt(Math.sign(input) * Math.round(Math.abs(input)));
 var roundMillisToNanos = (millis) => roundTiesAwayFromZero(millis * 1e6);
+var fromNanosNumber = (nanos) => make3(Number.isFinite(nanos) ? roundTiesAwayFromZero(nanos) : nanos);
 var parseNanos = (input, scale) => {
   const decimalIndex = input.indexOf(".");
   if (decimalIndex === -1)
@@ -1648,8 +1651,12 @@ var parseNanos = (input, scale) => {
   const fractional = input.slice(decimalIndex + 1);
   const fractionalScale = bigint10 ** BigInt(fractional.length);
   const scaled = (BigInt(input.slice(isNegative ? 1 : 0, decimalIndex)) * fractionalScale + BigInt(fractional)) * scale;
-  const rounded = scaled / fractionalScale + (scaled % fractionalScale * bigint2 >= fractionalScale ? bigint1 : bigint0);
-  return isNegative ? -rounded : rounded;
+  return divideTiesAwayFromZero(isNegative ? -scaled : scaled, fractionalScale);
+};
+var divideTiesAwayFromZero = (numerator, denominator) => {
+  const absolute = numerator < bigint0 ? -numerator : numerator;
+  const rounded = absolute / denominator + (absolute % denominator * bigint2 >= denominator ? bigint1 : bigint0);
+  return numerator < bigint0 ? -rounded : rounded;
 };
 var DURATION_REGEXP = /^(-?\d+(?:\.\d+)?)\s+(nanos?|micros?|millis?|seconds?|minutes?|hours?|days?|weeks?)$/;
 var fromInputUnsafe = (input) => {
@@ -1716,7 +1723,7 @@ var fromInputUnsafe = (input) => {
         if (input[0] === Infinity || input[1] === Infinity) {
           return infinity;
         }
-        return make3(roundTiesAwayFromZero(input[0] * 1e9 + input[1]));
+        return fromNanosNumber(input[0] * 1e9 + input[1]);
       }
       const obj = input;
       let millis = 0;
@@ -1734,7 +1741,7 @@ var fromInputUnsafe = (input) => {
         millis += obj.milliseconds;
       if (!obj.microseconds && !obj.nanoseconds)
         return make3(millis);
-      return make3(roundTiesAwayFromZero(millis * 1e6 + (obj.microseconds ?? 0) * 1000 + (obj.nanoseconds ?? 0)));
+      return fromNanosNumber(millis * 1e6 + (obj.microseconds ?? 0) * 1000 + (obj.nanoseconds ?? 0));
     }
   }
   return invalid(input);
@@ -3055,6 +3062,8 @@ var succeedPayload = function(_value, fiber) {
   return fiber.succeedWith(this.payload);
 };
 var continuationMarksStack = /* @__PURE__ */ (() => {
+  if (getStackTraceLimit() === 0)
+    return false;
   const marker = "~effect/Effect/stackProbe";
   const probe = {
     [marker]: function stackProbe() {
@@ -7642,6 +7651,15 @@ class SchemaError extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
   get message() {
     return defaultFormatter(this.issue);
   }
+  toJSON() {
+    return {
+      _tag: this._tag,
+      message: this.message
+    };
+  }
+  [NodeInspectSymbol]() {
+    return this.toJSON();
+  }
   toString() {
     return `SchemaError(${this.message})`;
   }
@@ -7929,9 +7947,11 @@ function isInt(annotations) {
       id: "effect/schema/isInt",
       payload: null
     },
-    toJsonSchema: () => [{
-      type: "integer"
-    }, true],
+    toJsonSchema: () => ({
+      type: "integer",
+      minimum: globalThis.Number.MIN_SAFE_INTEGER,
+      maximum: globalThis.Number.MAX_SAFE_INTEGER
+    }),
     toCode: () => ({
       runtime: "Schema.isInt()"
     }),
@@ -10114,7 +10134,6 @@ function v4Bytes(bytes = randomBytes()) {
   bytes[8] = bytes[8] & 63 | 128;
   return bytes;
 }
-var v4String = (bytes) => stringify(bytes === undefined ? v4Bytes() : v4Bytes(bytes));
 var maxV7Timestamp = 2 ** 48 - 1;
 function v7Bytes(timestampMillis, bytes = randomBytes()) {
   const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxV7Timestamp);
@@ -10128,7 +10147,6 @@ function v7Bytes(timestampMillis, bytes = randomBytes()) {
   bytes[8] = bytes[8] & 63 | 128;
   return bytes;
 }
-var v7String = (timestampMillis, bytes) => stringify(bytes === undefined ? v7Bytes(timestampMillis) : v7Bytes(timestampMillis, bytes));
 
 // node_modules/effect/dist/Crypto.js
 var TypeId23 = "~effect/Crypto";
@@ -10178,8 +10196,14 @@ var make16 = (impl) => {
       }
       return buffer;
     }),
-    randomUUIDv4: sync3(() => v4String(randomBytesUnsafe(16))),
-    randomUUIDv7: clockWith2((clock) => succeed6(v7String(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16)))),
+    randomUUIDv4: (options) => sync3(() => {
+      const bytes = v4Bytes(randomBytesUnsafe(16));
+      return options?.format === "bytes" ? bytes : stringify(bytes);
+    }),
+    randomUUIDv7: (options) => clockWith2((clock) => {
+      const bytes = v7Bytes(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16));
+      return succeed6(options?.format === "bytes" ? bytes : stringify(bytes));
+    }),
     randomULID: clockWith2((clock) => succeed6(ulidString(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(10))))
   });
 };
@@ -10403,6 +10427,7 @@ var make18 = (options) => ({
   [TypeId26]: TypeId26,
   stdinIsTerminal: succeed6(false),
   stdoutIsTerminal: succeed6(false),
+  stderrIsTerminal: succeed6(false),
   ...options
 });
 // node_modules/effect/dist/Terminal.js
@@ -11735,12 +11760,63 @@ var makeTempDirectoryScoped = /* @__PURE__ */ (() => {
     recursive: true
   })));
 })();
+var openFlagBits = (flag) => {
+  const {
+    O_APPEND,
+    O_CREAT,
+    O_EXCL,
+    O_RDONLY,
+    O_RDWR,
+    O_TRUNC,
+    O_WRONLY
+  } = NFS.constants;
+  switch (flag) {
+    case "r":
+      return O_RDONLY;
+    case "r+":
+      return O_RDWR;
+    case "w":
+      return O_TRUNC | O_CREAT | O_WRONLY;
+    case "wx":
+      return O_TRUNC | O_CREAT | O_WRONLY | O_EXCL;
+    case "w+":
+      return O_TRUNC | O_CREAT | O_RDWR;
+    case "wx+":
+      return O_TRUNC | O_CREAT | O_RDWR | O_EXCL;
+    case "a":
+      return O_APPEND | O_CREAT | O_WRONLY;
+    case "ax":
+      return O_APPEND | O_CREAT | O_WRONLY | O_EXCL;
+    case "a+":
+      return O_APPEND | O_CREAT | O_RDWR;
+    case "ax+":
+      return O_APPEND | O_CREAT | O_RDWR | O_EXCL;
+  }
+};
+var noFollowFlags = (method, flag) => suspend2(() => {
+  const {
+    O_NOFOLLOW
+  } = NFS.constants;
+  if (process.platform === "win32" || typeof O_NOFOLLOW !== "number" || O_NOFOLLOW === 0) {
+    return fail6(badArgument({
+      module: "FileSystem",
+      method,
+      description: "noFollow is not supported on this platform"
+    }));
+  }
+  return succeed6(openFlagBits(flag) | O_NOFOLLOW);
+});
 var openFactory = (method) => {
   const nodeOpen = effectify(NFS.open, handleErrnoException("FileSystem", method), handleBadArgument(method));
   const nodeClose = effectify(NFS.close, handleErrnoException("FileSystem", method), handleBadArgument(method));
-  return (path, options) => pipe(acquireRelease2(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map4((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
+  return (path, options) => pipe(acquireRelease2(options?.noFollow === true ? flatMap3(noFollowFlags(method, options.flag ?? "r"), (flags) => nodeOpen(path, flags, options.mode)) : nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map4((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
 };
 var open2 = /* @__PURE__ */ openFactory("open");
+var negativePosition = (method) => badArgument({
+  module: "FileSystem",
+  method,
+  description: "Cannot read before the start of the file"
+});
 var makeFile = /* @__PURE__ */ (() => {
   const nodeReadFactory = (method) => effectify(NFS.read, handleErrnoException("FileSystem", method), handleBadArgument(method));
   const nodeRead = /* @__PURE__ */ nodeReadFactory("read");
@@ -11784,8 +11860,15 @@ var makeFile = /* @__PURE__ */ (() => {
         return succeed6(position);
       });
     }
-    read(buffer) {
+    read(buffer, options) {
       return suspend2(() => {
+        const explicit = options?.position;
+        if (explicit !== undefined) {
+          return explicit < BigInt(0) ? fail6(negativePosition("read")) : nodeRead(this.fd, {
+            buffer,
+            position: explicit
+          });
+        }
         const position = this.position;
         return map4(nodeRead(this.fd, {
           buffer,
@@ -11796,14 +11879,18 @@ var makeFile = /* @__PURE__ */ (() => {
         });
       });
     }
-    readAlloc(size) {
+    readAlloc(size, options) {
       return suspend2(() => {
         try {
           if (!Number.isInteger(size) || size < 0) {
             throw new RangeError("size must be a non-negative integer");
           }
+          const explicit = options?.position;
+          if (explicit !== undefined && explicit < BigInt(0)) {
+            return fail6(negativePosition("readAlloc"));
+          }
           const buffer = Buffer.allocUnsafeSlow(size);
-          const position = this.position;
+          const position = explicit ?? this.position;
           return map4(nodeReadAlloc(this.fd, {
             buffer,
             position
@@ -11811,7 +11898,9 @@ var makeFile = /* @__PURE__ */ (() => {
             if (bytesRead === 0) {
               return none2();
             }
-            this.position = position + BigInt(bytesRead);
+            if (explicit === undefined) {
+              this.position = position + BigInt(bytesRead);
+            }
             if (bytesRead === size) {
               return some2(buffer);
             }
@@ -12102,6 +12191,7 @@ var layer9 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make18({
   args: /* @__PURE__ */ sync3(() => process.argv.slice(2)),
   stdinIsTerminal: /* @__PURE__ */ sync3(() => process.stdin.isTTY === true),
   stdoutIsTerminal: /* @__PURE__ */ sync3(() => process.stdout.isTTY === true),
+  stderrIsTerminal: /* @__PURE__ */ sync3(() => process.stderr.isTTY === true),
   stdout: (options) => fromWritable({
     evaluate: () => process.stdout,
     onError: (cause) => systemError({
@@ -12254,7 +12344,8 @@ var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
 });
 var layer11 = /* @__PURE__ */ effect(Terminal, /* @__PURE__ */ make24(defaultShouldQuit));
 function defaultShouldQuit(input) {
-  return input.key.ctrl && (input.key.name === "c" || input.key.name === "d");
+  const key = input.key;
+  return key.name === "escape" || key.ctrl && (key.name === "c" || key.name === "d");
 }
 
 // node_modules/@effect/platform-node/dist/NodeTerminal.js
