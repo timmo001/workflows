@@ -87,8 +87,8 @@ accordingly.
 `tooling-drift.yml` runs a repository's `mise run tooling:publish` from its
 default branch, so the `@timmo001/tooling-drift` tool it pins can compare the
 tool releases recorded in `tooling.yml` with the latest and open one pull
-request per tool that moved. Set `install: true` when an update command needs
-the repository's dependencies. Without the `token` secret it runs with
+request per tool that moved. A repository's refresh task declares its own
+`install` dependency. Without the `token` secret it runs with
 `GITHUB_TOKEN`, whose pull requests cannot trigger `pull_request` workflows,
 so the tool dispatches the repository's CI on each branch instead. The job is
 named `Tooling drift`.
