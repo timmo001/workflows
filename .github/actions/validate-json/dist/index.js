@@ -9272,12 +9272,63 @@ var makeTempDirectoryScoped = /* @__PURE__ */ (() => {
     recursive: true
   })));
 })();
+var openFlagBits = (flag) => {
+  const {
+    O_APPEND,
+    O_CREAT,
+    O_EXCL,
+    O_RDONLY,
+    O_RDWR,
+    O_TRUNC,
+    O_WRONLY
+  } = NFS.constants;
+  switch (flag) {
+    case "r":
+      return O_RDONLY;
+    case "r+":
+      return O_RDWR;
+    case "w":
+      return O_TRUNC | O_CREAT | O_WRONLY;
+    case "wx":
+      return O_TRUNC | O_CREAT | O_WRONLY | O_EXCL;
+    case "w+":
+      return O_TRUNC | O_CREAT | O_RDWR;
+    case "wx+":
+      return O_TRUNC | O_CREAT | O_RDWR | O_EXCL;
+    case "a":
+      return O_APPEND | O_CREAT | O_WRONLY;
+    case "ax":
+      return O_APPEND | O_CREAT | O_WRONLY | O_EXCL;
+    case "a+":
+      return O_APPEND | O_CREAT | O_RDWR;
+    case "ax+":
+      return O_APPEND | O_CREAT | O_RDWR | O_EXCL;
+  }
+};
+var noFollowFlags = (method, flag) => suspend2(() => {
+  const {
+    O_NOFOLLOW
+  } = NFS.constants;
+  if (process.platform === "win32" || typeof O_NOFOLLOW !== "number" || O_NOFOLLOW === 0) {
+    return fail6(badArgument({
+      module: "FileSystem",
+      method,
+      description: "noFollow is not supported on this platform"
+    }));
+  }
+  return succeed6(openFlagBits(flag) | O_NOFOLLOW);
+});
 var openFactory = (method) => {
   const nodeOpen = effectify(NFS.open, handleErrnoException("FileSystem", method), handleBadArgument(method));
   const nodeClose = effectify(NFS.close, handleErrnoException("FileSystem", method), handleBadArgument(method));
-  return (path, options) => pipe(acquireRelease2(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map4((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
+  return (path, options) => pipe(acquireRelease2(options?.noFollow === true ? flatMap3(noFollowFlags(method, options.flag ?? "r"), (flags) => nodeOpen(path, flags, options.mode)) : nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map4((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
 };
 var open2 = /* @__PURE__ */ openFactory("open");
+var negativePosition = (method) => badArgument({
+  module: "FileSystem",
+  method,
+  description: "Cannot read before the start of the file"
+});
 var makeFile = /* @__PURE__ */ (() => {
   const nodeReadFactory = (method) => effectify(NFS.read, handleErrnoException("FileSystem", method), handleBadArgument(method));
   const nodeRead = /* @__PURE__ */ nodeReadFactory("read");
@@ -9321,8 +9372,15 @@ var makeFile = /* @__PURE__ */ (() => {
         return succeed6(position);
       });
     }
-    read(buffer) {
+    read(buffer, options) {
       return suspend2(() => {
+        const explicit = options?.position;
+        if (explicit !== undefined) {
+          return explicit < BigInt(0) ? fail6(negativePosition("read")) : nodeRead(this.fd, {
+            buffer,
+            position: explicit
+          });
+        }
         const position = this.position;
         return map4(nodeRead(this.fd, {
           buffer,
@@ -9333,14 +9391,18 @@ var makeFile = /* @__PURE__ */ (() => {
         });
       });
     }
-    readAlloc(size) {
+    readAlloc(size, options) {
       return suspend2(() => {
         try {
           if (!Number.isInteger(size) || size < 0) {
             throw new RangeError("size must be a non-negative integer");
           }
+          const explicit = options?.position;
+          if (explicit !== undefined && explicit < BigInt(0)) {
+            return fail6(negativePosition("readAlloc"));
+          }
           const buffer = Buffer.allocUnsafeSlow(size);
-          const position = this.position;
+          const position = explicit ?? this.position;
           return map4(nodeReadAlloc(this.fd, {
             buffer,
             position
@@ -9348,7 +9410,9 @@ var makeFile = /* @__PURE__ */ (() => {
             if (bytesRead === 0) {
               return none2();
             }
-            this.position = position + BigInt(bytesRead);
+            if (explicit === undefined) {
+              this.position = position + BigInt(bytesRead);
+            }
             if (bytesRead === size) {
               return some2(buffer);
             }
@@ -9649,6 +9713,7 @@ var layer8 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make17({
   args: /* @__PURE__ */ sync3(() => process.argv.slice(2)),
   stdinIsTerminal: /* @__PURE__ */ sync3(() => process.stdin.isTTY === true),
   stdoutIsTerminal: /* @__PURE__ */ sync3(() => process.stdout.isTTY === true),
+  stderrIsTerminal: /* @__PURE__ */ sync3(() => process.stderr.isTTY === true),
   stdout: (options) => fromWritable({
     evaluate: () => process.stdout,
     onError: (cause) => systemError({
@@ -10738,7 +10803,8 @@ var make22 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
 });
 var layer10 = /* @__PURE__ */ effect(Terminal, /* @__PURE__ */ make22(defaultShouldQuit));
 function defaultShouldQuit(input) {
-  return input.key.ctrl && (input.key.name === "c" || input.key.name === "d");
+  const key = input.key;
+  return key.name === "escape" || key.ctrl && (key.name === "c" || key.name === "d");
 }
 
 // node_modules/@effect/platform-node/dist/NodeTerminal.js
