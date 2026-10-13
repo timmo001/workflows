@@ -761,8 +761,13 @@ var pickInternalCall = () => {
       } finally {}
     }
   };
-  const isNotOptimizedAway = getStackTraceLimit() !== 0 && standard[InternalTypeId](() => new Error().stack)?.includes(InternalTypeId) === true;
-  return isNotOptimizedAway ? standard[InternalTypeId] : forced[InternalTypeId];
+  const limit = getStackTraceLimit();
+  if (limit === 0)
+    return forced[InternalTypeId];
+  setStackTraceLimit(2);
+  const error = standard[InternalTypeId](() => new Error);
+  setStackTraceLimit(limit);
+  return error.stack?.includes(InternalTypeId) === true ? standard[InternalTypeId] : forced[InternalTypeId];
 };
 var internalCall = /* @__PURE__ */ pickInternalCall();
 
@@ -3059,15 +3064,19 @@ var succeedPayload = function(_value, fiber) {
   return fiber.succeedWith(this.payload);
 };
 var continuationMarksStack = /* @__PURE__ */ (() => {
-  if (getStackTraceLimit() === 0)
+  const limit = /* @__PURE__ */ getStackTraceLimit();
+  if (limit === 0)
     return false;
   const marker = "~effect/Effect/stackProbe";
   const probe = {
     [marker]: function stackProbe() {
-      return new Error().stack;
+      return new Error;
     }
   };
-  return probe[marker]()?.includes("[as " + marker + "]") === true;
+  setStackTraceLimit(1);
+  const error = /* @__PURE__ */ probe[marker]();
+  setStackTraceLimit(limit);
+  return error.stack?.includes("[as " + marker + "]") === true;
 })();
 var mapCont = function(value, fiber) {
   const f = this.payload;
@@ -11034,6 +11043,11 @@ var toPlatformError = (method, error, command) => {
 };
 var processGroupGraceMillis = 1000;
 var processGroupPollIntervalMillis = 10;
+var handleInputErrors = (writable) => {
+  const onError = () => {};
+  writable.on("error", onError);
+  writable.once("close", () => writable.off("error", onError));
+};
 var isProcessAlive = (childProcess, exitSignal) => {
   if (!isDoneUnsafe(exitSignal)) {
     return true;
@@ -11048,9 +11062,15 @@ var isProcessAlive = (childProcess, exitSignal) => {
     return false;
   }
 };
-var taskkill = (childProcess, onExit = () => {}) => NodeChildProcess.execFile("taskkill", ["/pid", String(childProcess.pid), "/T", "/F"], {
-  windowsHide: true
-}, onExit);
+var taskkill = (childProcess, onExit = () => {}) => {
+  if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+    onExit(null);
+    return;
+  }
+  NodeChildProcess.execFile("taskkill", ["/pid", String(childProcess.pid), "/T", "/F"], {
+    windowsHide: true
+  }, onExit);
+};
 var make22 = /* @__PURE__ */ gen2(function* () {
   const fs = yield* FileSystem;
   const path = yield* Path;
@@ -11168,6 +11188,7 @@ var make22 = /* @__PURE__ */ gen2(function* () {
         case "input": {
           let sink = drain2;
           if (nodeStream && "write" in nodeStream) {
+            handleInputErrors(nodeStream);
             sink = fromWritable({
               evaluate: () => nodeStream,
               onError: (error) => toPlatformError(`fromWritable(fd${fd})`, toError(error), command)
@@ -11206,6 +11227,7 @@ var make22 = /* @__PURE__ */ gen2(function* () {
   const setupChildStdin = (command, childProcess, config) => suspend2(() => {
     let sink = drain2;
     if (isNotNull(childProcess.stdin)) {
+      handleInputErrors(childProcess.stdin);
       sink = fromWritable({
         evaluate: () => childProcess.stdin,
         onError: (error) => toPlatformError("fromWritable(stdin)", toError(error), command),
