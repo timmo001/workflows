@@ -10556,6 +10556,9 @@ class GhDecodeError extends TaggedError3()("GhDecodeError", { cause: Defect() })
 class GhOutputLimitError extends TaggedError3()("GhOutputLimitError", { executable: String4, limitBytes: Int }) {
 }
 
+class GhInvalidOptionsError extends TaggedError3()("GhInvalidOptionsError", { cause: Defect() }) {
+}
+
 // node_modules/@timmo001/effect-gh/src/transient.ts
 var statusPattern = /\b(?:HTTP|status(?: code)?)\s*(\d{3})\b/i;
 var transientStatuses = new Set([
