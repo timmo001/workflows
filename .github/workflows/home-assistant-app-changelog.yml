@@ -37,7 +37,7 @@ jobs:
         env:
           CHANGELOG_PATH: ${{ inputs.changelog-path }}
           RELEASE_NOTES: ${{ github.event.release.body }}
-        run: printf '%s\n' "$RELEASE_NOTES" | tr -d '\r' > "$CHANGELOG_PATH"
+        run: printf '%s\n' "$(printf '%s' "$RELEASE_NOTES" | tr -d '\r')" > "$CHANGELOG_PATH"
 
       - name: Commit changelog
         env:
