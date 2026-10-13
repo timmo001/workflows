@@ -1,0 +1,195 @@
+---
+name: Build container image
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Full image name, such as ghcr.io/owner/name. Pushing needs a GHCR image in the caller's owner."
+        required: true
+        type: string
+      version:
+        description: "Release version, without a v prefix. Tags the image with it and major.minor. Required when push is true."
+        required: false
+        type: string
+        default: ""
+      context:
+        description: "Build context"
+        required: false
+        type: string
+        default: "."
+      file:
+        description: "Dockerfile path; defaults to Dockerfile in the context"
+        required: false
+        type: string
+        default: ""
+      target:
+        description: "Build stage to target"
+        required: false
+        type: string
+        default: ""
+      build-args:
+        description: "Newline-separated KEY=value build arguments"
+        required: false
+        type: string
+        default: ""
+      home-assistant:
+        description: "Label the image as a Home Assistant app (io.hass.type, io.hass.arch and io.hass.version)"
+        required: false
+        type: boolean
+        default: false
+      latest:
+        description: "Also tag the manifest latest"
+        required: false
+        type: boolean
+        default: true
+      push:
+        description: "Push the images and manifest; false only checks each architecture builds"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  # Each architecture builds on its own native runner, since emulated builds are
+  # slow and some compilers are unreliable under QEMU, and is pushed by digest.
+  # The manifest job then tags one multi-arch manifest.
+  image:
+    name: Image (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            hass-arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            hass-arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Check inputs
+        if: inputs.push && inputs.version == ''
+        run: |
+          echo "::error title=Missing version::Set version when push is true."
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        if: inputs.push
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ inputs.image }}
+          labels: |
+            ${{ inputs.home-assistant && 'io.hass.type=app' || '' }}
+            ${{ inputs.home-assistant && format('io.hass.arch={0}', matrix.hass-arch) || '' }}
+            ${{ inputs.home-assistant && inputs.version != '' && format('io.hass.version={0}', inputs.version) || '' }}
+
+      - name: Build
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          target: ${{ inputs.target }}
+          build-args: ${{ inputs.build-args }}
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: ${{ inputs.push && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', inputs.image) || 'type=cacheonly' }}
+
+      - name: Export digest
+        id: digest
+        if: inputs.push
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ inputs.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+          printf 'key=%s\n' "$(printf '%s' "$IMAGE" | tr '/:' '--')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload digest
+        if: inputs.push
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-digest-${{ steps.digest.outputs.key }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    name: Manifest
+    if: inputs.push
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Artifact key
+        id: key
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: printf 'key=%s\n' "$(printf '%s' "$IMAGE" | tr '/:' '--')" >> "$GITHUB_OUTPUT"
+
+      - name: Download digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: image-digest-${{ steps.key.outputs.key }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ inputs.image }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ inputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }}
+            type=raw,value=latest,enable=${{ inputs.latest }}
+
+      - name: Create and push manifest
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          # shellcheck disable=SC2046
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      - name: Inspect manifest
+        env:
+          IMAGE: ${{ inputs.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: docker buildx imagetools inspect "${IMAGE}:${VERSION}"
