@@ -1,0 +1,43 @@
+---
+name: Home Assistant app dispatch
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: "The app repository to send the release to, such as my-org/home-assistant-apps"
+        required: true
+        type: string
+      event-type:
+        description: "The repository_dispatch event type the app repository listens for"
+        required: false
+        type: string
+        default: app-release
+    secrets:
+      token:
+        description: >-
+          Token with Contents write on the app repository, which GitHub requires to send it a repository_dispatch
+        required: true
+
+jobs:
+  # Sends the caller's repository and release tag to a shared app repository,
+  # which copies the app folder from that tag. Call it once the release's image
+  # is pushed, so the shared repository never offers a version with no image.
+  dispatch:
+    name: Dispatch
+    if: ${{ github.event_name == 'release' && !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send the release
+        env:
+          GH_TOKEN: ${{ secrets.token }}
+          TARGET: ${{ inputs.repository }}
+          EVENT_TYPE: ${{ inputs.event-type }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: >-
+          gh api "repos/$TARGET/dispatches"
+          -f "event_type=$EVENT_TYPE"
+          -f "client_payload[repository]=$GITHUB_REPOSITORY"
+          -f "client_payload[tag]=$TAG"

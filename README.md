@@ -54,7 +54,7 @@ The collection includes reusable workflows for:
 - Preparing stable Python distributions from immutable release source
 - Building allowlisted Arch packages from exact source commits
 - Building and releasing Home Assistant cards and command-line tools
-- Building multi-arch container images and Home Assistant app changelogs
+- Building multi-arch container images, Home Assistant app changelogs and app repository dispatches
 - Building, linting and attaching Bun CLI and Arch package artefacts
 - Managing dependency updates, labels, stale items and releases
 
@@ -109,6 +109,13 @@ them in the update dialog. Pass a `token` secret that can push there, such as a
 fine-grained admin token with Contents write when a ruleset blocks
 `GITHUB_TOKEN`. A failure only warns, so it never fails the release. The job is
 named `Changelog`.
+
+`home-assistant-app-dispatch.yml` sends a published stable release's repository
+and tag to a shared Home Assistant app repository as a `repository_dispatch`
+(`event-type`, default `app-release`), so that repository can copy the app
+folder from the tag. Call it after the image is pushed, and pass the shared
+repository as `repository` and a `token` secret with Contents write on it, which
+GitHub requires to send a dispatch. The job is named `Dispatch`.
 
 `lint-arch-pkgbuild.yml` runs namcap in an Arch container over the files or
 directories listed in `pkgbuild-paths` (newline-separated, default `.scripts`).
