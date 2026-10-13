@@ -48,7 +48,7 @@ jobs:
       - name: 🏗️ Install dependencies
         env:
           # renovate: datasource=github-releases depName=goreleaser/nfpm
-          NFPM_VERSION: "2.47.0"
+          NFPM_VERSION: "2.48.0"
         run: |
           sudo apt update
           sudo apt install libavahi-compat-libdnssd-dev libxtst-dev libpng++-dev libxext-dev libxss-dev libopengl0
