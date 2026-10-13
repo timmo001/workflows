@@ -54,7 +54,8 @@ The collection includes reusable workflows for:
 - Preparing stable Python distributions from immutable release source
 - Building allowlisted Arch packages from exact source commits
 - Building and releasing Home Assistant cards and command-line tools
-- Building multi-arch container images, Home Assistant app changelogs and app repository dispatches
+- Building multi-arch container images and Home Assistant app changelogs
+- Sending Home Assistant app releases to a shared app repository
 - Building, linting and attaching Bun CLI and Arch package artefacts
 - Managing dependency updates, labels, stale items and releases
 
