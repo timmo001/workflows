@@ -54,6 +54,7 @@ The collection includes reusable workflows for:
 - Preparing stable Python distributions from immutable release source
 - Building allowlisted Arch packages from exact source commits
 - Building and releasing Home Assistant cards and command-line tools
+- Building multi-arch container images and Home Assistant app changelogs
 - Building, linting and attaching Bun CLI and Arch package artefacts
 - Managing dependency updates, labels, stale items and releases
 
@@ -92,6 +93,22 @@ request per tool that moved. A repository's refresh task declares its own
 `GITHUB_TOKEN`, whose pull requests cannot trigger `pull_request` workflows,
 so the tool dispatches the repository's CI on each branch instead. The job is
 named `Tooling drift`.
+
+`build-container-image.yml` builds a Dockerfile for amd64 and arm64 on native
+runners, pushes each by digest to GHCR and tags one multi-arch manifest with
+`version`, its `major.minor` and, unless `latest: false`, `latest`. The caller
+job needs `contents: read` and `packages: write`. `home-assistant: true` adds
+the `io.hass.type`, `io.hass.arch` and `io.hass.version` labels the Supervisor
+reads from a prebuilt app image. `push: false` only checks that both
+architectures build, with no registry access, for pull requests. Call it once
+per image; jobs are named `Image (amd64)`, `Image (arm64)` and `Manifest`.
+
+`home-assistant-app-changelog.yml` copies a published stable release's notes to
+the app's `changelog-path` on the default branch, where the Supervisor shows
+them in the update dialog. Pass a `token` secret that can push there, such as a
+fine-grained admin token with Contents write when a ruleset blocks
+`GITHUB_TOKEN`. A failure only warns, so it never fails the release. The job is
+named `Changelog`.
 
 `lint-arch-pkgbuild.yml` runs namcap in an Arch container over the files or
 directories listed in `pkgbuild-paths` (newline-separated, default `.scripts`).
