@@ -327,6 +327,7 @@ describe.each(["node", "bun"])("GitHub action bundles on %s", (runtime) => {
             "POST",
             "--input",
             "-",
+            "--allow-escape-sequences",
             "--",
             "repos/timmo001/arch-repo/dispatches",
           ],

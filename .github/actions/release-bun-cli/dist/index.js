@@ -12479,7 +12479,7 @@ ${delimiter}
 // src/action/GitHubCommand.ts
 var mapError6 = (label) => mapError2((error) => new ActionFailure({
   title: "Command failed",
-  message: value2(error).pipe(tag3("GhCommandError", (error) => error.stderr.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhOutputLimitError", (error) => `Command output passed ${error.limitBytes} bytes: ${label}`), tag3("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
+  message: value2(error).pipe(tag3("GhCommandError", (error) => error.stderr.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhOutputLimitError", (error) => `Command output passed ${error.limitBytes} bytes: ${label}`), tag3("GhPlatformError", "GhDecodeError", "GhInvalidOptionsError", (error) => String(error.cause)), exhaustive2)
 }));
 var run3 = (label, operation) => operation.pipe(tapError2((error) => error instanceof GhCommandError && error.stderr !== "" ? writeStderr(error.stderr.endsWith(`
 `) ? error.stderr : `${error.stderr}

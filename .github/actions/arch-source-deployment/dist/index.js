@@ -13032,7 +13032,7 @@ var finishStatus = (inputs, logUrl) => value2(inputs.jobStatus).pipe(when3("succ
 })), when3("failure", () => ({ state: "failure", log_url: logUrl })), when3("cancelled", () => ({ state: "error", log_url: logUrl })), exhaustive2);
 var toActionFailure2 = (error) => new ActionFailure({
   title: "GitHub request failed",
-  message: value2(error).pipe(tag3("GhCommandError", (error) => error.stderr.trim() || `gh exited with code ${error.exitCode}`), tag3("GhTimeoutError", (error) => `gh timed out after ${error.timeoutMs}ms`), tag3("GhOutputLimitError", (error) => `gh output passed ${error.limitBytes} bytes`), tag3("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
+  message: value2(error).pipe(tag3("GhCommandError", (error) => error.stderr.trim() || `gh exited with code ${error.exitCode}`), tag3("GhTimeoutError", (error) => `gh timed out after ${error.timeoutMs}ms`), tag3("GhOutputLimitError", (error) => `gh output passed ${error.limitBytes} bytes`), tag3("GhPlatformError", "GhDecodeError", "GhInvalidOptionsError", (error) => String(error.cause)), exhaustive2)
 });
 var runLogUrl = gen2(function* () {
   const server = yield* String5("GITHUB_SERVER_URL");
