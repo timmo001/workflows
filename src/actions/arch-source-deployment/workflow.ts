@@ -83,8 +83,11 @@ const toActionFailure = (error: GhError) =>
         "GhOutputLimitError",
         (error) => `gh output passed ${error.limitBytes} bytes`,
       ),
-      Match.tag("GhPlatformError", "GhDecodeError", (error) =>
-        String(error.cause),
+      Match.tag(
+        "GhPlatformError",
+        "GhDecodeError",
+        "GhInvalidOptionsError",
+        (error) => String(error.cause),
       ),
       Match.exhaustive,
     ),

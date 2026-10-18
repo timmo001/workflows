@@ -10556,6 +10556,9 @@ class GhDecodeError extends TaggedError3()("GhDecodeError", { cause: Defect() })
 class GhOutputLimitError extends TaggedError3()("GhOutputLimitError", { executable: String4, limitBytes: Int }) {
 }
 
+class GhInvalidOptionsError extends TaggedError3()("GhInvalidOptionsError", { cause: Defect() }) {
+}
+
 // node_modules/@timmo001/effect-gh/src/transient.ts
 var statusPattern = /\b(?:HTTP|status(?: code)?)\s*(\d{3})\b/i;
 var transientStatuses = new Set([
@@ -12458,7 +12461,7 @@ import { basename, join as join3 } from "node:path";
 // src/action/GitHubCommand.ts
 var mapError6 = (label) => mapError2((error) => new ActionFailure({
   title: "Command failed",
-  message: value2(error).pipe(tag3("GhCommandError", (error) => error.stderr.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhOutputLimitError", (error) => `Command output passed ${error.limitBytes} bytes: ${label}`), tag3("GhPlatformError", "GhDecodeError", (error) => String(error.cause)), exhaustive2)
+  message: value2(error).pipe(tag3("GhCommandError", (error) => error.stderr.trim() || `Command failed with exit code ${error.exitCode}: ${label}`), tag3("GhTimeoutError", (error) => `Command timed out after ${error.timeoutMs}ms: ${label}`), tag3("GhOutputLimitError", (error) => `Command output passed ${error.limitBytes} bytes: ${label}`), tag3("GhPlatformError", "GhDecodeError", "GhInvalidOptionsError", (error) => String(error.cause)), exhaustive2)
 }));
 var run3 = (label, operation) => operation.pipe(tapError2((error) => error instanceof GhCommandError && error.stderr !== "" ? writeStderr(error.stderr.endsWith(`
 `) ? error.stderr : `${error.stderr}

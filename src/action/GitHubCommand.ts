@@ -24,8 +24,11 @@ export const mapError = (label: string) =>
             (error) =>
               `Command output passed ${error.limitBytes} bytes: ${label}`,
           ),
-          Match.tag("GhPlatformError", "GhDecodeError", (error) =>
-            String(error.cause),
+          Match.tag(
+            "GhPlatformError",
+            "GhDecodeError",
+            "GhInvalidOptionsError",
+            (error) => String(error.cause),
           ),
           Match.exhaustive,
         ),
