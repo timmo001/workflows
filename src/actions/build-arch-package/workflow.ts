@@ -208,12 +208,20 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
       "allowlist-url",
     );
 
+    // GitHub sometimes answers these with a brief 403 or 5xx, so retry them
+    const fetchArgs = [
+      "--fail",
+      "--location",
+      "--silent",
+      "--show-error",
+      "--retry",
+      "5",
+      "--retry-all-errors",
+    ];
+
     const repository = yield* commands
       .run("curl", [
-        "--fail",
-        "--location",
-        "--silent",
-        "--show-error",
+        ...fetchArgs,
         `https://api.github.com/repos/${inputs.sourceRepository}`,
       ])
       .pipe(mapCommand);
@@ -242,13 +250,7 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
       return yield* failure("Source repository must be public.");
 
     const allowlist = yield* commands
-      .run("curl", [
-        "--fail",
-        "--location",
-        "--silent",
-        "--show-error",
-        allowlistUrl,
-      ])
+      .run("curl", [...fetchArgs, allowlistUrl])
       .pipe(mapCommand);
 
     const allowlistFile = yield* fs

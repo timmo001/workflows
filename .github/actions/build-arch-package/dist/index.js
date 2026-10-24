@@ -12397,11 +12397,17 @@ var validateContract = fn2("BuildArchPackage.validateContract")(function* (input
   const commands = yield* Service3;
   const fs = yield* FileSystem;
   const allowlistUrl = yield* requireInput(inputs.allowlistUrl, "allowlist-url");
-  const repository = yield* commands.run("curl", [
+  const fetchArgs = [
     "--fail",
     "--location",
     "--silent",
     "--show-error",
+    "--retry",
+    "5",
+    "--retry-all-errors"
+  ];
+  const repository = yield* commands.run("curl", [
+    ...fetchArgs,
     `https://api.github.com/repos/${inputs.sourceRepository}`
   ]).pipe(mapCommand);
   const repositoryFile = yield* fs.makeTempFileScoped({ prefix: "repository-" }).pipe(mapError2((error) => failure(String(error), "File operation failed")));
@@ -12409,13 +12415,7 @@ var validateContract = fn2("BuildArchPackage.validateContract")(function* (input
   const visibility = yield* commands.run("jq", ["-r", ".visibility", repositoryFile]).pipe(mapCommand);
   if (visibility.trim() !== "public")
     return yield* failure("Source repository must be public.");
-  const allowlist = yield* commands.run("curl", [
-    "--fail",
-    "--location",
-    "--silent",
-    "--show-error",
-    allowlistUrl
-  ]).pipe(mapCommand);
+  const allowlist = yield* commands.run("curl", [...fetchArgs, allowlistUrl]).pipe(mapCommand);
   const allowlistFile = yield* fs.makeTempFileScoped({ prefix: "allowlist-" }).pipe(mapError2((error) => failure(String(error), "File operation failed")));
   yield* fs.writeFileString(allowlistFile, allowlist).pipe(mapError2((error) => failure(String(error), "File operation failed")));
   const allowed = yield* commands.exitCode("jq", [
