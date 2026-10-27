@@ -1,0 +1,49 @@
+// Shared hk base: the checks lint-general.yml runs, plus Oxlint for repositories
+// with their own config, all check-only on pre-push. There is no pre-commit
+// hook. A repository amends this module and adds its own steps.
+amends "package://github.com/jdx/hk/releases/download/v2.9.0/hk@2.9.0#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.9.0/hk@2.9.0#/Builtins.pkl"
+
+// The config files `dot agent oxlint` looks for: the step runs exactly where
+// that pass steps aside for the repository's own Oxlint.
+local oxlintConfigs = List(
+  ".oxlintrc.json",
+  ".oxlintrc.jsonc",
+  "oxlint.config.js",
+  "oxlint.config.mjs",
+  "oxlint.config.cjs",
+  "oxlint.config.ts",
+  "oxlint.config.mts",
+  "oxlint.config.cts",
+)
+
+local lint = new Mapping<String, Step> {
+  // The repository's own pinned Oxlint and config, without the builtin's
+  // --deny-warnings, matching the plain `oxlint` lint scripts.
+  ["oxlint"] = (Builtins.ox_lint) {
+    check = "bunx oxlint {{files}}"
+    step_condition = "exec_ok('ls \(oxlintConfigs.join(" ")) 2>/dev/null | grep -q .')"
+  }
+  ["markdownlint"] {
+    glob = List("**/*.md")
+    check = "markdownlint-cli2 {{files}}"
+  }
+  // CI runs yamllint without --strict.
+  ["yamllint"] = (Builtins.yamllint) {
+    check = "yamllint {{files}}"
+  }
+  ["actionlint"] = Builtins.actionlint
+  ["shellcheck"] = Builtins.shellcheck
+}
+
+hooks {
+  ["pre-push"] {
+    fix = false
+    stash = "none"
+    steps = lint
+  }
+  ["check"] {
+    steps = lint
+  }
+}

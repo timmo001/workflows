@@ -1,0 +1,13 @@
+// The shared hk base, published with each release as hk-base@<tag>.0, since
+// Pkl package versions must be semver. Built by `mise run hk:package`.
+amends "pkl:Project"
+
+local tag = read("env:RELEASE_TAG")
+
+package {
+  name = "hk-base"
+  version = "\(tag).0"
+  baseUri = "package://github.com/timmo001/workflows/releases/download/\(tag)/hk-base"
+  packageZipUrl = "https://github.com/timmo001/workflows/releases/download/\(tag)/hk-base@\(version).zip"
+  license = "Apache-2.0"
+}

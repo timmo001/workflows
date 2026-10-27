@@ -44,6 +44,38 @@ When action sources, the lockfile, or action metadata change,
 pull request or opens an automerging pull request on `master`.
 `validate-actions.yml` still fails if a committed bundle is out of date.
 
+## hk base
+
+[`hk/base.pkl`](hk/base.pkl) is a shared [hk](https://hk.jdx.dev) config with
+the checks `lint-general.yml` runs (markdownlint-cli2, yamllint, actionlint,
+ShellCheck), plus Oxlint for repositories with their own Oxlint config. Each
+runs on the files a push changes, before it leaves the machine. It is
+check-only and has no pre-commit hook. `publish-hk-base.yml` attaches it to
+every release as `hk-base@<tag>.0`.
+
+Amend it from a repository's `hk.pkl` and add the repository's own steps:
+
+<!-- markdownlint-disable MD013 -->
+
+```pkl
+amends "package://github.com/timmo001/workflows/releases/download/<tag>/hk-base@<tag>.0#/base.pkl"
+
+hooks {
+  ["pre-push"] {
+    steps {
+      ["validate"] { check = "mise run validate" }
+    }
+  }
+}
+```
+
+<!-- markdownlint-enable MD013 -->
+
+Pin `npm:markdownlint-cli2`, `yamllint`, `actionlint` and `shellcheck` in the
+repository's `mise.toml`. The Oxlint step runs `bunx oxlint`, so it uses the
+repository's own Oxlint version. Install hk's hooks once per machine with
+`hk install --global --mise`.
+
 ## Scope
 
 The collection includes reusable workflows for:

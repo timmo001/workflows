@@ -1,6 +1,7 @@
 [tools]
 bun = "1.4.4"
 node = "24.22.1"
+pkl = "0.32.2"
 
 [tasks.install]
 description = "Install dependencies"
@@ -45,6 +46,10 @@ run = "bun run format:check"
 [tasks.validate]
 description = "Run every check in parallel"
 depends = ["lint", "typecheck", "test", "format:check", "bundle:check"]
+
+[tasks."hk:package"]
+description = "Package the shared hk base for a release (RELEASE_TAG sets the version)"
+run = "pkl project package hk --output-path dist-hk"
 
 [tasks."bump-consumers"]
 description = "Bump timmo001/workflows pins in consuming repositories"

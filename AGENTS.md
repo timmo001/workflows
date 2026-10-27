@@ -67,6 +67,9 @@ Not called outside this repository:
   the pull request, or opens an automerging pull request for drift on `master`.
 - `renovate-automerge-any.yml`: enables automerge on Renovate pull requests
   once `validate-actions.yml` passes.
+- `publish-hk-base.yml`: packages `hk/` with `mise run hk:package` and attaches
+  `hk-base@<tag>.0` to each release. Keep `hk/base.pkl` in step with
+  `lint-general.yml`, check-only, with no pre-commit hook.
 
 Other workflows are public. Code search
 `timmo001/workflows/.github/workflows/<name>` for callers before changing or
