@@ -4407,6 +4407,9 @@ var _await = (self) => callback((resume) => {
       resumes.splice(index, 1);
   });
 });
+var completeWith = /* @__PURE__ */ dual(2, (self, effect) => sync(() => doneUnsafe(self, effect)));
+var done3 = completeWith;
+var fail6 = /* @__PURE__ */ dual(2, (self, error) => done3(self, exitFail(error)));
 var isDone3 = (self) => sync(() => isDoneUnsafe(self));
 var isDoneUnsafe = (self) => self.effect !== undefined;
 var doneUnsafe = (self, effect) => {
@@ -4814,7 +4817,7 @@ var void_3 = void_;
 var callback2 = callback;
 var never2 = never;
 var gen2 = gen;
-var fail6 = fail3;
+var fail7 = fail3;
 var failSync2 = failSync;
 var failCause3 = failCause;
 var failCauseSync2 = failCauseSync;
@@ -4829,6 +4832,7 @@ var tap2 = tap;
 var exit2 = exit;
 var map5 = map3;
 var as2 = as;
+var asVoid2 = asVoid;
 var catch_2 = catch_;
 var catchTag2 = catchTag;
 var catchCause2 = catchCause;
@@ -4875,7 +4879,7 @@ var effectify = (fn, onError, onSyncError) => (...args) => callback2((resume) =>
   let pending;
   try {
     fn(...args, (err, result) => {
-      const effect = err ? onError ? suspend2(() => fail6(onError(err, args))) : fail6(err) : succeed6(result);
+      const effect = err ? onError ? suspend2(() => fail7(onError(err, args))) : fail7(err) : succeed6(result);
       if (synchronous) {
         pending ??= effect;
       } else {
@@ -4883,7 +4887,7 @@ var effectify = (fn, onError, onSyncError) => (...args) => callback2((resume) =>
       }
     });
   } catch (err) {
-    pending = onSyncError ? fail6(onSyncError(err, args)) : die3(err);
+    pending = onSyncError ? fail7(onSyncError(err, args)) : die3(err);
   }
   synchronous = false;
   if (pending) {
@@ -5537,7 +5541,7 @@ var defectFromJson = (options) => transform2({
   encode: makeEncodeDefect(options)
 });
 var urlFromString = /* @__PURE__ */ transformEffect2({
-  decode: (s, options) => URL.canParse(s) ? succeed6(new URL(s)) : fail6(new InvalidValue({
+  decode: (s, options) => URL.canParse(s) ? succeed6(new URL(s)) : fail7(new InvalidValue({
     expected: "a valid URL string"
   }, s, options)),
   encode: (url) => succeed6(url.href)
@@ -5813,12 +5817,12 @@ var Arrays = class extends ASTNodeImpl {
             else
               state.issues = [issue];
           } else {
-            return fail6(new Composite(ast, [issue], input, options));
+            return fail7(new Composite(ast, [issue], input, options));
           }
         }
       }
       if (state.issues) {
-        return fail6(new Composite(ast, state.issues, input, options));
+        return fail7(new Composite(ast, state.issues, input, options));
       }
       return succeed7(state.output);
     };
@@ -5857,7 +5861,7 @@ var Arrays = class extends ASTNodeImpl {
         return missingExit;
       try {
         if (!Array.isArray(input)) {
-          return fail6(new InvalidType(ast, input, options));
+          return fail7(new InvalidType(ast, input, options));
         }
         if (!elements) {
           elements = ast.elements.map((ast) => ({
@@ -6091,7 +6095,7 @@ var Objects = class extends ASTNodeImpl {
           return missing;
         }
         if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
-          return yield* fail6(new InvalidType(ast, input, options));
+          return yield* fail7(new InvalidType(ast, input, options));
         }
         compileMembers();
         const record = input;
@@ -6129,7 +6133,7 @@ var Objects = class extends ASTNodeImpl {
                 }
                 continue;
               } else {
-                return yield* fail6(new Composite(ast, [issue], input, options));
+                return yield* fail7(new Composite(ast, [issue], input, options));
               }
             }
           }
@@ -6170,7 +6174,7 @@ var Objects = class extends ASTNodeImpl {
             yield* eff;
         }
         if (state.issues) {
-          return yield* fail6(new Composite(ast, state.issues, input, options));
+          return yield* fail7(new Composite(ast, state.issues, input, options));
         }
         return out;
       });
@@ -6202,7 +6206,7 @@ var Objects = class extends ASTNodeImpl {
         return (fallback ??= makeFallback())(input, options);
       }
       if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
-        return fail6(new InvalidType(ast, input, options));
+        return fail7(new InvalidType(ast, input, options));
       }
       const props = compileMembers();
       const record = input;
@@ -6586,7 +6590,7 @@ var Union = class extends ASTNodeImpl {
       }
       const candidates = (index ??= getCandidateIndex(ast.types))(input, isConstructor);
       if (candidates.length === 0) {
-        return fail6(new AnyOf(ast, [], input, options));
+        return fail7(new AnyOf(ast, [], input, options));
       }
       if (candidates.length === 1) {
         const result = parser(candidates[0])(input, options);
@@ -6667,7 +6671,7 @@ function parseUnionCandidates(ast, parser, candidates, input, options) {
   if (!eff) {
     if (state.out)
       return state.out;
-    return fail6(new AnyOf(ast, state.issues ?? [], input, options));
+    return fail7(new AnyOf(ast, state.issues ?? [], input, options));
   }
   if (effectIsExit(eff))
     return resumeUnion(eff, state);
@@ -6685,7 +6689,7 @@ function resumeUnion(eff, state) {
       return succeed6(state.input);
     if (state.out)
       return state.out;
-    return fail6(new AnyOf(state.ast, state.issues ?? [], state.input, state.options));
+    return fail7(new AnyOf(state.ast, state.issues ?? [], state.input, state.options));
   });
 }
 var parseUnion = /* @__PURE__ */ iterateEager()({
@@ -7069,7 +7073,7 @@ function fromConst(ast, value) {
       return missingExit;
     if (input === value)
       return succeed;
-    return fail6(new InvalidType(ast, input, options));
+    return fail7(new InvalidType(ast, input, options));
   };
 }
 function fromRefinement(ast, refinement) {
@@ -7078,7 +7082,7 @@ function fromRefinement(ast, refinement) {
       return missingExit;
     if (refinement(input))
       return sameExit;
-    return fail6(new InvalidType(ast, input, options));
+    return fail7(new InvalidType(ast, input, options));
   };
 }
 var parameterFromPropertyKey = /* @__PURE__ */ applyToSelfOrLastLinkEncodingIdempotent((ast) => {
@@ -7201,7 +7205,7 @@ function isTree(u, isLeaf) {
 function isJson(u) {
   return isTree(u, isJsonLeaf);
 }
-var Json = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isJson(input) ? sameExit : fail6(new InvalidType(ast, input, options)), {
+var Json = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isJson(input) ? sameExit : fail7(new InvalidType(ast, input, options)), {
   representation: {
     id: "effect/schema/Json",
     payload: null
@@ -7215,7 +7219,7 @@ var Json = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => is
 function isStringTree(u) {
   return isTree(u, isStringTreeLeaf);
 }
-var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isStringTree(input) ? sameExit : fail6(new InvalidType(ast, input, options)), {
+var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast, options) => isStringTree(input) ? sameExit : fail7(new InvalidType(ast, input, options)), {
   expected: "StringTree",
   toCodecStringTree: () => {
     return;
@@ -7319,7 +7323,7 @@ function compile(ast, compile, compileField, base, specialize) {
             if (input !== missing && output !== missing) {
               const issues = collectIssues(encodingChecks, input, undefined, ast, options);
               if (issues) {
-                result = fail6(new Composite(ast, issues, input, options));
+                result = fail7(new Composite(ast, issues, input, options));
               }
             }
           }
@@ -7328,7 +7332,7 @@ function compile(ast, compile, compileField, base, specialize) {
             if (input !== missing && value !== missing) {
               const issues = collectIssues(encodingChecks, input, undefined, ast, options);
               if (issues) {
-                return fail6(new Composite(ast, issues, input, options));
+                return fail7(new Composite(ast, issues, input, options));
               }
             }
             return succeed6(value);
@@ -7343,7 +7347,7 @@ function compile(ast, compile, compileField, base, specialize) {
               return result;
             const issues = collectIssues(checks, value, undefined, ast, options);
             if (issues) {
-              result = fail6(new Composite(ast, issues, value, options));
+              result = fail7(new Composite(ast, issues, value, options));
             }
           }
         } else {
@@ -7351,7 +7355,7 @@ function compile(ast, compile, compileField, base, specialize) {
             if (value !== missing) {
               const issues = collectIssues(checks, value, undefined, ast, options);
               if (issues) {
-                return fail6(new Composite(ast, issues, value, options));
+                return fail7(new Composite(ast, issues, value, options));
               }
             }
             return succeed6(value);
@@ -7584,7 +7588,7 @@ var mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
 } : options;
 var getValue = (value) => {
   if (value === missing) {
-    return fail6(new InvalidValue);
+    return fail7(new InvalidValue);
   }
   return succeed6(value);
 };
@@ -7733,7 +7737,7 @@ function declareConstructor() {
   };
 }
 function declare(is, annotations) {
-  return declareConstructor()([], () => (input, ast, options) => is(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options)), annotations);
+  return declareConstructor()([], () => (input, ast, options) => is(input) ? succeed6(input) : fail7(new InvalidType(ast, input, options)), annotations);
 }
 class SchemaError extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
   [SchemaErrorTypeId] = SchemaErrorTypeId;
@@ -8188,7 +8192,7 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
     lastModified: Int
   }), transformEffect2({
     decode: (e, options) => match2(decode(e.data), {
-      onFailure: () => fail6(new InvalidValue({
+      onFailure: () => fail7(new InvalidValue({
         expected: "a valid Base64 string"
       }, e.data, options)),
       onSuccess: (bytes) => {
@@ -8354,7 +8358,7 @@ function getClassSchemaFactory(from, identifier, annotations) {
     const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
     const transformation = getClassTransformation(self);
     const to = make8(new Declaration([from.ast], () => (input, ast, options) => {
-      return isClassValue(input) ? succeed6(input) : fail6(new InvalidType(ast, input, options));
+      return isClassValue(input) ? succeed6(input) : fail7(new InvalidType(ast, input, options));
     }, {
       identifier,
       [CONSTRUCTOR_ANNOTATION_KEY]: ([from]) => ({
@@ -9063,6 +9067,7 @@ var mapAccum = /* @__PURE__ */ dual((args) => isChannel(args[0]), (self, initial
   });
   return pump;
 })));
+var tapError3 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => succeed6(tapError2(pull, (err) => isDone2(err) ? void_3 : asVoid2(f(err))))));
 var mapError4 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => succeed6(mapError2(pull, (err) => isDone2(err) ? err : f(err)))));
 var mergeAll3 = /* @__PURE__ */ dual(2, (channels, {
   bufferSize = 16,
@@ -9563,6 +9568,7 @@ function* concatChannels(self, that) {
 }
 var merge3 = /* @__PURE__ */ dual((args) => isStream(args[0]) && isStream(args[1]), (self, that, options) => fromChannel3(merge2(toChannel2(self), toChannel2(that), options)));
 var mergeEffect2 = /* @__PURE__ */ dual(2, (self, effect) => self.channel.pipe(mergeEffect(effect), fromChannel3));
+var tapError4 = /* @__PURE__ */ dual(2, (self, f) => self.channel.pipe(tapError3(f), fromChannel3));
 var mapError5 = /* @__PURE__ */ dual(2, (self, f) => fromChannel3(mapError4(self.channel, f)));
 var emptyArr = /* @__PURE__ */ empty2();
 var mapAccumEffect = /* @__PURE__ */ dual((args) => isStream(args[0]), (self, initial, f, options) => self.channel.pipe(flattenArray, mapAccum(initial, (state, a) => map5(f(state, a), ([state, values]) => [state, isReadonlyArrayNonEmpty(values) ? of(values) : empty2()]), options?.onHalt ? {
@@ -9622,7 +9628,7 @@ var FileSystem = /* @__PURE__ */ Service("effect/FileSystem");
 var make15 = (impl) => FileSystem.of({
   ...impl,
   [TypeId21]: TypeId21,
-  exists: (path) => pipe(impl.access(path), as2(true), catchTag2("PlatformError", (e) => e.reason._tag === "NotFound" ? succeed6(false) : fail6(e))),
+  exists: (path) => pipe(impl.access(path), as2(true), catchTag2("PlatformError", (e) => e.reason._tag === "NotFound" ? succeed6(false) : fail7(e))),
   readFileString: (path, encoding) => flatMap3(impl.readFile(path), (_) => try_2({
     try: () => new TextDecoder(encoding).decode(_),
     catch: (cause) => badArgument({
@@ -9805,7 +9811,7 @@ var make17 = (impl) => {
     randomULID: clockWith2((clock) => succeed6(ulidString(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(10))))
   });
 };
-var validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ? succeed6(size) : fail6(badArgument({
+var validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ? succeed6(size) : fail7(badArgument({
   module: "Crypto",
   method,
   description: "size must be a non-negative safe integer"
@@ -10323,7 +10329,7 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
     const limitBytes = options.maxOutputBytes;
     const limited = limitBytes === undefined ? output : output.pipe(mapAccumEffect(() => 0, (bytes, chunk) => {
       const total = isTagged(chunk, "Stdout") ? bytes + new TextEncoder().encode(chunk.text).byteLength : bytes;
-      return total > limitBytes ? fail6(new GhOutputLimitError({ executable, limitBytes })) : succeed6([total, [chunk]]);
+      return total > limitBytes ? fail7(new GhOutputLimitError({ executable, limitBytes })) : succeed6([total, [chunk]]);
     }));
     const completion = gen2(function* () {
       const exitCode = yield* handle.exitCode.pipe(mapError2((cause) => new GhPlatformError({ executable, cause })));
@@ -10352,7 +10358,7 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
     if (!isFinite(fromInputUnsafe(options.timeout)))
       return output;
     const timeoutMs = toMillis(options.timeout);
-    return output.pipe(mergeEffect2(sleep2(options.timeout).pipe(andThen2(fail6(new GhTimeoutError({
+    return output.pipe(mergeEffect2(sleep2(options.timeout).pipe(andThen2(fail7(new GhTimeoutError({
       executable: options.executable ?? "gh",
       timeoutMs
     }))))));
@@ -10385,7 +10391,7 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
         forceKillAfter: "1 second"
       }));
       return yield* handle.exitCode;
-    })).pipe(mapError2((cause) => new GhPlatformError({ executable, cause })), flatMap3((exitCode) => exitCode === 0 ? void_3 : fail6(new GhCommandError({
+    })).pipe(mapError2((cause) => new GhPlatformError({ executable, cause })), flatMap3((exitCode) => exitCode === 0 ? void_3 : fail7(new GhCommandError({
       executable,
       exitCode,
       stdout: "",
@@ -10398,7 +10404,7 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
     const timeoutMs = toMillis(options.timeout);
     return yield* run.pipe(timeoutOrElse2({
       duration: options.timeout,
-      orElse: () => fail6(new GhTimeoutError({ executable, timeoutMs }))
+      orElse: () => fail7(new GhTimeoutError({ executable, timeoutMs }))
     }));
   });
   return Gh.of({ execute, json, stream, interactive });
@@ -10765,7 +10771,7 @@ var readableToPullUnsafe = (options) => {
         return exit.current;
       }
       if (readable.readableEnded) {
-        return fail6(Done2());
+        return fail7(Done2());
       }
       latch.closeUnsafe();
       return flatMap3(latch.await, loop);
@@ -10809,22 +10815,25 @@ var handleInputErrors = (writable) => {
   writable.on("error", onError);
   writable.once("close", () => writable.off("error", onError));
 };
-var isProcessAlive = (childProcess, exitSignal) => {
-  if (!isDoneUnsafe(exitSignal)) {
+var hasExited = (childProcess) => childProcess.exitCode !== null || childProcess.signalCode !== null;
+var ownsProcessGroup = (command, childProcess) => command.options.detached !== false || !hasExited(childProcess);
+var isUnsignallableProcessGroup = (error) => error?.code === "EPERM";
+var isProcessAlive = (command, childProcess) => {
+  if (!hasExited(childProcess)) {
     return true;
   }
-  if (globalThis.process.platform === "win32") {
+  if (globalThis.process.platform === "win32" || !ownsProcessGroup(command, childProcess)) {
     return false;
   }
   try {
     globalThis.process.kill(-childProcess.pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return isUnsignallableProcessGroup(error);
   }
 };
 var taskkill = (childProcess, onExit = () => {}) => {
-  if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+  if (hasExited(childProcess)) {
     onExit(null);
     return;
   }
@@ -10931,7 +10940,8 @@ var make23 = /* @__PURE__ */ gen2(function* () {
     }
     return stdio;
   };
-  const setupAdditionalFds = fnUntraced2(function* (command, childProcess, additionalFds) {
+  const runInputStream = (stream, sink, inputFailure) => forkScoped2(run2(tapError4(stream, (error) => fail6(inputFailure, error)), sink));
+  const setupAdditionalFds = fnUntraced2(function* (command, childProcess, additionalFds, inputFailure) {
     if (additionalFds.length === 0) {
       return {
         getInputFd: () => drain2,
@@ -10956,7 +10966,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
             });
           }
           if (config.stream) {
-            yield* forkScoped2(run2(config.stream, sink));
+            yield* runInputStream(config.stream, sink, inputFailure);
           }
           inputSinks.set(fd, sink);
           break;
@@ -10985,7 +10995,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
       getOutputFd: (fd) => outputStreams.get(fd) ?? empty4
     };
   });
-  const setupChildStdin = (command, childProcess, config) => suspend2(() => {
+  const setupChildStdin = (command, childProcess, config, inputFailure) => suspend2(() => {
     let sink = drain2;
     if (isNotNull(childProcess.stdin)) {
       handleInputErrors(childProcess.stdin);
@@ -10997,7 +11007,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
       });
     }
     if (isStream(config.stream)) {
-      return as2(forkScoped2(run2(config.stream, sink)), sink);
+      return as2(runInputStream(config.stream, sink, inputFailure), sink);
     }
     return succeed6(sink);
   });
@@ -11037,7 +11047,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
     const deferred = makeUnsafe2();
     const handle = NodeChildProcess.spawn(command.command, command.args, spawnOptions);
     handle.on("error", (error) => {
-      resume(fail6(toPlatformError("spawn", error, command)));
+      resume(fail7(toPlatformError("spawn", error, command)));
     });
     handle.on("exit", (...args) => {
       doneUnsafe(deferred, succeed4(args));
@@ -11054,7 +11064,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
       return callback2((resume) => {
         taskkill(childProcess, (error) => {
           if (error) {
-            resume(fail6(toPlatformError("kill", toError(error), command)));
+            resume(fail7(toPlatformError("kill", toError(error), command)));
           } else {
             resume(void_3);
           }
@@ -11081,11 +11091,11 @@ var make23 = /* @__PURE__ */ gen2(function* () {
     const killed = childProcess.kill(signal);
     if (!killed) {
       const error = new globalThis.Error("Failed to kill child process");
-      return fail6(toPlatformError("kill", error, command));
+      return fail7(toPlatformError("kill", error, command));
     }
     return void_3;
   });
-  const awaitProcessExit = (childProcess, exitSignal, timeoutMillis) => callback2((resume) => {
+  const awaitProcessExit = (command, childProcess, timeoutMillis) => callback2((resume) => {
     const deadline = Date.now() + timeoutMillis;
     let timer;
     const stop = () => {
@@ -11094,7 +11104,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
     };
     const poll = () => {
       clearTimeout(timer);
-      if (Date.now() >= deadline || !isProcessAlive(childProcess, exitSignal)) {
+      if (Date.now() >= deadline || !isProcessAlive(command, childProcess)) {
         stop();
         resume(void_3);
         return;
@@ -11106,16 +11116,16 @@ var make23 = /* @__PURE__ */ gen2(function* () {
     return sync3(stop);
   });
   const terminateProcessGroup = fnUntraced2(function* (command, childProcess, exitSignal, options) {
-    const signalGroup = (signal) => killProcessGroup(command, childProcess, signal).pipe(catch_2(() => killProcess(command, childProcess, signal)));
+    const signalGroup = (signal) => ownsProcessGroup(command, childProcess) ? killProcessGroup(command, childProcess, signal).pipe(catch_2((error) => hasExited(childProcess) && isUnsignallableProcessGroup(error.cause) ? void_3 : killProcess(command, childProcess, signal))) : killProcess(command, childProcess, signal);
     yield* signalGroup(options?.killSignal ?? "SIGTERM");
     if (isUndefined(options?.forceKillAfter)) {
       yield* _await(exitSignal);
-      yield* awaitProcessExit(childProcess, exitSignal, processGroupGraceMillis);
+      yield* awaitProcessExit(command, childProcess, processGroupGraceMillis);
     } else {
-      yield* awaitProcessExit(childProcess, exitSignal, toMillis(options.forceKillAfter));
-      if (isProcessAlive(childProcess, exitSignal)) {
+      yield* awaitProcessExit(command, childProcess, toMillis(options.forceKillAfter));
+      if (isProcessAlive(command, childProcess)) {
         yield* signalGroup("SIGKILL");
-        yield* awaitProcessExit(childProcess, exitSignal, processGroupGraceMillis);
+        yield* awaitProcessExit(command, childProcess, processGroupGraceMillis);
       }
     }
     yield* _await(exitSignal);
@@ -11170,11 +11180,13 @@ var make23 = /* @__PURE__ */ gen2(function* () {
           yield* ignore2(terminateProcessGroup(cmd, childProcess, exitSignal, cmd.options));
         }));
         const pid = ProcessId(childProcess.pid);
-        childProcess.on("exit", (code) => {
-          if (code !== 0 && isNotNull(code)) {
-            killProcessGroupOnExit(childProcess, cmd.options.killSignal ?? "SIGTERM");
-          }
-        });
+        if (cmd.options.detached !== false) {
+          childProcess.on("exit", (code) => {
+            if (code !== 0 && isNotNull(code)) {
+              killProcessGroupOnExit(childProcess, cmd.options.killSignal ?? "SIGTERM");
+            }
+          });
+        }
         const reref = sync3(() => {
           if (!isReferenced) {
             childProcess.ref();
@@ -11188,7 +11200,8 @@ var make23 = /* @__PURE__ */ gen2(function* () {
           }
           return reref;
         });
-        const stdin = yield* setupChildStdin(cmd, childProcess, stdinConfig);
+        const inputFailure = makeUnsafe2();
+        const stdin = yield* setupChildStdin(cmd, childProcess, stdinConfig, inputFailure);
         const {
           all,
           stderr,
@@ -11197,14 +11210,17 @@ var make23 = /* @__PURE__ */ gen2(function* () {
         const {
           getInputFd,
           getOutputFd
-        } = yield* setupAdditionalFds(cmd, childProcess, resolvedAdditionalFds);
+        } = yield* setupAdditionalFds(cmd, childProcess, resolvedAdditionalFds, inputFailure);
         const isRunning = map5(isDone3(exitSignal), (done) => !done);
-        const exitCode = flatMap3(_await(exitSignal), ([code, signal]) => {
+        const exitCode = flatMap3(raceFirst2(_await(exitSignal), _await(inputFailure)), ([code, signal]) => {
+          if (isDoneUnsafe(inputFailure)) {
+            return _await(inputFailure);
+          }
           if (isNotNull(code)) {
             return succeed6(ExitCode(code));
           }
           const error = new globalThis.Error(`Process interrupted due to receipt of signal: '${signal}'`);
-          return fail6(toPlatformError("exitCode", error, cmd));
+          return fail7(toPlatformError("exitCode", error, cmd));
         });
         const kill = (options) => terminateProcessGroup(cmd, childProcess, exitSignal, options);
         return makeHandle({
@@ -11458,7 +11474,8 @@ var makeTempDirectoryScoped = /* @__PURE__ */ (() => {
   const makeDirectory = /* @__PURE__ */ makeTempDirectoryFactory("makeTempDirectoryScoped");
   const removeDirectory = /* @__PURE__ */ removeFactory("makeTempDirectoryScoped");
   return (options) => acquireRelease2(makeDirectory(options), (directory) => orDie2(removeDirectory(directory, {
-    recursive: true
+    recursive: true,
+    force: true
   })));
 })();
 var openFlagBits = (flag) => {
@@ -11499,7 +11516,7 @@ var noFollowFlags = (method, flag) => suspend2(() => {
     O_NOFOLLOW
   } = NFS.constants;
   if (process.platform === "win32" || typeof O_NOFOLLOW !== "number" || O_NOFOLLOW === 0) {
-    return fail6(badArgument({
+    return fail7(badArgument({
       module: "FileSystem",
       method,
       description: "noFollow is not supported on this platform"
@@ -11551,7 +11568,7 @@ var makeFile = /* @__PURE__ */ (() => {
       return suspend2(() => {
         const position = from === "start" ? offset : this.position + offset;
         if (position < BigInt(0)) {
-          return fail6(badArgument({
+          return fail7(badArgument({
             module: "FileSystem",
             method: "seek",
             description: "Cannot seek before the start of the file"
@@ -11565,7 +11582,7 @@ var makeFile = /* @__PURE__ */ (() => {
       return suspend2(() => {
         const explicit = options?.position;
         if (explicit !== undefined) {
-          return explicit < BigInt(0) ? fail6(negativePosition("read")) : nodeRead(this.fd, {
+          return explicit < BigInt(0) ? fail7(negativePosition("read")) : nodeRead(this.fd, {
             buffer,
             position: explicit
           });
@@ -11588,7 +11605,7 @@ var makeFile = /* @__PURE__ */ (() => {
           }
           const explicit = options?.position;
           if (explicit !== undefined && explicit < BigInt(0)) {
-            return fail6(negativePosition("readAlloc"));
+            return fail7(negativePosition("readAlloc"));
           }
           const buffer = Buffer.allocUnsafeSlow(size);
           const position = explicit ?? this.position;
@@ -11610,7 +11627,7 @@ var makeFile = /* @__PURE__ */ (() => {
             return some2(dst);
           });
         } catch (cause) {
-          return fail6(handleBadArgument("readAlloc")(cause));
+          return fail7(handleBadArgument("readAlloc")(cause));
         }
       });
     }
@@ -11640,7 +11657,7 @@ var makeFile = /* @__PURE__ */ (() => {
         const position = this.position;
         return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "writeAll"), (nodePosition) => flatMap3(nodeWriteAll(this.fd, buffer, undefined, undefined, nodePosition), (bytesWritten) => {
           if (bytesWritten === 0) {
-            return fail6(systemError({
+            return fail7(systemError({
               module: "FileSystem",
               method: "writeAll",
               _tag: "WriteZero",
@@ -11676,7 +11693,8 @@ var makeTempFileScoped = /* @__PURE__ */ (() => {
   const makeFile = /* @__PURE__ */ makeTempFileFactory("makeTempFileScoped");
   const removeDirectory = /* @__PURE__ */ removeFactory("makeTempFileScoped");
   return (options) => acquireRelease2(makeFile(options), (file) => orDie2(removeDirectory(Path2.dirname(file), {
-    recursive: true
+    recursive: true,
+    force: true
   })));
 })();
 var readDirectory = (path, options) => tryPromise2({
@@ -11689,13 +11707,13 @@ var readFile2 = (path) => callback2((resume, signal) => {
       signal
     }, (err, data) => {
       if (err) {
-        resume(fail6(handleErrnoException("FileSystem", "readFile")(err, [path])));
+        resume(fail7(handleErrnoException("FileSystem", "readFile")(err, [path])));
       } else {
         resume(succeed6(data));
       }
     });
   } catch (err) {
-    resume(fail6(handleBadArgument("readFile")(err)));
+    resume(fail7(handleBadArgument("readFile")(err)));
   }
 });
 var readLink = /* @__PURE__ */ (() => {
@@ -11802,13 +11820,13 @@ var writeFile2 = (path, data, options) => callback2((resume, signal) => {
       mode: options?.mode
     }, (err) => {
       if (err) {
-        resume(fail6(handleErrnoException("FileSystem", "writeFile")(err, [path])));
+        resume(fail7(handleErrnoException("FileSystem", "writeFile")(err, [path])));
       } else {
         resume(void_3);
       }
     });
   } catch (err) {
-    resume(fail6(handleBadArgument("writeFile")(err)));
+    resume(fail7(handleBadArgument("writeFile")(err)));
   }
 });
 var makeFileSystem = /* @__PURE__ */ map5(/* @__PURE__ */ serviceOption2(WatchBackend), (backend) => make15({
@@ -12031,7 +12049,7 @@ var make25 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
     onSome: succeed6
   })), mapError2(() => new QuitError({}))));
   const display = (prompt) => uninterruptible2(callback2((resume) => {
-    stdout.write(prompt, (err) => isNullish(err) ? resume(void_3) : resume(fail6(badArgument({
+    stdout.write(prompt, (err) => isNullish(err) ? resume(void_3) : resume(fail7(badArgument({
       module: "Terminal",
       method: "display",
       description: "Failed to write prompt to stdout",
@@ -12233,7 +12251,7 @@ var runAction = (program, layer) => {
   const completed = scoped2(program).pipe(provide4(layer), catch_2((error) => gen2(function* () {
     const annotations = yield* Service2;
     yield* annotations.error(error.message, error.title === undefined ? undefined : { title: error.title });
-    return yield* fail6(error);
+    return yield* fail7(error);
   }).pipe(provide4(layer14))), catch_2(() => sync3(() => {
     process.exitCode = 1;
   })));
@@ -12275,7 +12293,7 @@ var failure = (message, title) => {
     return new ActionFailure({ message });
   return new ActionFailure({ message, title });
 };
-var requireInput = (value, name) => value === undefined ? fail6(failure(`Input is required: ${name}`)) : succeed6(value);
+var requireInput = (value, name) => value === undefined ? fail7(failure(`Input is required: ${name}`)) : succeed6(value);
 var validateIdentity = (inputs) => {
   if (!/^timmo001\/[A-Za-z0-9._-]+$/.test(inputs.sourceRepository)) {
     return failure(`Unsupported source repository: ${inputs.sourceRepository}`);
