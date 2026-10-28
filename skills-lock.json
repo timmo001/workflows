@@ -24,10 +24,10 @@
     },
     "effect-gh": {
       "source": "timmo001/effect-gh",
-      "ref": "e28dea0935278bccad666d1611ba4beceef69b50",
+      "ref": "c01c125f461a5d4c4d2e9634a00879d450e9b0b6",
       "sourceType": "github",
       "skillPath": "skills/effect-gh/SKILL.md",
-      "computedHash": "eae9bde4570299ccb369f483978c50e4dee5dfbcac9e59eaa71ea6ed2135f98d"
+      "computedHash": "0c32a55a8d47a25e65b7bfd9e005b9184ac5776aa2dd6893cf59bb6e8d4352cd"
     },
     "effect-service-design": {
       "source": "dmmulroy/skills",
@@ -66,10 +66,10 @@
     },
     "writing-style": {
       "source": "timmo001/skills",
-      "ref": "00525681b1bb4a17f361df8cd7f76b8c3f6cd066",
+      "ref": "59909fee61d81bf5151e913da62340d1719d48b5",
       "sourceType": "github",
       "skillPath": "writing-style/SKILL.md",
-      "computedHash": "3628c2f1a2b4427ad19ca7920afa6404026e424c05604f1f518ceec6669551ef"
+      "computedHash": "e5332625f2e963ff1ad66b0d8b05bc576c6dc237ce704a80101710235a2e1432"
     }
   }
 }

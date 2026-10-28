@@ -34,10 +34,12 @@ have a different transport contract.
 ## Use the package
 
 1. Choose the smallest public operation that fits. Use `Repository`, `Issue`,
-   `PullRequest`, `Workflow`, `Release`, `Label`, `Auth`, `Extension`, `Search`
-   and `Cli` for their typed operations, selecting `fields` where the operation
-   takes them. Use `Api.json`, `Api.pages`, `Api.empty`, `Api.text` or
-   `Api.headers` with a response schema for other endpoints. When a CLI command
+   `PullRequest`, `Review`, `Comment`, `Discussion`, `Workflow`, `Release`,
+   `Label`, `Attachment`, `Auth`, `Extension`, `Search` and `Cli` for their
+   typed operations, selecting `fields` where the operation takes them. Use
+   `Graphql.query` with a data schema for other GraphQL, and `Api.json`,
+   `Api.pages`, `Api.empty`, `Api.text` or `Api.headers` with a response schema
+   for other REST endpoints. When a CLI command
    has no typed operation, add one to effect-gh rather than calling the `Gh`
    service's raw `execute`, `json` or `stream` methods from the consumer; the
    `timmo-effect/no-raw-gh` lint rule flags those calls and direct `gh` spawns.
