@@ -1,6 +1,6 @@
 [tools]
 bun = "1.4.4"
-node = "24.22.2"
+node = "26.13.0"
 pkl = "0.32.2"
 
 [tasks.install]
