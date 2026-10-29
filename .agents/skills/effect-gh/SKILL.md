@@ -34,7 +34,8 @@ have a different transport contract.
 ## Use the package
 
 1. Choose the smallest public operation that fits. Use `Repository`, `Issue`,
-   `PullRequest`, `Review`, `Comment`, `Discussion`, `Workflow`, `Release`,
+   `IssueArtifact`, `PullRequest`, `Review`, `Comment`, `Discussion`,
+   `Workflow`, `Release`,
    `Label`, `Attachment`, `Auth`, `Extension`, `Search` and `Cli` for their
    typed operations, selecting `fields` where the operation takes them. Use
    `Graphql.query` with a data schema for other GraphQL, and `Api.json`,

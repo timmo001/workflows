@@ -24,10 +24,10 @@
     },
     "effect-gh": {
       "source": "timmo001/effect-gh",
-      "ref": "c01c125f461a5d4c4d2e9634a00879d450e9b0b6",
+      "ref": "28ff2a8066dabb53491d142cb4a74f728711204e",
       "sourceType": "github",
       "skillPath": "skills/effect-gh/SKILL.md",
-      "computedHash": "0c32a55a8d47a25e65b7bfd9e005b9184ac5776aa2dd6893cf59bb6e8d4352cd"
+      "computedHash": "fccf8fc8908f26c77241f0ead5fb64a92063b260419f3b0a05b1f64bf835ff9f"
     },
     "effect-service-design": {
       "source": "dmmulroy/skills",
