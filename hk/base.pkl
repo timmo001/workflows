@@ -1,9 +1,9 @@
 // Shared hk base: the checks lint-general.yml runs, plus Oxlint for repositories
 // with their own config, all check-only on pre-push. There is no pre-commit
 // hook. A repository amends this module and adds its own steps.
-amends "package://github.com/jdx/hk/releases/download/v2.9.0/hk@2.9.0#/Config.pkl"
+amends "package://github.com/jdx/hk/releases/download/v2.10.0/hk@2.10.0#/Config.pkl"
 
-import "package://github.com/jdx/hk/releases/download/v2.9.0/hk@2.9.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.10.0/hk@2.10.0#/Builtins.pkl"
 
 // The config files `dot agent oxlint` looks for: the step runs exactly where
 // that pass steps aside for the repository's own Oxlint.
