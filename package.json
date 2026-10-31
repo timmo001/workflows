@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "4.0.6",
-    "@timmo001/effect-gh": "0.9.1",
+    "@timmo001/effect-gh": "0.9.2",
     "effect": "4.0.6"
   },
   "devDependencies": {
