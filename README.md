@@ -118,15 +118,6 @@ lockfile policy. The job is named `Build`; a reusable-workflow job appears in
 check contexts as `<caller job id> / Build`, so update required checks
 accordingly.
 
-`tooling-drift.yml` runs a repository's `mise run tooling:publish` from its
-default branch, so the `@timmo001/tooling-drift` tool it pins can compare the
-tool releases recorded in `tooling.yml` with the latest and open one pull
-request per tool that moved. A repository's refresh task declares its own
-`install` dependency. Without the `token` secret it runs with
-`GITHUB_TOKEN`, whose pull requests cannot trigger `pull_request` workflows,
-so the tool dispatches the repository's CI on each branch instead. The job is
-named `Tooling drift`.
-
 `build-container-image.yml` builds a Dockerfile for amd64 and arm64 on native
 runners, pushes each by digest to GHCR and tags one multi-arch manifest with
 `version`, its `major.minor` and, unless `latest: false`, `latest`. The caller
