@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { isolatedGitEnv } from "./support.js";
 
 const releaseBundle = resolve(".github/actions/release-bun-cli/dist/index.js");
 
@@ -50,6 +51,7 @@ if [[ "$2" == edit && -n "$GH_ADD_ASSET" ]]; then touch "$GH_ADD_ASSET"; fi
 
   const env = {
     ...process.env,
+    ...isolatedGitEnv,
     LC_ALL: "C",
     PATH: `${bin}:${process.env.PATH}`,
     GH_TOKEN: "fixture-gh-token",

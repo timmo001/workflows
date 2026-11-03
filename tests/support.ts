@@ -2,6 +2,15 @@ import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer } from "effect";
 import { CommandExecutor } from "../src/services/CommandExecutor.js";
 
+// Keep the developer's global and system git config (such as tag.gpgsign) out
+// of fixture repositories, so local runs behave like CI.
+export const isolatedGitEnv = {
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+} as const;
+
+Object.assign(process.env, isolatedGitEnv);
+
 export const tempDirectory = (prefix: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
