@@ -7,48 +7,46 @@ sort-direction: ascending
 categories:
   - title: "🚨 Breaking changes"
     labels:
-      - "breaking-change"
+      - "Breaking Change"
   - title: "✨ New features"
     labels:
-      - "new-feature"
+      - "Feature"
   - title: "🐛 Bug fixes"
     labels:
-      - "bugfix"
+      - "Bug Fix"
   - title: "🚀 Enhancements"
     labels:
-      - "enhancement"
-      - "refactor"
-      - "performance"
+      - "Enhancement"
+      - "Refactor"
+      - "Performance"
   - title: "🧰 Maintenance"
     labels:
-      - "maintenance"
-      - "ci"
+      - "Maintenance"
+      - "CI"
   - title: "📚 Documentation"
     labels:
-      - "documentation"
+      - "Documentation"
   - title: "⬆️ Dependency updates"
     labels:
-      - "dependencies"
+      - "Dependencies"
 
 version-resolver:
   major:
     labels:
-      - "major"
-      - "breaking-change"
+      - "Breaking Change"
   minor:
     labels:
-      - "minor"
-      - "new-feature"
+      - "Feature"
   patch:
     labels:
-      - "bugfix"
-      - "chore"
-      - "ci"
-      - "dependencies"
-      - "documentation"
-      - "enhancement"
-      - "performance"
-      - "refactor"
+      - "Bug Fix"
+      - "CI"
+      - "Dependencies"
+      - "Documentation"
+      - "Enhancement"
+      - "Maintenance"
+      - "Performance"
+      - "Refactor"
   default: patch
 
 template: |
