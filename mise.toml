@@ -50,7 +50,3 @@ depends = ["lint", "typecheck", "test", "format:check", "bundle:check"]
 [tasks."hk:package"]
 description = "Package the shared hk base for a release (RELEASE_TAG sets the version)"
 run = "pkl project package hk --output-path dist-hk"
-
-[tasks."bump-consumers"]
-description = "Bump timmo001/workflows pins in consuming repositories"
-run = "bun run scripts/bump-consumers.ts"
