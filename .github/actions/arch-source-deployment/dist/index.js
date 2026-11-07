@@ -2157,6 +2157,30 @@ var PreventSchedulerYield = /* @__PURE__ */ Reference("effect/Scheduler/PreventS
 });
 
 // node_modules/effect/dist/Data.js
+var taggedEnum = () => new Proxy({}, {
+  get(_target, tag, _receiver) {
+    if (tag === "$is") {
+      return isTagged;
+    } else if (tag === "$match") {
+      return taggedMatch;
+    }
+    return (props) => ({
+      ...props,
+      _tag: tag
+    });
+  }
+});
+function taggedMatch() {
+  if (arguments.length === 1) {
+    const cases = arguments[0];
+    return function(value) {
+      return cases[value._tag](value);
+    };
+  }
+  const value = arguments[0];
+  const cases = arguments[1];
+  return cases[value._tag](value);
+}
 var Error3 = Error2;
 var TaggedError2 = TaggedError;
 
@@ -11875,18 +11899,61 @@ var empty5 = fn2("Api.empty")(function* (request) {
 var text = fn2("Api.text")(function* (request) {
   return (yield* raw(request)).stdout;
 });
+var parseIncluded = (stdout) => {
+  const blank = /\r?\n\r?\n/.exec(stdout);
+  const head = blank ? stdout.slice(0, blank.index) : stdout;
+  const [statusLine = "", ...lines] = head.split(/\r?\n/);
+  const headers = {};
+  for (const line of lines) {
+    const separator = line.indexOf(":");
+    if (separator > 0)
+      headers[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim();
+  }
+  return {
+    status: Number(/^HTTP\/\S+\s+(\d{3})\b/.exec(statusLine)?.[1] ?? 0),
+    headers,
+    body: blank ? stdout.slice(blank.index + blank[0].length) : ""
+  };
+};
 var headers = fn2("Api.headers")(function* (request) {
   const command = yield* prepare(request);
   const gh = yield* Gh;
   const output = yield* gh.execute([...command.args, "--include", "--", command.endpoint], command.options);
-  const head = output.stdout.split(/\r?\n\r?\n/, 1)[0] ?? "";
-  const result = {};
-  for (const line of head.split(/\r?\n/).slice(1)) {
-    const separator = line.indexOf(":");
-    if (separator > 0)
-      result[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim();
-  }
-  return result;
+  return parseIncluded(output.stdout).headers;
+});
+var Conditional = taggedEnum();
+var conditional = fn2("Api.conditional")(function* (request, schema, validators = {}) {
+  const command = yield* prepare({
+    ...request,
+    method: "GET",
+    headers: {
+      ...request.headers,
+      ...validators.etag !== undefined && {
+        "If-None-Match": validators.etag
+      },
+      ...validators.lastModified !== undefined && {
+        "If-Modified-Since": validators.lastModified
+      }
+    }
+  });
+  const gh = yield* Gh;
+  const stdout = yield* gh.execute([...command.args, "--include", "--", command.endpoint], command.options).pipe(map5((output) => output.stdout), catchTag2("GhCommandError", (error) => parseIncluded(error.stdout).status === 304 ? succeed6(error.stdout) : fail7(error)));
+  const response = parseIncluded(stdout);
+  if (response.status === 304)
+    return Conditional.NotModified({ headers: response.headers });
+  const value = yield* decodeEffect2(fromJsonString2(schema))(response.body).pipe(mapError2((cause) => new GhDecodeError({ cause })));
+  return Conditional.Modified({
+    value,
+    validators: {
+      ...response.headers.etag !== undefined && {
+        etag: response.headers.etag
+      },
+      ...response.headers["last-modified"] !== undefined && {
+        lastModified: response.headers["last-modified"]
+      }
+    },
+    headers: response.headers
+  });
 });
 var json = fn2("Api.json")(function* (request, schema) {
   const command = yield* prepare(request);
