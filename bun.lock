@@ -6,7 +6,7 @@
       "name": "@timmo001/workflows-actions",
       "dependencies": {
         "@effect/platform-node": "4.1.2",
-        "@timmo001/effect-gh": "0.10.1",
+        "@timmo001/effect-gh": "0.12.0",
         "effect": "4.1.2",
       },
       "devDependencies": {
@@ -148,7 +148,7 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@timmo001/effect-gh": ["@timmo001/effect-gh@0.10.1", "", { "dependencies": { "graphql": "17.0.2" }, "peerDependencies": { "effect": "^4.1.2" } }, "sha512-SI81hYfVZSsWNUwvKTh8POESH4Y2oOhoPkmSJeRKZoLZKSLRZraYy8VDki/66VSJ2fBrnmiiZd7yjGRbMWn3jA=="],
+    "@timmo001/effect-gh": ["@timmo001/effect-gh@0.12.0", "", { "dependencies": { "graphql": "17.1.0" }, "peerDependencies": { "effect": "^4.1.2" } }, "sha512-8fqvLyeNnhsdhZisds0qn4ReUseHSTBcQmz98zJ1SUV/hbovyfN5pcJX/h/SjmpTGPoont6RJdXFWq2W0oit9A=="],
 
     "@timmo001/oxlint-rules": ["@timmo001/oxlint-rules@0.6.4", "", { "peerDependencies": { "@oxlint/plugins": "^1.91.0", "oxlint": "^1.91.0" }, "bin": { "oxlint-rules": "dist/cli.js" } }, "sha512-FHVvFrgyhw8JuE+eL+1/ABEWTynttmornkOU5a2WutAZeAkNQK38olP//u0OGOEKgtmHORTbUWD9jq9CmeJXmA=="],
 
@@ -228,7 +228,7 @@
 
     "fsevents": ["fsevents@2.3.3", "", { "os": "darwin", "hasInstallScript": true }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
 
-    "graphql": ["graphql@17.0.2", "", {}, "sha512-FRWbddMxfkjiB7z+aQDWIR+E34xo9I8c9mtK2RPv8PmMzKRvrdsreHL/Ui/TmwHJfhHChEtsFPyMHKI+xuarQQ=="],
+    "graphql": ["graphql@17.1.0", "", {}, "sha512-JKCOa7rSQNrket/JFhuua86hljUO+IIpyUHfKxlKD6FEfbrLX8jc1FDrA0KPKI+s8OspBCF/5npYccAICHXPpQ=="],
 
     "lightningcss": ["lightningcss@1.33.0", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-android-arm64": "1.33.0", "lightningcss-darwin-arm64": "1.33.0", "lightningcss-darwin-x64": "1.33.0", "lightningcss-freebsd-x64": "1.33.0", "lightningcss-linux-arm-gnueabihf": "1.33.0", "lightningcss-linux-arm64-gnu": "1.33.0", "lightningcss-linux-arm64-musl": "1.33.0", "lightningcss-linux-x64-gnu": "1.33.0", "lightningcss-linux-x64-musl": "1.33.0", "lightningcss-win32-arm64-msvc": "1.33.0", "lightningcss-win32-x64-msvc": "1.33.0" } }, "sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA=="],
 
