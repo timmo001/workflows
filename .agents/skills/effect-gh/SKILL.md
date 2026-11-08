@@ -33,11 +33,13 @@ have a different transport contract.
 
 ## Use the package
 
-1. Choose the smallest public operation that fits. Use `Repository`, `Issue`,
-   `IssueArtifact`, `PullRequest`, `Review`, `Comment`, `Discussion`,
-   `Workflow`, `Release`,
-   `Label`, `Attachment`, `Auth`, `Extension`, `Search` and `Cli` for their
-   typed operations, selecting `fields` where the operation takes them. Use
+1. Choose the smallest public operation that fits. Every gh command that works
+   without a terminal has a typed operation in a namespace named after its
+   command group, such as `Repository`, `Issue`, `IssueArtifact`,
+   `PullRequest`, `Workflow`, `Cache`, `Secret`, `Variable`, `Release`,
+   `Project`, `Codespace`, `Gist`, `Search`, `Skill` and `Auth`; the README
+   lists them all. `Review`, `Comment` and `Discussion` add GraphQL-backed
+   operations. Select `fields` where the operation takes them. Use
    `Graphql.query` with a data schema for other GraphQL, and `Api.json`,
    `Api.pages`, `Api.empty`, `Api.text` or `Api.headers` with a response schema
    for other REST endpoints. When a CLI command
