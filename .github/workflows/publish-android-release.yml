@@ -86,8 +86,9 @@ jobs:
       TAG: ${{ inputs.release-tag }}
       APK: ${{ inputs.asset-name }}-${{ inputs.release-tag }}.apk
       # fdroidserver ships only as source, so mise can't lock it with a uv
-      # dependency graph and a locked install refuses it. It's installed with
-      # pipx below instead, and awscli comes with the runner image
+      # dependency graph and a locked install refuses it. It's installed in a
+      # virtual environment below instead, and awscli comes with the runner
+      # image
       MISE_DISABLE_TOOLS: pipx:fdroidserver,pipx:awscli
       MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}/${{ inputs.working-directory }}
     steps:
@@ -153,9 +154,14 @@ jobs:
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # In its own virtual environment from the runner's Python, as pipx would
+      # pick up mise's uv shim, which has no version outside the app's config
       - name: Install fdroidserver
         if: steps.r2.outputs.publish == 'true'
-        run: pipx install "fdroidserver==$FDROIDSERVER_VERSION"
+        run: |
+          /usr/bin/python3 -m venv "$RUNNER_TEMP/fdroidserver"
+          "$RUNNER_TEMP/fdroidserver/bin/pip" install --quiet "fdroidserver==$FDROIDSERVER_VERSION"
+          echo "$RUNNER_TEMP/fdroidserver/bin" >> "$GITHUB_PATH"
 
       - name: Update the F-Droid repository
         if: steps.r2.outputs.publish == 'true'

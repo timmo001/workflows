@@ -169,8 +169,9 @@ the caller's `build-command`, signs it with the `ANDROID_KEYSTORE_*` and
 adds it to the shared F-Droid repository on R2 (`R2_*` secrets), using the
 caller's `fdroid-directory` for its `config.yml` and listing. Without the
 signing secrets it skips with a notice, and without the R2 secrets it attaches
-the APK and skips F-Droid. It installs fdroidserver with pipx rather than mise,
-as fdroidserver ships only as source and can't be locked. Because it builds
+the APK and skips F-Droid. It installs fdroidserver in a virtual environment
+from the runner's Python rather than with mise, as fdroidserver ships only as
+source and can't be locked. Because it builds
 the tag, a caller can run it again for a release that's already out, such as
 from `workflow_dispatch`. The calling job needs `contents: write`, and the job
 is named `Publish`.
