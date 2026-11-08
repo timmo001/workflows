@@ -173,6 +173,14 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           FDROID_DIRECTORY: ${{ inputs.fdroid-directory }}
         run: |
+          # fdroid runs apksigner outside the app's directory, where mise's shim
+          # for it has no version, so the SDK's newest build-tools come first
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          if [ -z "$build_tools" ]; then
+            echo "::error::No build-tools in $ANDROID_HOME; install them in setup-command"
+            exit 1
+          fi
+          export PATH="$build_tools:$PATH"
           dir="$RUNNER_TEMP/fdroid"
           mkdir -p "$dir/repo" "$dir/metadata"
           aws s3 sync "s3://$R2_BUCKET/repo/" "$dir/repo/" --endpoint-url "$R2_ENDPOINT" --no-progress
