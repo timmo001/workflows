@@ -1,0 +1,185 @@
+---
+# Signs a release's Android APK with the shared key, attaches it to the
+# release, and adds it to the shared F-Droid repository on R2. It builds the
+# tag's source, so it can run again for a release that's already out. Without
+# the signing secrets it skips everything; without the R2 secrets it attaches
+# the APK and skips F-Droid.
+name: Publish Android release
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      release-tag:
+        description: "Existing GitHub release tag, which is built and published"
+        required: true
+        type: string
+      working-directory:
+        description: "Directory with the app's mise.toml, where the commands run"
+        required: false
+        type: string
+        default: "."
+      mise-install-args:
+        description: "Tools mise installs, space-separated, when not all of them, such as java gradle android-sdk"
+        required: false
+        type: string
+        default: ""
+      setup-command:
+        description: "Trusted shell command run before the build, such as installing the SDK packages and dependencies"
+        required: false
+        type: string
+        default: ""
+      build-command:
+        description: "Trusted shell command that builds the signed release APK"
+        required: true
+        type: string
+      apk-path:
+        description: "Workspace-relative path of the release APK the build writes"
+        required: true
+        type: string
+      asset-name:
+        description: "Name the APK is attached as, before -<release tag>.apk, such as my-app"
+        required: true
+        type: string
+      fdroid-directory:
+        description: "Workspace-relative directory with the F-Droid config.yml and metadata/"
+        required: true
+        type: string
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
+      R2_ACCESS_KEY_ID:
+        required: false
+      R2_SECRET_ACCESS_KEY:
+        required: false
+      R2_ACCOUNT_ID:
+        required: false
+      R2_BUCKET:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  # renovate: datasource=pypi depName=fdroidserver
+  FDROIDSERVER_VERSION: "2.4.5"
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      APP_VERSION: ${{ inputs.release-tag }}
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.release-tag }}
+      APK: ${{ inputs.asset-name }}-${{ inputs.release-tag }}.apk
+      # fdroidserver ships only as source, so mise can't lock it with a uv
+      # dependency graph and a locked install refuses it. It's installed with
+      # pipx below instead, and awscli comes with the runner image
+      MISE_DISABLE_TOOLS: pipx:fdroidserver,pipx:awscli
+      MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}/${{ inputs.working-directory }}
+    steps:
+      - name: Write the signing key
+        id: key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::notice::No ANDROID_KEYSTORE_BASE64 secret, so no signed APK or F-Droid repository for $TAG"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the release
+        if: steps.key.outputs.signed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.release-tag }}
+          persist-credentials: false
+
+      - name: Set up mise
+        if: steps.key.outputs.signed == 'true'
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          working_directory: ${{ inputs.working-directory }}
+          install_args: ${{ inputs.mise-install-args }}
+
+      - name: Set up the build
+        if: steps.key.outputs.signed == 'true' && inputs.setup-command != ''
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.setup-command }}
+
+      - name: Build the signed APK
+        if: steps.key.outputs.signed == 'true'
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.build-command }}
+
+      - name: Attach the APK to the release
+        if: steps.key.outputs.signed == 'true'
+        env:
+          APK_PATH: ${{ inputs.apk-path }}
+        run: |
+          cp "$APK_PATH" "$RUNNER_TEMP/$APK"
+          gh release upload "$TAG" "$RUNNER_TEMP/$APK" --clobber
+
+      # The F-Droid repository is shared by every app, so this pulls its
+      # current state from R2, adds this release's APK and listing, re-signs
+      # the index and pushes it back
+      - name: Check for the R2 secrets
+        id: r2
+        if: steps.key.outputs.signed == 'true'
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$R2_ACCESS_KEY_ID" ]; then
+            echo "::notice::No R2 secrets, so the F-Droid repository isn't updated for $TAG"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install fdroidserver
+        if: steps.r2.outputs.publish == 'true'
+        run: pipx install "fdroidserver==$FDROIDSERVER_VERSION"
+
+      - name: Update the F-Droid repository
+        if: steps.r2.outputs.publish == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          FDROID_DIRECTORY: ${{ inputs.fdroid-directory }}
+        run: |
+          dir="$RUNNER_TEMP/fdroid"
+          mkdir -p "$dir/repo" "$dir/metadata"
+          aws s3 sync "s3://$R2_BUCKET/repo/" "$dir/repo/" --endpoint-url "$R2_ENDPOINT" --no-progress
+          aws s3 sync "s3://$R2_BUCKET/metadata/" "$dir/metadata/" --endpoint-url "$R2_ENDPOINT" --no-progress
+          cp -r "$FDROID_DIRECTORY/." "$dir/"
+          cp "$RUNNER_TEMP/$APK" "$dir/repo/"
+          cd "$dir"
+          chmod 600 config.yml
+          fdroid update --pretty
+          aws s3 sync repo/ "s3://$R2_BUCKET/repo/" --endpoint-url "$R2_ENDPOINT" --no-progress \
+            --exclude '*' --include '*.apk' \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync repo/ "s3://$R2_BUCKET/repo/" --endpoint-url "$R2_ENDPOINT" --no-progress \
+            --exclude '*.apk' \
+            --cache-control "public, max-age=60, must-revalidate"
+          aws s3 sync metadata/ "s3://$R2_BUCKET/metadata/" --endpoint-url "$R2_ENDPOINT" --no-progress

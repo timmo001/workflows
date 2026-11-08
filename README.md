@@ -89,6 +89,7 @@ The collection includes reusable workflows for:
 - Building multi-arch container images and Home Assistant app changelogs
 - Sending Home Assistant app releases to a shared app repository
 - Building, linting and attaching Bun CLI and Arch package artefacts
+- Signing Android apps and publishing them to a shared F-Droid repository
 - Managing dependency updates, labels, stale items and releases
 
 These workflows reflect the requirements of my projects. Review the workflow
@@ -161,6 +162,18 @@ that commits a placeholder version and takes its version from the tag, set
 `version-from-release-tag: true` to write the tag into both files first. The JSR
 workflow then publishes with `--allow-dirty`, since those files are left
 modified.
+
+`publish-android-release.yml` builds an existing release's tag with mise and
+the caller's `build-command`, signs it with the `ANDROID_KEYSTORE_*` and
+`ANDROID_KEY_*` secrets, attaches `<asset-name>-<tag>.apk` to the release and
+adds it to the shared F-Droid repository on R2 (`R2_*` secrets), using the
+caller's `fdroid-directory` for its `config.yml` and listing. Without the
+signing secrets it skips with a notice, and without the R2 secrets it attaches
+the APK and skips F-Droid. It installs fdroidserver with pipx rather than mise,
+as fdroidserver ships only as source and can't be locked. Because it builds
+the tag, a caller can run it again for a release that's already out, such as
+from `workflow_dispatch`. The calling job needs `contents: write`, and the job
+is named `Publish`.
 
 `attach-release-arch-package.yml` takes the artifact produced by
 `build-arch-package.yml`, attests the package and uploads it with its bundle to
