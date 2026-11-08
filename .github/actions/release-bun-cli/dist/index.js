@@ -11250,13 +11250,22 @@ var layer = (defaults = {}) => effect(Gh, gen2(function* () {
 }));
 // node_modules/@timmo001/effect-gh/src/release.ts
 var Fields = Struct({
+  id: String5,
+  databaseId: Int,
   tagName: String5,
   name: String5,
   url: String5,
+  apiUrl: String5,
+  uploadUrl: String5,
+  tarballUrl: String5,
+  zipballUrl: String5,
   body: String5,
+  author: Struct({ id: String5, login: String5 }),
   isDraft: Boolean3,
   isPrerelease: Boolean3,
+  isImmutable: Boolean3,
   targetCommitish: String5,
+  createdAt: String5,
   publishedAt: NullOr(String5),
   assets: ArraySchema(Struct({ name: String5, url: String5 }))
 });
@@ -11274,6 +11283,52 @@ var view = fn2("Release.view")(function* (input, options) {
 });
 var exists2 = fn2("Release.exists")(function* (input, options) {
   return yield* view({ ...input, fields: ["tagName"] }, options).pipe(as2(true), catchTag2("GhCommandError", (error) => /release not found/i.test(error.stderr) ? succeed6(false) : fail7(error)));
+});
+var ListItem = Struct({
+  tagName: String5,
+  name: String5,
+  isDraft: Boolean3,
+  isPrerelease: Boolean3,
+  isLatest: Boolean3,
+  isImmutable: Boolean3,
+  createdAt: String5,
+  publishedAt: String5
+});
+var list = fn2("Release.list")(function* (input = {}, options) {
+  const gh = yield* Gh;
+  return yield* gh.json([
+    "release",
+    "list",
+    ...repoArgs(input.repo),
+    ...input.limit === undefined ? [] : ["--limit", String(input.limit)],
+    ...input.excludeDrafts ? ["--exclude-drafts"] : [],
+    ...input.excludePrereleases ? ["--exclude-pre-releases"] : [],
+    ...input.order === undefined ? [] : ["--order", input.order],
+    "--json",
+    Object.keys(ListItem.fields).join(",")
+  ], ArraySchema(ListItem), options);
+});
+var remove = fn2("Release.remove")(function* (input, options) {
+  const gh = yield* Gh;
+  yield* gh.execute([
+    "release",
+    "delete",
+    input.tag,
+    ...repoArgs(input.repo),
+    ...input.cleanupTag ? ["--cleanup-tag"] : [],
+    "--yes"
+  ], options);
+});
+var removeAsset = fn2("Release.removeAsset")(function* (input, options) {
+  const gh = yield* Gh;
+  yield* gh.execute([
+    "release",
+    "delete-asset",
+    input.tag,
+    input.asset,
+    ...repoArgs(input.repo),
+    "--yes"
+  ], options);
 });
 var settingArgs = (settings) => [
   ...settings.title === undefined ? [] : ["--title", settings.title],
@@ -11330,6 +11385,26 @@ var download = fn2("Release.download")(function* (input, options) {
     ...input.patterns.flatMap((pattern) => ["--pattern", pattern]),
     "--dir",
     input.directory
+  ], options);
+});
+var verify = fn2("Release.verify")(function* (input = {}, options) {
+  const gh = yield* Gh;
+  yield* gh.execute([
+    "release",
+    "verify",
+    ...repoArgs(input.repo),
+    ...input.tag === undefined ? [] : ["--", input.tag]
+  ], options);
+});
+var verifyAsset = fn2("Release.verifyAsset")(function* (input, options) {
+  const gh = yield* Gh;
+  yield* gh.execute([
+    "release",
+    "verify-asset",
+    ...repoArgs(input.repo),
+    "--",
+    ...input.tag === undefined ? [] : [input.tag],
+    input.file
   ], options);
 });
 // src/action/ActionInputs.ts
@@ -12328,7 +12403,7 @@ var removeFactory = (method) => {
     force: options?.force ?? false
   });
 };
-var remove = /* @__PURE__ */ removeFactory("remove");
+var remove2 = /* @__PURE__ */ removeFactory("remove");
 var makeTempDirectoryScoped = /* @__PURE__ */ (() => {
   const makeDirectory = /* @__PURE__ */ makeTempDirectoryFactory("makeTempDirectoryScoped");
   const removeDirectory = /* @__PURE__ */ removeFactory("makeTempDirectoryScoped");
@@ -12717,7 +12792,7 @@ var makeFileSystem = /* @__PURE__ */ map5(/* @__PURE__ */ serviceOption2(WatchBa
   readFile: readFile2,
   readLink,
   realPath,
-  remove,
+  remove: remove2,
   rename: rename2,
   stat: stat2,
   symlink: symlink2,
