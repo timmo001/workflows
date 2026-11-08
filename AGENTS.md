@@ -44,7 +44,8 @@ To add one:
 
 The bundles are committed. After changing `src/`, `package.json`, `bun.lock` or
 `tsconfig.json`, run `mise run bundle`, or `bundle:check` fails.
-`sync-action-bundles.yml` also rebuilds them on pull requests and `master`.
+`sync-action-bundles.yml` also rebuilds them on pull requests. Upkeep runs
+`mise run bundle` itself when it pushes a dependency update to `master`.
 
 ## Tasks
 
@@ -64,7 +65,7 @@ Not called outside this repository:
 - `validate-actions.yml`: runs `mise run -c validate` and smoke-tests a
   bundled action through `$/` syntax.
 - `sync-action-bundles.yml`: rebuilds the action bundles and commits them to
-  the pull request, or opens an automerging pull request for drift on `master`.
+  the pull request.
 - `renovate-automerge-any.yml`: enables automerge on Renovate pull requests
   once `validate-actions.yml` passes.
 - `publish-hk-base.yml`: packages `hk/` with `mise run hk:package` and attaches

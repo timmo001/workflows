@@ -40,8 +40,8 @@ workflows reference sibling actions with `$/.github/actions/<name>` so the
 action resolves from the same commit as the workflow.
 
 When action sources, the lockfile, or action metadata change,
-`sync-action-bundles.yml` rebuilds `dist` and either commits it to the open
-pull request or opens an automerging pull request on `master`.
+`sync-action-bundles.yml` rebuilds `dist` and commits it to the open pull
+request.
 `validate-actions.yml` still fails if a committed bundle is out of date.
 
 ## hk base
