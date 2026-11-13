@@ -130,7 +130,9 @@ jobs:
         if: inputs.push
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: image-digest-${{ steps.digest.outputs.key }}-${{ matrix.arch }}
+          # The image last, so one image's pattern can't match another whose
+          # name starts with it, such as kestrel and kestrel-app
+          name: image-digest-${{ matrix.arch }}-${{ steps.digest.outputs.key }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -155,7 +157,7 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: ${{ runner.temp }}/digests
-          pattern: image-digest-${{ steps.key.outputs.key }}-*
+          pattern: image-digest-*-${{ steps.key.outputs.key }}
           merge-multiple: true
 
       - name: Set up Docker Buildx
