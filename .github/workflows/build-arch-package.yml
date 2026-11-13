@@ -53,6 +53,7 @@ jobs:
           pkgbuildPath: ${{ inputs.pkgbuild-path }}
           sourceRepository: ${{ github.repository }}
           sourceSha: ${{ github.sha }}
+          sourceVisibility: ${{ github.event.repository.visibility }}
           allowlistUrl: https://raw.githubusercontent.com/timmo001/arch-repo/refs/heads/main/config/packages.json
       - name: Check out exact source revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

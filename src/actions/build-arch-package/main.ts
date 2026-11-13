@@ -12,6 +12,7 @@ const program = Effect.gen(function* () {
     "pkgbuildPath",
     "sourceRepository",
     "sourceSha",
+    "sourceVisibility",
     "allowlistUrl",
     "artifactName",
     "sourceRunId",

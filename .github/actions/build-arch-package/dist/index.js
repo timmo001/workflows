@@ -13469,6 +13469,7 @@ var Inputs = Struct({
   pkgbuildPath: optionalKey2(String5),
   sourceRepository: String5,
   sourceSha: String5,
+  sourceVisibility: optionalKey2(String5),
   allowlistUrl: optionalKey2(String5),
   artifactName: optionalKey2(String5),
   sourceRunId: optionalKey2(String5)
@@ -13600,6 +13601,9 @@ var validateContract = fn2("BuildArchPackage.validateContract")(function* (input
   const commands = yield* Service3;
   const fs = yield* FileSystem;
   const allowlistUrl = yield* requireInput(inputs.allowlistUrl, "allowlist-url");
+  const visibility = yield* requireInput(inputs.sourceVisibility, "source-visibility");
+  if (visibility !== "public")
+    return yield* failure("Source repository must be public.");
   const fetchArgs = [
     "--fail",
     "--location",
@@ -13609,15 +13613,6 @@ var validateContract = fn2("BuildArchPackage.validateContract")(function* (input
     "5",
     "--retry-all-errors"
   ];
-  const repository = yield* commands.run("curl", [
-    ...fetchArgs,
-    `https://api.github.com/repos/${inputs.sourceRepository}`
-  ]).pipe(mapCommand);
-  const repositoryFile = yield* fs.makeTempFileScoped({ prefix: "repository-" }).pipe(mapError2((error) => failure(String(error), "File operation failed")));
-  yield* fs.writeFileString(repositoryFile, repository).pipe(mapError2((error) => failure(String(error), "File operation failed")));
-  const visibility = yield* commands.run("jq", ["-r", ".visibility", repositoryFile]).pipe(mapCommand);
-  if (visibility.trim() !== "public")
-    return yield* failure("Source repository must be public.");
   const allowlist = yield* commands.run("curl", [...fetchArgs, allowlistUrl]).pipe(mapCommand);
   const allowlistFile = yield* fs.makeTempFileScoped({ prefix: "allowlist-" }).pipe(mapError2((error) => failure(String(error), "File operation failed")));
   yield* fs.writeFileString(allowlistFile, allowlist).pipe(mapError2((error) => failure(String(error), "File operation failed")));
@@ -13709,6 +13704,7 @@ var program = gen2(function* () {
     "pkgbuildPath",
     "sourceRepository",
     "sourceSha",
+    "sourceVisibility",
     "allowlistUrl",
     "artifactName",
     "sourceRunId"

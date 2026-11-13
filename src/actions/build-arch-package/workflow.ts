@@ -18,6 +18,7 @@ export const Inputs = Schema.Struct({
   pkgbuildPath: Schema.optionalKey(Schema.String),
   sourceRepository: Schema.String,
   sourceSha: Schema.String,
+  sourceVisibility: Schema.optionalKey(Schema.String),
   allowlistUrl: Schema.optionalKey(Schema.String),
   artifactName: Schema.optionalKey(Schema.String),
   sourceRunId: Schema.optionalKey(Schema.String),
@@ -208,7 +209,15 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
       "allowlist-url",
     );
 
-    // GitHub sometimes answers these with a brief 403 or 5xx, so retry them
+    const visibility = yield* requireInput(
+      inputs.sourceVisibility,
+      "source-visibility",
+    );
+
+    if (visibility !== "public")
+      return yield* failure("Source repository must be public.");
+
+    // GitHub sometimes answers this with a brief 403 or 5xx, so retry it
     const fetchArgs = [
       "--fail",
       "--location",
@@ -218,36 +227,6 @@ const validateContract = Effect.fn("BuildArchPackage.validateContract")(
       "5",
       "--retry-all-errors",
     ];
-
-    const repository = yield* commands
-      .run("curl", [
-        ...fetchArgs,
-        `https://api.github.com/repos/${inputs.sourceRepository}`,
-      ])
-      .pipe(mapCommand);
-
-    const repositoryFile = yield* fs
-      .makeTempFileScoped({ prefix: "repository-" })
-      .pipe(
-        Effect.mapError((error) =>
-          failure(String(error), "File operation failed"),
-        ),
-      );
-
-    yield* fs
-      .writeFileString(repositoryFile, repository)
-      .pipe(
-        Effect.mapError((error) =>
-          failure(String(error), "File operation failed"),
-        ),
-      );
-
-    const visibility = yield* commands
-      .run("jq", ["-r", ".visibility", repositoryFile])
-      .pipe(mapCommand);
-
-    if (visibility.trim() !== "public")
-      return yield* failure("Source repository must be public.");
 
     const allowlist = yield* commands
       .run("curl", [...fetchArgs, allowlistUrl])

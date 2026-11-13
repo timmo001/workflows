@@ -19,6 +19,9 @@ inputs:
   sourceSha:
     description: Full source commit SHA
     required: true
+  sourceVisibility:
+    description: Source repository visibility from the event payload
+    required: false
   allowlistUrl:
     description: Pinned package allowlist URL
     required: false

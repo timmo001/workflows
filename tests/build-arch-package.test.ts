@@ -205,6 +205,32 @@ ${sourcePolicyScript}`,
         ).toBe(true);
       }).pipe(Effect.provide(platformLayer)),
   );
+
+  const contractInputs = {
+    ...validInputs,
+    stage: "validate-contract",
+    allowlistUrl: "https://example.invalid/packages.json",
+  } satisfies Inputs;
+
+  it.effect.each<{ inputs: Inputs; message: string }>([
+    { inputs: contractInputs, message: "source-visibility" },
+    {
+      inputs: { ...contractInputs, sourceVisibility: "private" },
+      message: "must be public",
+    },
+  ])(
+    "rejects a source repository that isn't public %#",
+    ({ inputs, message }) =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(Effect.scoped(run(inputs))).pipe(
+          Effect.provide(layer()),
+          Effect.provide(commandLayer),
+          Effect.provide(NodeServices.layer),
+        );
+
+        expect(error.message).toContain(message);
+      }),
+  );
 });
 
 const validateFixture = (root: string) =>
