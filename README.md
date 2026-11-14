@@ -128,6 +128,13 @@ reads from a prebuilt app image. `push: false` only checks that both
 architectures build, with no registry access, for pull requests. Call it once
 per image; jobs are named `Image (amd64)`, `Image (arm64)` and `Manifest`.
 
+To build from files an earlier job in the same run made, such as a release
+archive, set `artifact-pattern` to the artifacts' name or a glob. They're
+merged into one folder and passed to the build as the `artifact-context` build
+context (default `artifact`), which replaces a Dockerfile stage of that name.
+`smoke-test` takes trusted shell commands run against each architecture's image
+before anything is pushed, with `IMAGE` naming a local copy of it.
+
 `home-assistant-app-changelog.yml` copies a published stable release's notes to
 the app's `changelog-path` on the default branch, where the Supervisor shows
 them in the update dialog. Pass a `token` secret that can push there, such as a

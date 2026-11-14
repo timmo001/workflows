@@ -49,6 +49,25 @@ on:
         required: false
         type: boolean
         default: true
+      artifact-pattern:
+        description: >-
+          Artifacts from the calling run to build from, by name or glob pattern. They're merged into one folder and
+          passed to the build as the artifact-context build context; empty downloads none
+        required: false
+        type: string
+        default: ""
+      artifact-context:
+        description: "Name of the build context the downloaded artifacts are passed as, for FROM or COPY --from"
+        required: false
+        type: string
+        default: artifact
+      smoke-test:
+        description: >-
+          Trusted multi-line shell commands run against each architecture's image before anything is pushed, with
+          IMAGE naming a local copy of it; empty skips the smoke test
+        required: false
+        type: string
+        default: ""
 
 jobs:
   # Each architecture builds on its own native runner, since emulated builds are
@@ -103,6 +122,37 @@ jobs:
             ${{ inputs.home-assistant && format('io.hass.arch={0}', matrix.hass-arch) || '' }}
             ${{ inputs.home-assistant && inputs.version != '' && format('io.hass.version={0}', inputs.version) || '' }}
 
+      - name: Download artifacts
+        if: inputs.artifact-pattern != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/build-artifact
+          pattern: ${{ inputs.artifact-pattern }}
+          merge-multiple: true
+
+      # Loaded into Docker so the smoke test can run it. The build below then
+      # comes from the builder's cache, so a failing image is never pushed
+      - name: Build for the smoke test
+        if: inputs.smoke-test != ''
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          target: ${{ inputs.target }}
+          build-args: ${{ inputs.build-args }}
+          build-contexts: ${{ inputs.artifact-pattern != '' && format('{0}={1}/build-artifact', inputs.artifact-context, runner.temp) || '' }}
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          tags: smoke-test:${{ matrix.arch }}
+
+      - name: Smoke test
+        if: inputs.smoke-test != ''
+        env:
+          IMAGE: smoke-test:${{ matrix.arch }}
+          SMOKE_TEST: ${{ inputs.smoke-test }}
+        run: bash -euo pipefail -c "$SMOKE_TEST"
+
       - name: Build
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -111,6 +161,7 @@ jobs:
           file: ${{ inputs.file }}
           target: ${{ inputs.target }}
           build-args: ${{ inputs.build-args }}
+          build-contexts: ${{ inputs.artifact-pattern != '' && format('{0}={1}/build-artifact', inputs.artifact-context, runner.temp) || '' }}
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: ${{ inputs.push && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', inputs.image) || 'type=cacheonly' }}
