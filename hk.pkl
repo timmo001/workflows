@@ -1,0 +1,14 @@
+// Pre-push checks: this repository's own shared base, plus its lint. Tests,
+// types and bundles are left to CI and `mise run validate`. Run them by hand
+// with `hk check`.
+amends "hk/base.pkl"
+
+hooks {
+  ["pre-push"] {
+    steps {
+      ["lint"] {
+        check = "mise run lint"
+      }
+    }
+  }
+}
