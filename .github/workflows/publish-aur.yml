@@ -10,9 +10,22 @@ on:
         required: true
         type: string
       artifact-name:
-        description: "Artifact containing the final AUR files"
-        required: true
+        description: "Artifact containing the final AUR files; leave empty when prepare-command makes them"
+        required: false
         type: string
+        default: ""
+      prepare-command:
+        description: >-
+          Trusted shell command that writes the final AUR files to $AUR_PACKAGE_DIR from the full git history, such as
+          .scripts/linux/prepare-aur.sh "$AUR_PACKAGE_DIR"; used instead of artifact-name
+        required: false
+        type: string
+        default: ""
+      prepare-mise:
+        description: "Install the caller's mise tools before prepare-command runs"
+        required: false
+        type: boolean
+        default: false
       pkgbuild-path:
         description: "Path to the final PKGBUILD within the artifact"
         required: false
@@ -46,8 +59,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare-package:
+    name: Prepare AUR package
+    if: inputs.prepare-command != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up mise
+        if: inputs.prepare-mise
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+      - name: Prepare package files
+        env:
+          AUR_PACKAGE_DIR: ${{ runner.temp }}/aur-package
+          PREPARE_COMMAND: ${{ inputs.prepare-command }}
+        run: |
+          mkdir -p "$AUR_PACKAGE_DIR"
+          bash -euo pipefail -c "$PREPARE_COMMAND"
+      - name: Upload package files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aur-${{ inputs.package-name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aur-package
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
   validate-package:
     name: Validate AUR package
+    needs: prepare-package
+    # Runs after prepare-package, or without it when the caller passes artifact-name
+    if: >-
+      !cancelled() && (needs.prepare-package.result == 'success' || (needs.prepare-package.result == 'skipped' &&
+      inputs.artifact-name != ''))
     runs-on: ubuntu-latest
     timeout-minutes: 120
     container:
@@ -56,7 +104,8 @@ jobs:
       - name: Download package files
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ${{ inputs.artifact-name }}
+          name: >-
+            ${{ inputs.artifact-name || format('aur-{0}-{1}-{2}', inputs.package-name, github.run_id, github.run_attempt) }}
           path: ${{ runner.temp }}/aur-input
       - name: Build and validate package
         uses: $/.github/actions/publish-aur
