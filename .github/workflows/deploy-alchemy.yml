@@ -1,0 +1,127 @@
+---
+name: Deploy Alchemy stack
+
+# Deploys an Alchemy stack to Cloudflare by running one of the caller's mise
+# tasks, such as a docs site, or an app Worker with its D1 and R2 bindings. The
+# task owns the build and the Alchemy command, so it stays the one place that
+# says how the stack deploys. Callers own the triggers and the concurrency.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      task:
+        description: "Trusted mise task that builds and deploys the stack, such as deploy or docs:deploy"
+        required: false
+        type: string
+        default: deploy
+      stage:
+        description: >-
+          Alchemy stage, set as ALCHEMY_STAGE for the task; a task that passes --stage itself wins
+        required: false
+        type: string
+        default: prod
+      install-args:
+        description: "Tools mise installs before the task runs, as mise-action's install_args"
+        required: false
+        type: string
+        default: bun node
+      fetch-depth:
+        description: "Commits to check out; 0 fetches the full history, which Blume needs for last-modified dates"
+        required: false
+        type: number
+        default: 0
+      timeout-minutes:
+        description: "Minutes before the deploy job is cancelled"
+        required: false
+        type: number
+        default: 20
+      smoke-check:
+        description: >-
+          Trusted URLs to check after the deploy, one "<url> <expected status>" pair per line; empty skips the check
+        required: false
+        type: string
+        default: ""
+      smoke-check-seconds:
+        description: "Seconds the smoke check retries before failing, as new custom domains can return 500s for a minute"
+        required: false
+        type: number
+        default: 120
+      env:
+        description: >-
+          Plain values the stack reads at deploy time, such as Worker vars, one NAME=value per line; blank lines and #
+          comments are skipped
+        required: false
+        type: string
+        default: ""
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID:
+        description: "Cloudflare account to deploy to, written to the caller's secrets by its stacks/github.ts stack"
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        description: "Cloudflare API token that can deploy the stack, written to the caller's secrets by its stacks/github.ts stack"
+        required: true
+      SECRET_ENV:
+        description: >-
+          Secret values the stack reads at deploy time, such as Worker secrets, one NAME=value per line; each value is
+          masked in the log
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Check out with mise
+        uses: $/.github/actions/checkout-mise
+        with:
+          fetch-depth: ${{ inputs.fetch-depth }}
+          install-args: ${{ inputs.install-args }}
+      - name: Build and deploy
+        env:
+          TASK: ${{ inputs.task }}
+          ALCHEMY_STAGE: ${{ inputs.stage }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ENV_LINES: ${{ inputs.env }}
+          SECRET_ENV_LINES: ${{ secrets.SECRET_ENV }}
+        run: |
+          # Exports NAME=value lines for this step only, so the values never
+          # reach the job's other steps
+          load() {
+            local label=$1 mask=$2 line name value
+            while IFS= read -r line || [ -n "$line" ]; do
+              line=${line#"${line%%[![:space:]]*}"}
+              [[ "$line" =~ ^(#.*)?$ ]] && continue
+              if ! [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+                echo "::error title=Invalid $label::Each line must be NAME=value"
+                exit 1
+              fi
+              name=${BASH_REMATCH[1]}
+              value=${BASH_REMATCH[2]}
+              case "$name" in
+                TASK | ALCHEMY_STAGE | CLOUDFLARE_* | GITHUB_* | RUNNER_* | MISE_* | PATH | HOME)
+                  echo "::error title=Invalid $label::$name is set by the workflow"
+                  exit 1
+                  ;;
+              esac
+              if [ "$mask" = true ] && [ -n "$value" ]; then
+                echo "::add-mask::$value"
+              fi
+              export "$name=$value"
+            done
+          }
+          load env false <<< "$ENV_LINES"
+          load SECRET_ENV true <<< "$SECRET_ENV_LINES"
+          unset ENV_LINES SECRET_ENV_LINES
+          mise run "$TASK"
+      - name: Smoke check
+        if: inputs.smoke-check != ''
+        uses: $/.github/actions/smoke-check
+        with:
+          checks: ${{ inputs.smoke-check }}
+          timeout-seconds: ${{ inputs.smoke-check-seconds }}

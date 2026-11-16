@@ -91,6 +91,8 @@ The collection includes reusable workflows for:
 - Building, linting and attaching Bun CLI and Arch package artefacts
 - Signing Android apps and publishing them to a shared F-Droid repository
 - Managing dependency updates, labels, stale items and releases
+- Deploying Alchemy stacks to Cloudflare
+- Publishing to R2, purging Cloudflare's cache and smoke-checking URLs
 
 These workflows reflect the requirements of my projects. Review the workflow
 contract and implementation before using one elsewhere, particularly its
@@ -254,3 +256,158 @@ upload releases. It runs in the caller's job, so the signer identity is the
 calling workflow, and it makes no SLSA Build Level 3 claim. Verify with
 `gh attestation verify <file> --repo <owner>/<repo>`, adding
 `--bundle <path>` to check against a downloaded bundle.
+
+## Alchemy deploys
+
+`deploy-alchemy.yml` deploys an Alchemy stack to Cloudflare by running one of
+the caller's mise tasks (`task`, default `deploy`), so the task stays the one
+place that builds the stack and runs `alchemy deploy`. It works for a docs site
+and for an app Worker with its D1 and R2 bindings alike, so there's one
+workflow rather than a docs and an app version that would only differ in the
+task name. It checks out the full history (`fetch-depth`, default `0`, as Blume
+reads last-modified dates from git), installs only `install-args` with mise
+(default `bun node`) and sets `stage` (default `prod`) as `ALCHEMY_STAGE`,
+which a task that passes `--stage` itself overrides. `timeout-minutes` defaults
+to 20.
+
+Pass `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as secrets, usually
+written to the repository by its own `stacks/github.ts` stack. Keep that stack
+out of CI.
+
+Values the stack reads at deploy time, such as a Worker's vars and secrets
+(`Config.string`, `Config.redacted`), go in `env` (plain) and the `SECRET_ENV`
+secret (masked), one `NAME=value` per line. They're set for the deploy step
+only. Names the workflow sets itself, such as `CLOUDFLARE_*`, `ALCHEMY_STAGE`,
+`GITHUB_*` and `MISE_*`, are refused. Reusable workflows can't take secrets by
+arbitrary names, so `SECRET_ENV` gathers them; build it from the caller's own
+secrets:
+
+<!-- markdownlint-disable MD013 -->
+
+```yaml
+    with:
+      env: |
+        PUBLIC_URL=https://events.example.dev
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SECRET_ENV: |
+        WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
+```
+
+<!-- markdownlint-enable MD013 -->
+
+`smoke-check` takes `<url> <expected status>` pairs, one per line, checked
+after the deploy by the `smoke-check` action. Each is retried every 5 seconds
+until it matches or `smoke-check-seconds` (default 120) runs out, as a new
+custom domain can return 500s for a minute after its first deploy. Redirects
+aren't followed, so a redirect Worker can be checked for its `301`.
+
+The caller keeps the triggers, path filters and concurrency. Deploys should
+queue rather than cancel, so a stack update never stops halfway: use one
+concurrency group per stage, shared by every workflow that changes it, with
+`cancel-in-progress: false`. The job is named `Deploy`, so its check context is
+`<caller job id> / Deploy`.
+
+<!-- markdownlint-disable MD013 -->
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/deploy.yml
+      - alchemy.run.ts
+      - bun.lock
+      - mise.toml
+  workflow_dispatch: {}
+
+concurrency:
+  group: alchemy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    uses: timmo001/workflows/.github/workflows/deploy-alchemy.yml@<sha> # master
+    with:
+      task: docs:deploy
+      smoke-check: |
+        https://example.timmo.dev 200
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+```
+
+<!-- markdownlint-enable MD013 -->
+
+These are placeholders that fail without doing anything. Their inputs and
+secrets are set out, but they aren't ready to call:
+
+- `plan-alchemy.yml` (job `Plan`): runs a plan task, such as a pull request
+  check. It needs a decision on keeping the Cloudflare token away from pull
+  request code first.
+- `deploy-alchemy-preview.yml` (job `Deploy preview`): deploys a pull request
+  to its own stage, `pr-<number>` by default.
+- `destroy-alchemy-preview.yml` (job `Destroy preview`): destroys that stage
+  when the pull request closes. Retained resources, such as D1 databases and R2
+  buckets with `RemovalPolicy.retain()`, stay behind unless the stack retains
+  them only on prod. Prod is never destroyed from CI.
+
+## Cloudflare actions
+
+Step-level actions for jobs that publish to Cloudflare outside an Alchemy
+stack, such as a package repository on R2. Each is called as
+`uses: timmo001/workflows/.github/actions/<name>@<sha> # master`.
+
+`smoke-check` checks that URLs return an expected status, retrying until a
+shared time limit. `checks` takes one `<url> <status>` pair per line;
+`timeout-seconds` (default 120) and `interval-seconds` (default 5) set the
+retries. Redirects aren't followed. `Jtalk/url-health-check-action` only
+checks for success, so it can't expect a `301` or a `404`.
+
+`r2-objects` runs `aws s3 sync`, `cp` or `rm` (`command`) against an R2 bucket
+with the aws CLI the runner image ships, so sync keeps aws's own comparison
+and filter rules. `direction` is `up` (default) or `down`; `local-path` is the
+file or directory and `remote-path` the key or prefix in the bucket. `delete`
+(sync), `recursive` (cp and rm), `cache-control` (uploads) and `filters` (one
+`include <pattern>` or `exclude <pattern>` per line, in aws's order) are
+optional. Pass `account-id`, `access-key-id`, `secret-access-key` and `bucket`
+from the caller's `R2_*` secrets. The marketplace R2 actions only upload, with
+no download, sync, delete or filters.
+
+<!-- markdownlint-disable MD013 -->
+
+```yaml
+- uses: timmo001/workflows/.github/actions/r2-objects@<sha> # master
+  with:
+    command: sync
+    local-path: repo/
+    remote-path: repo/
+    filters: |
+      exclude *
+      include *.apk
+    cache-control: public, max-age=31536000, immutable
+    account-id: ${{ secrets.R2_ACCOUNT_ID }}
+    access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+    secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    bucket: ${{ secrets.R2_BUCKET }}
+```
+
+<!-- markdownlint-enable MD013 -->
+
+`cloudflare-purge-cache` purges `files`, one absolute URL per line, from a
+zone's cache in batches of 30, and fails with Cloudflare's errors when the
+purge is refused. Pass `zone-id` and an `api-token` with Zone > Cache Purge.
+The marketplace purge actions are Docker actions with few users, and the API
+call is small enough to own rather than hand a zone token to.
+
+`checkout-mise` is a composite action that checks out the caller's repository
+without persisting credentials (`fetch-depth`, default `1`) and installs its
+mise tools (`install-args`, default every tool). `deploy-alchemy.yml` uses it,
+and so will the Alchemy placeholders.

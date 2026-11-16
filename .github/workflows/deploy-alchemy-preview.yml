@@ -1,0 +1,75 @@
+---
+name: Deploy Alchemy preview
+
+# PLACEHOLDER: this workflow fails without deploying anything. It holds the
+# contract for deploying a pull request to its own Alchemy stage, so the
+# change can be tried before it merges. destroy-alchemy-preview.yml removes
+# the stage again. Call it only for pull requests from the same repository:
+# the job runs the pull request's code with the Cloudflare credentials. Not
+# needed yet: cardstock retains its D1 database and R2 bucket, so it needs a
+# stage-aware removal policy before previews can be cleaned up.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      task:
+        description: "Trusted mise task that builds and deploys the stack without passing --stage, so ALCHEMY_STAGE picks it"
+        required: false
+        type: string
+        default: deploy:preview
+      stage:
+        description: "Alchemy stage to deploy, set as ALCHEMY_STAGE; empty uses pr-<pull request number>"
+        required: false
+        type: string
+        default: ""
+      install-args:
+        description: "Tools mise installs before the task runs, as mise-action's install_args"
+        required: false
+        type: string
+        default: bun node
+      fetch-depth:
+        description: "Commits to check out; 0 fetches the full history"
+        required: false
+        type: number
+        default: 0
+      timeout-minutes:
+        description: "Minutes before the deploy job is cancelled"
+        required: false
+        type: number
+        default: 20
+      env:
+        description: >-
+          Plain values the stack reads at deploy time, such as Worker vars, one NAME=value per line; blank lines and #
+          comments are skipped
+        required: false
+        type: string
+        default: ""
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID:
+        description: "Cloudflare account to deploy to, written to the caller's secrets by its stacks/github.ts stack"
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        description: "Cloudflare API token that can deploy the stack, written to the caller's secrets by its stacks/github.ts stack"
+        required: true
+      SECRET_ENV:
+        description: >-
+          Secret values the stack reads at deploy time, such as Worker secrets, one NAME=value per line; each value is
+          masked in the log
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The working version starts with $/.github/actions/checkout-mise and
+      # loads env and SECRET_ENV the way deploy-alchemy.yml does
+      - name: Placeholder
+        run: |
+          echo "::error title=Placeholder::deploy-alchemy-preview.yml doesn't deploy yet"
+          exit 1

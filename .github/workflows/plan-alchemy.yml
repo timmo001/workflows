@@ -1,0 +1,74 @@
+---
+name: Plan Alchemy stack
+
+# PLACEHOLDER: this workflow fails without planning anything. It holds the
+# contract for showing what deploying a stage would change, such as a check on
+# pull requests. Before it runs on pull requests, decide how the Cloudflare
+# credentials are kept from pull request code: a same-repository pull request
+# could change the task to deploy, and pull requests from forks get no secrets.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      task:
+        description: "Trusted mise task that builds the stack and runs alchemy plan, such as plan"
+        required: false
+        type: string
+        default: plan
+      stage:
+        description: >-
+          Alchemy stage to plan, set as ALCHEMY_STAGE for the task; a task that passes --stage itself wins
+        required: false
+        type: string
+        default: prod
+      install-args:
+        description: "Tools mise installs before the task runs, as mise-action's install_args"
+        required: false
+        type: string
+        default: bun node
+      fetch-depth:
+        description: "Commits to check out; 0 fetches the full history, which Blume needs for last-modified dates"
+        required: false
+        type: number
+        default: 0
+      timeout-minutes:
+        description: "Minutes before the plan job is cancelled"
+        required: false
+        type: number
+        default: 20
+      env:
+        description: >-
+          Plain values the stack reads at deploy time, such as Worker vars, one NAME=value per line; blank lines and #
+          comments are skipped
+        required: false
+        type: string
+        default: ""
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID:
+        description: "Cloudflare account the stack is in, written to the caller's secrets by its stacks/github.ts stack"
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        description: "Cloudflare API token that can read the stack, written to the caller's secrets by its stacks/github.ts stack"
+        required: true
+      SECRET_ENV:
+        description: >-
+          Secret values the stack reads at deploy time, such as Worker secrets, one NAME=value per line; each value is
+          masked in the log
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The working version starts with $/.github/actions/checkout-mise and
+      # loads env and SECRET_ENV the way deploy-alchemy.yml does
+      - name: Placeholder
+        run: |
+          echo "::error title=Placeholder::plan-alchemy.yml doesn't plan anything yet"
+          exit 1

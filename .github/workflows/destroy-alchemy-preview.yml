@@ -1,0 +1,74 @@
+---
+name: Destroy Alchemy preview
+
+# PLACEHOLDER: this workflow fails without removing anything. It holds the
+# contract for destroying the Alchemy stage deploy-alchemy-preview.yml made
+# for a pull request, once the pull request closes. Resources with
+# RemovalPolicy.retain(), such as cardstock's D1 database and R2 bucket, stay
+# behind unless the stack retains them only on prod. Prod is never destroyed
+# from CI, so the working version should refuse that stage.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      task:
+        description: "Trusted mise task that destroys the stack without passing --stage, so ALCHEMY_STAGE picks it"
+        required: false
+        type: string
+        default: destroy:preview
+      stage:
+        description: "Alchemy stage to destroy, set as ALCHEMY_STAGE; empty uses pr-<pull request number>"
+        required: false
+        type: string
+        default: ""
+      install-args:
+        description: "Tools mise installs before the task runs, as mise-action's install_args"
+        required: false
+        type: string
+        default: bun node
+      fetch-depth:
+        description: "Commits to check out; 0 fetches the full history, which Blume needs if the task builds the docs"
+        required: false
+        type: number
+        default: 0
+      timeout-minutes:
+        description: "Minutes before the destroy job is cancelled"
+        required: false
+        type: number
+        default: 20
+      env:
+        description: >-
+          Plain values the stack reads at deploy time, such as Worker vars, one NAME=value per line; blank lines and #
+          comments are skipped
+        required: false
+        type: string
+        default: ""
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID:
+        description: "Cloudflare account the stage is in, written to the caller's secrets by its stacks/github.ts stack"
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        description: "Cloudflare API token that can destroy the stack, written to the caller's secrets by its stacks/github.ts stack"
+        required: true
+      SECRET_ENV:
+        description: >-
+          Secret values the stack reads at deploy time, such as Worker secrets, one NAME=value per line; each value is
+          masked in the log
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  destroy:
+    name: Destroy preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The working version starts with $/.github/actions/checkout-mise and
+      # loads env and SECRET_ENV the way deploy-alchemy.yml does
+      - name: Placeholder
+        run: |
+          echo "::error title=Placeholder::destroy-alchemy-preview.yml doesn't destroy anything yet"
+          exit 1
