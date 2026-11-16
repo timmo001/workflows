@@ -93,6 +93,8 @@ The collection includes reusable workflows for:
 - Managing dependency updates, labels, stale items and releases
 - Deploying Alchemy stacks to Cloudflare
 - Publishing to R2, purging Cloudflare's cache and smoke-checking URLs
+- Running mise tasks, checking generated docs and building Android apps
+- Validating and publishing Omarchy shell plugins
 
 These workflows reflect the requirements of my projects. Review the workflow
 contract and implementation before using one elsewhere, particularly its
@@ -409,5 +411,121 @@ call is small enough to own rather than hand a zone token to.
 
 `checkout-mise` is a composite action that checks out the caller's repository
 without persisting credentials (`fetch-depth`, default `1`) and installs its
-mise tools (`install-args`, default every tool). `deploy-alchemy.yml` uses it,
-and so will the Alchemy placeholders.
+mise tools (`install-args`, default every tool) from `working-directory`
+(default `.`). `deploy-alchemy.yml`, `run-mise-task.yml`, `check-docs.yml` and
+`build-android.yml` use it, and so will the Alchemy placeholders.
+
+## mise project jobs
+
+Jobs that repeat across projects whose tasks live in `mise.toml`. Each keeps
+the task as the one place that says what the job does, and the caller keeps
+its triggers, path filters and concurrency.
+
+`run-mise-task.yml` checks out the repository, installs its mise tools and runs
+`mise run <task>`. `task` is required and takes several tasks the way
+`mise run` does, such as `check ::: test`, which run in parallel. `smoke-test`
+takes trusted shell commands run afterwards, such as a built CLI's `--help`.
+`install-args` (default every tool), `working-directory` (default `.`),
+`fetch-depth` (default `1`) and `timeout-minutes` (default 30) are optional.
+The job is named after `name`, or the task when that's empty, so its check
+context is `<caller job id> / <name>`. Call it once per job, such as a `check`
+and a `test` job.
+
+<!-- markdownlint-disable MD013 -->
+
+```yaml
+jobs:
+  smoke:
+    uses: timmo001/workflows/.github/workflows/run-mise-task.yml@<sha> # master
+    with:
+      name: CLI smoke check
+      task: build
+      smoke-test: bun dist/index.js --help
+```
+
+<!-- markdownlint-enable MD013 -->
+
+`check-docs.yml` checks a docs site whose pages are partly generated, such as
+a command or MCP tool reference. It runs `generate-task` (default `docs:gen`),
+fails if that changed or added files under `generated-paths` (one per line;
+empty checks the whole working tree), then runs `task` (default `docs:build`,
+such as `docs:check ::: docs:build`) and any `extra-checks` commands from the
+repository root. An empty `generate-task` skips the regenerate and its check.
+It checks out the full history for Blume (`fetch-depth`, default `0`). The job
+is named `Docs`.
+
+<!-- markdownlint-disable MD013 -->
+
+```yaml
+jobs:
+  docs:
+    uses: timmo001/workflows/.github/workflows/check-docs.yml@<sha> # master
+    with:
+      generated-paths: |
+        docs/src/content/docs/commands
+        docs/commands-sidebar.json
+      extra-checks: cd docs && bun run --parallel --no-exit-on-error check validate
+```
+
+<!-- markdownlint-enable MD013 -->
+
+`build-android.yml` builds an Android app for pull requests and uploads its
+APKs. Its inputs match `publish-android-release.yml`'s, so the two jobs read
+alike: `working-directory`, `mise-install-args`, `setup-command`,
+`build-command` (required), plus `apk-directory` (required), the APK folder
+uploaded as `artifact-name` (default `android-apk`). The job is named `Build`.
+
+`publish-aur.yml` can prepare its own files: set `prepare-command` to a trusted
+command that writes the final AUR files to `$AUR_PACKAGE_DIR` from the full
+git history, such as `.scripts/linux/prepare-aur.sh "$AUR_PACKAGE_DIR"`, and
+leave `artifact-name` empty. `prepare-mise: true` installs the repository's
+mise tools first. The extra job is named `Prepare AUR package`; callers that
+pass `artifact-name` skip it.
+
+## Omarchy plugins
+
+`validate-omarchy-plugin.yml` runs Omarchy's `bin/omarchy-plugin-validate`
+over `plugin-directory` (default `.`) and lints the directory's QML with
+`qmllint`, in the pinned `archlinux` image with Arch's Quickshell and Qt.
+`omarchy-repository` (default `omacom/omarchy`) and `omarchy-ref` (default
+`quattro`) choose the validator. `qmllint-args` defaults to
+`--import disable --unqualified disable`; pass `""` to lint strictly. The job
+is named `Validate plugin`.
+
+`publish-omarchy-plugin.yml` copies a plugin to its own publish repository and
+commits `Publish from <repository>@<sha>` when anything changed. Only files git
+tracks in `plugin-directory` (required) are published, so stray build output
+never is, plus the repository's `LICENSE` unless the plugin has its own. The
+directory must be flat, with no links, and the manifest's entry points must be
+among its files. Pass `publish-repository` and a `DEPLOY_KEY` or `PUSH_TOKEN`
+secret that can push to it. The `commit` output is the pushed SHA, or empty
+when nothing changed. The job is named `Publish plugin`. The
+`stage-omarchy-plugin` action does the copying and can be used on its own.
+
+<!-- markdownlint-disable MD013 -->
+
+```yaml
+jobs:
+  validate:
+    uses: timmo001/workflows/.github/workflows/validate-omarchy-plugin.yml@<sha> # master
+    with:
+      plugin-directory: omarchy-plugin
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    uses: timmo001/workflows/.github/workflows/publish-omarchy-plugin.yml@<sha> # master
+    with:
+      plugin-directory: omarchy-plugin
+      publish-repository: timmo001/omarchy-notes
+    secrets:
+      DEPLOY_KEY: ${{ secrets.OMARCHY_PLUGIN_DEPLOY_KEY }}
+```
+
+<!-- markdownlint-enable MD013 -->
+
+## Container images for several targets
+
+`build-container-image.yml` builds one image per call. A Dockerfile with
+several published targets, such as a server image and a Home Assistant app
+image, calls it once per target with its own `image` and `target`. Digest
+artifacts are keyed by image, so the calls don't clash.
