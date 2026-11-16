@@ -13,7 +13,7 @@
         "@effect/tsgo": "0.69.0",
         "@effect/vitest": "4.1.4",
         "@oxlint/plugins": "1.93.0",
-        "@timmo001/oxlint-rules": "0.6.5",
+        "@timmo001/oxlint-rules": "0.7.1",
         "@types/bun": "1.4.4",
         "oxlint": "1.93.0",
         "oxlint-tsgolint": "7.0.2007",
@@ -160,7 +160,7 @@
 
     "@timmo001/effect-gh": ["@timmo001/effect-gh@0.13.2", "", { "dependencies": { "graphql": "17.1.0" }, "peerDependencies": { "effect": "^4.1.0" } }, "sha512-XY74QhpC/h1Lwte/qpgycbrzscQR2TUABmUp+jDK7aTFSV8vBC50mPQxsCmbCGhdCOBbtGFWZzEe3JNvOOsOOg=="],
 
-    "@timmo001/oxlint-rules": ["@timmo001/oxlint-rules@0.6.5", "", { "peerDependencies": { "@oxlint/plugins": "^1.91.0", "oxlint": "^1.91.0" }, "bin": { "oxlint-rules": "dist/cli.js" } }, "sha512-BFDZ+yFyzT0jQA3A5Cgb533e5BwJBS4wWG4Z7JNQ+yjyZJspzssMLRRdoFk1bx7g1mWWvSFgl920vmtTXJJGZQ=="],
+    "@timmo001/oxlint-rules": ["@timmo001/oxlint-rules@0.7.1", "", { "peerDependencies": { "@oxlint/plugins": "^1.91.0", "oxlint": "^1.91.0" }, "bin": { "oxlint-rules": "dist/cli.js" } }, "sha512-d4ZmZ03tWs4l0AKhrDWOaKayLC56HH0EtmhFb2GGMD1kOxN7Nkzo3p1wSNJFpJ06O9rj8TF7VJThYdpmTprxLg=="],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.5", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA=="],
 
