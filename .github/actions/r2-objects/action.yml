@@ -1,0 +1,49 @@
+---
+name: R2 objects
+description: Sync, copy or remove Cloudflare R2 objects with the aws CLI on the runner
+inputs:
+  command:
+    description: sync, cp or rm, run as aws s3 <command>
+    required: true
+  direction:
+    description: up copies local-path to remote-path; down copies remote-path to local-path (sync and cp)
+    required: false
+    default: up
+  local-path:
+    description: Local file or directory (sync and cp)
+    required: false
+  remote-path:
+    description: Object key, or a prefix ending in / for a directory, inside the bucket; empty is the bucket root
+    required: false
+    default: ""
+  recursive:
+    description: Copy or remove every object under remote-path (cp and rm; sync always is)
+    required: false
+    default: "false"
+  delete:
+    description: Delete destination files that aren't in the source (sync)
+    required: false
+    default: "false"
+  filters:
+    description: >-
+      One "include <pattern>" or "exclude <pattern>" per line, passed to aws in order, so later lines win, such as
+      "exclude *" then "include *.apk"
+    required: false
+  cache-control:
+    description: Cache-Control header for uploaded objects (direction up)
+    required: false
+  account-id:
+    description: Cloudflare account ID, which sets the R2 endpoint
+    required: true
+  access-key-id:
+    description: R2 API token access key ID
+    required: true
+  secret-access-key:
+    description: R2 API token secret access key
+    required: true
+  bucket:
+    description: R2 bucket name
+    required: true
+runs:
+  using: node24
+  main: dist/index.js

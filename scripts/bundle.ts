@@ -16,6 +16,9 @@ const actions = [
   "validate-agent-skills",
   "validate-json",
   "arch-source-deployment",
+  "smoke-check",
+  "r2-objects",
+  "cloudflare-purge-cache",
 ] as const;
 
 type Outcome = "written" | "current" | "stale";

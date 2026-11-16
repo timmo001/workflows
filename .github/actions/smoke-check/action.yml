@@ -1,0 +1,20 @@
+---
+name: Smoke check
+description: Check that URLs return the expected HTTP status, retrying until a time limit
+inputs:
+  checks:
+    description: >-
+      One "<url> <status>" pair per line, such as "https://example.com 200"; redirects aren't followed, and blank
+      lines and # comments are skipped
+    required: true
+  timeout-seconds:
+    description: Seconds every check together keeps retrying before failing
+    required: false
+    default: "120"
+  interval-seconds:
+    description: Seconds between attempts at one check
+    required: false
+    default: "5"
+runs:
+  using: node24
+  main: dist/index.js

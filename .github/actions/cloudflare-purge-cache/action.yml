@@ -1,0 +1,16 @@
+---
+name: Cloudflare purge cache
+description: Purge URLs from a Cloudflare zone's cache, in batches of 30
+inputs:
+  zone-id:
+    description: Cloudflare zone ID
+    required: true
+  api-token:
+    description: Cloudflare API token with Zone > Cache Purge on the zone
+    required: true
+  files:
+    description: "One absolute URL per line; blank lines and # comments are skipped"
+    required: true
+runs:
+  using: node24
+  main: dist/index.js
