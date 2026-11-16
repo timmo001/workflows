@@ -1,0 +1,78 @@
+---
+name: Run mise task
+
+# Checks out the caller's repository, installs its mise tools and runs one or
+# more of its mise tasks, such as a check, test or build job. The tasks stay
+# the one place that says what the job does. Callers own the triggers and the
+# concurrency.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      task:
+        description: >-
+          Trusted mise tasks to run, as words after mise run, such as build or "check ::: test" to run several in
+          parallel
+        required: true
+        type: string
+      name:
+        description: "Job name, which sets the check context <caller job id> / <name>; empty uses the task"
+        required: false
+        type: string
+        default: ""
+      smoke-test:
+        description: "Trusted multi-line shell commands run after the task; empty skips them"
+        required: false
+        type: string
+        default: ""
+      install-args:
+        description: "Tools mise installs, as mise-action's install_args; empty installs every tool in the config"
+        required: false
+        type: string
+        default: ""
+      working-directory:
+        description: "Directory, relative to the workspace, the tasks and smoke test run in"
+        required: false
+        type: string
+        default: "."
+      fetch-depth:
+        description: "Commits to check out; 0 fetches the full history"
+        required: false
+        type: number
+        default: 1
+      timeout-minutes:
+        description: "Minutes before the job is cancelled"
+        required: false
+        type: number
+        default: 30
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: ${{ inputs.name || inputs.task }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Check out with mise
+        uses: $/.github/actions/checkout-mise
+        with:
+          fetch-depth: ${{ inputs.fetch-depth }}
+          install-args: ${{ inputs.install-args }}
+          working-directory: ${{ inputs.working-directory }}
+      - name: Run task
+        env:
+          TASK: ${{ inputs.task }}
+        run: |
+          read -ra words <<< "$TASK"
+          mise run "${words[@]}"
+      - name: Smoke test
+        if: inputs.smoke-test != ''
+        env:
+          SMOKE_TEST: ${{ inputs.smoke-test }}
+        run: bash -euo pipefail -c "$SMOKE_TEST"
