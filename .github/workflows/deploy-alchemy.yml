@@ -43,10 +43,12 @@ on:
         type: string
         default: ""
       smoke-check-seconds:
-        description: "Seconds the smoke check retries before failing, as new custom domains can return 500s for a minute"
+        description: >-
+          Seconds the smoke check retries before failing, as a new custom domain can take minutes to resolve and serve
+          its certificate
         required: false
         type: number
-        default: 120
+        default: 300
       env:
         description: >-
           Plain values the stack reads at deploy time, such as Worker vars, one NAME=value per line; blank lines and #

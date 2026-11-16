@@ -1,7 +1,8 @@
-import { Effect, Layer } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { NodeHttpClient } from "@effect/platform-node";
+import { Effect } from "effect";
 import { ActionInputs } from "../../action/ActionInputs.js";
 import { ActionRuntime } from "../../action/ActionRuntime.js";
+import { publicLookup } from "./PublicLookup.js";
 import { Inputs, run } from "./workflow.js";
 
 const program = Effect.gen(function* () {
@@ -14,12 +15,12 @@ const program = Effect.gen(function* () {
   yield* run(inputs);
 });
 
-// Each check expects the first response, so redirects aren't followed
-const httpLayer = FetchHttpClient.layer.pipe(
-  Layer.provide(
-    Layer.succeed(FetchHttpClient.RequestInit, { redirect: "manual" }),
-  ),
-);
+// Undici doesn't follow redirects, as each check expects the first response.
+// Hostnames resolve through public resolvers on every connection, so a new
+// domain's NXDOMAIN cached by the runner doesn't outlast its first deploy.
+const httpLayer = NodeHttpClient.layerUndiciOptions({
+  connect: { lookup: publicLookup },
+});
 
 ActionRuntime.runAction(
   program.pipe(Effect.provide(httpLayer)),

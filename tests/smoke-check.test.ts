@@ -2,7 +2,102 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Exit, Fiber, Layer } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { TestClock } from "effect/testing";
+import {
+  lookupThrough,
+  resolveAddresses,
+  type Resolve,
+} from "../src/actions/smoke-check/PublicLookup.js";
 import { parseChecks, run } from "../src/actions/smoke-check/workflow.js";
+
+const dnsError = (code: string) =>
+  Object.assign(new Error(`query ${code}`), { code });
+
+const fakeResolver = (
+  v4: string[] | string,
+  v6: string[] | string,
+): Resolve & { readonly asked: string[] } => {
+  const asked: string[] = [];
+
+  const answer = (family: string, value: string[] | string) => () => {
+    asked.push(family);
+
+    return Array.isArray(value)
+      ? Promise.resolve(value)
+      : Promise.reject(dnsError(value));
+  };
+
+  return { asked, resolve4: answer("A", v4), resolve6: answer("AAAA", v6) };
+};
+
+describe("smoke-check public lookup", () => {
+  it("returns IPv4 addresses before IPv6", async () => {
+    expect(
+      await resolveAddresses(
+        fakeResolver(["192.0.2.1"], ["2001:db8::1"]),
+        "example.com",
+        0,
+      ),
+    ).toEqual([
+      { address: "192.0.2.1", family: 4 },
+      { address: "2001:db8::1", family: 6 },
+    ]);
+  });
+
+  it("asks only for the family net.connect wants", async () => {
+    const resolver = fakeResolver(["192.0.2.1"], ["2001:db8::1"]);
+
+    await resolveAddresses(resolver, "example.com", 4);
+
+    expect(resolver.asked).toEqual(["A"]);
+  });
+
+  it("treats NXDOMAIN as no address yet, and unreachable resolvers apart", async () => {
+    expect(
+      await resolveAddresses(
+        fakeResolver("ENOTFOUND", "ENODATA"),
+        "new.example.com",
+        0,
+      ),
+    ).toEqual([]);
+
+    expect(
+      await resolveAddresses(
+        fakeResolver("ETIMEOUT", "ECONNREFUSED"),
+        "example.com",
+        0,
+      ),
+    ).toBe("unreachable");
+  });
+
+  it("fails the connection with ENOTFOUND while the name has no address", async () => {
+    const lookup = lookupThrough(() => fakeResolver("ENOTFOUND", "ENODATA"));
+
+    const code = await new Promise((resolve) =>
+      lookup("new.example.com", { all: true }, (error) => resolve(error?.code)),
+    );
+
+    expect(code).toBe("ENOTFOUND");
+  });
+
+  it("answers in the shape net.connect asked for", async () => {
+    const lookup = lookupThrough(() => fakeResolver(["192.0.2.1"], []));
+
+    const single = await new Promise((resolve) =>
+      lookup("example.com", {}, (_error, address, family) =>
+        resolve([address, family]),
+      ),
+    );
+
+    const all = await new Promise((resolve) =>
+      lookup("example.com", { all: true }, (_error, addresses) =>
+        resolve(addresses),
+      ),
+    );
+
+    expect(single).toEqual(["192.0.2.1", 4]);
+    expect(all).toEqual([{ address: "192.0.2.1", family: 4 }]);
+  });
+});
 
 const fakeClient = (statuses: number[]) => {
   const requests: string[] = [];

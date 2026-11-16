@@ -1,4 +1,4 @@
-import { Clock, Effect, Schedule, Schema } from "effect";
+import { Clock, Effect, Predicate, Schedule, Schema } from "effect";
 import { HttpClient } from "effect/http";
 import { Annotations } from "../../action/Annotations.js";
 
@@ -64,11 +64,25 @@ export const parseChecks = Effect.fn("SmokeCheck.parseChecks")(function* (
   return checks;
 });
 
+/** The error's message and, for a transport error, what caused it, such as a DNS lookup that found nothing. */
+export const describeFailure = (error: Error) => {
+  const cause = Predicate.hasProperty(error, "reason")
+    ? Predicate.hasProperty(error.reason, "cause")
+      ? error.reason.cause
+      : undefined
+    : undefined;
+
+  return cause instanceof Error
+    ? `${error.message}: ${cause.message}`
+    : error.message;
+};
+
 const attempt = Effect.fn("SmokeCheck.attempt")(function* (check: Check) {
   const response = yield* HttpClient.get(check.url).pipe(
     Effect.timeout("10 seconds"),
     Effect.mapError(
-      (error) => new Miss({ received: `no response (${error.message})` }),
+      (error) =>
+        new Miss({ received: `no response (${describeFailure(error)})` }),
     ),
   );
 
