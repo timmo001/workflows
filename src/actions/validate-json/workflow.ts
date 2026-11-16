@@ -15,15 +15,15 @@ const Json = Schema.String.pipe(
   Schema.decodeTo(Schema.Unknown, SchemaTransformation.fromJsonString()),
 );
 
-export type ValidationResult =
-  | { readonly _tag: "Valid"; readonly file: string }
-  | {
-      readonly _tag: "Invalid";
-      readonly file: string;
-      readonly message: string;
-      readonly line?: number | undefined;
-      readonly column?: number | undefined;
-    };
+export type ValidationResult = Data.TaggedEnum<{
+  Valid: { readonly file: string };
+  Invalid: {
+    readonly file: string;
+    readonly message: string;
+    readonly line?: number | undefined;
+    readonly column?: number | undefined;
+  };
+}>;
 
 const ValidationResult = Data.taggedEnum<ValidationResult>();
 

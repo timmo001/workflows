@@ -9,10 +9,11 @@ export const Inputs = Schema.Struct({
 
 export interface Inputs extends Schema.Schema.Type<typeof Inputs> {}
 
-export type ValidationResult =
-  | { readonly _tag: "Valid"; readonly skillDirectory: string }
-  | { readonly _tag: "MissingSkillFile"; readonly skillDirectory: string }
-  | { readonly _tag: "SkillsRefFailure"; readonly skillDirectory: string };
+export type ValidationResult = Data.TaggedEnum<{
+  Valid: { readonly skillDirectory: string };
+  MissingSkillFile: { readonly skillDirectory: string };
+  SkillsRefFailure: { readonly skillDirectory: string };
+}>;
 
 const ValidationResult = Data.taggedEnum<ValidationResult>();
 
