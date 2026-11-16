@@ -163,14 +163,35 @@ jobs:
           "$RUNNER_TEMP/fdroidserver/bin/pip" install --quiet "fdroidserver==$FDROIDSERVER_VERSION"
           echo "$RUNNER_TEMP/fdroidserver/bin" >> "$GITHUB_PATH"
 
+      - name: Download the F-Droid repository
+        if: steps.r2.outputs.publish == 'true'
+        uses: $/.github/actions/r2-objects
+        with:
+          command: sync
+          direction: down
+          local-path: ${{ runner.temp }}/fdroid/repo/
+          remote-path: repo/
+          account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ secrets.R2_BUCKET }}
+
+      - name: Download the F-Droid metadata
+        if: steps.r2.outputs.publish == 'true'
+        uses: $/.github/actions/r2-objects
+        with:
+          command: sync
+          direction: down
+          local-path: ${{ runner.temp }}/fdroid/metadata/
+          remote-path: metadata/
+          account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ secrets.R2_BUCKET }}
+
       - name: Update the F-Droid repository
         if: steps.r2.outputs.publish == 'true'
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
           FDROID_DIRECTORY: ${{ inputs.fdroid-directory }}
         run: |
           # fdroid runs apksigner outside the app's directory, where mise's shim
@@ -183,17 +204,52 @@ jobs:
           export PATH="$build_tools:$PATH"
           dir="$RUNNER_TEMP/fdroid"
           mkdir -p "$dir/repo" "$dir/metadata"
-          aws s3 sync "s3://$R2_BUCKET/repo/" "$dir/repo/" --endpoint-url "$R2_ENDPOINT" --no-progress
-          aws s3 sync "s3://$R2_BUCKET/metadata/" "$dir/metadata/" --endpoint-url "$R2_ENDPOINT" --no-progress
           cp -r "$FDROID_DIRECTORY/." "$dir/"
           cp "$RUNNER_TEMP/$APK" "$dir/repo/"
           cd "$dir"
           chmod 600 config.yml
           fdroid update --pretty
-          aws s3 sync repo/ "s3://$R2_BUCKET/repo/" --endpoint-url "$R2_ENDPOINT" --no-progress \
-            --exclude '*' --include '*.apk' \
-            --cache-control "public, max-age=31536000, immutable"
-          aws s3 sync repo/ "s3://$R2_BUCKET/repo/" --endpoint-url "$R2_ENDPOINT" --no-progress \
-            --exclude '*.apk' \
-            --cache-control "public, max-age=60, must-revalidate"
-          aws s3 sync metadata/ "s3://$R2_BUCKET/metadata/" --endpoint-url "$R2_ENDPOINT" --no-progress
+
+      # APKs never change once published; the index and listing do
+      - name: Upload the APKs
+        if: steps.r2.outputs.publish == 'true'
+        uses: $/.github/actions/r2-objects
+        with:
+          command: sync
+          local-path: ${{ runner.temp }}/fdroid/repo/
+          remote-path: repo/
+          filters: |
+            exclude *
+            include *.apk
+          cache-control: public, max-age=31536000, immutable
+          account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ secrets.R2_BUCKET }}
+
+      - name: Upload the F-Droid index
+        if: steps.r2.outputs.publish == 'true'
+        uses: $/.github/actions/r2-objects
+        with:
+          command: sync
+          local-path: ${{ runner.temp }}/fdroid/repo/
+          remote-path: repo/
+          filters: |
+            exclude *.apk
+          cache-control: public, max-age=60, must-revalidate
+          account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ secrets.R2_BUCKET }}
+
+      - name: Upload the F-Droid metadata
+        if: steps.r2.outputs.publish == 'true'
+        uses: $/.github/actions/r2-objects
+        with:
+          command: sync
+          local-path: ${{ runner.temp }}/fdroid/metadata/
+          remote-path: metadata/
+          account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ secrets.R2_BUCKET }}
