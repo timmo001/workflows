@@ -14,6 +14,12 @@ inputs:
     description: Directory, relative to the workspace, whose mise config is installed
     required: false
     default: "."
+  locked:
+    description: >-
+      "true" installs with mise install --locked when the repository has a mise lock file, which fails for a tool
+      the lock has no full entry for; "false" installs without it
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -22,8 +28,29 @@ runs:
       with:
         persist-credentials: false
         fetch-depth: ${{ inputs.fetch-depth }}
+    # mise-action adds --locked whenever it finds a lock file, so an unlocked
+    # install runs mise install itself, with its own cache of mise's tools
+    - name: Restore mise tools
+      if: inputs.locked != 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.local/share/mise
+        key: >-
+          checkout-mise-${{ runner.os }}-${{ runner.arch }}-${{ inputs.working-directory }}-${{ inputs.install-args }}-${{
+          hashFiles('**/mise.toml', '**/.mise.toml', '**/mise.*.toml', '**/mise.lock', '**/.tool-versions') }}
     - name: Set up mise
       uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
       with:
+        install: ${{ inputs.locked == 'true' }}
+        cache: ${{ inputs.locked == 'true' }}
         install_args: ${{ inputs.install-args }}
         working_directory: ${{ inputs.working-directory }}
+    - name: Install mise tools
+      if: inputs.locked != 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INSTALL_ARGS: ${{ inputs.install-args }}
+      run: |
+        read -ra args <<< "$INSTALL_ARGS"
+        mise install "${args[@]}"

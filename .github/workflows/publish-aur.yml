@@ -66,13 +66,16 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out source
+        if: ${{ !inputs.prepare-mise }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Set up mise
+      - name: Check out with mise
         if: inputs.prepare-mise
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        uses: $/.github/actions/checkout-mise
+        with:
+          fetch-depth: 0
       - name: Prepare package files
         env:
           AUR_PACKAGE_DIR: ${{ runner.temp }}/aur-package

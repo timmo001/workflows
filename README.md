@@ -302,9 +302,10 @@ secrets:
 
 `smoke-check` takes `<url> <expected status>` pairs, one per line, checked
 after the deploy by the `smoke-check` action. Each is retried every 5 seconds
-until it matches or `smoke-check-seconds` (default 120) runs out, as a new
-custom domain can return 500s for a minute after its first deploy. Redirects
-aren't followed, so a redirect Worker can be checked for its `301`.
+until it matches or `smoke-check-seconds` (default 300) runs out, as a new
+custom domain can take minutes to resolve and serve its certificate after its
+first deploy. Redirects aren't followed, so a redirect Worker can be checked
+for its `301`.
 
 The caller keeps the triggers, path filters and concurrency. Deploys should
 queue rather than cancel, so a stack update never stops halfway: use one
@@ -371,8 +372,12 @@ stack, such as a package repository on R2. Each is called as
 `smoke-check` checks that URLs return an expected status, retrying until a
 shared time limit. `checks` takes one `<url> <status>` pair per line;
 `timeout-seconds` (default 120) and `interval-seconds` (default 5) set the
-retries. Redirects aren't followed. `Jtalk/url-health-check-action` only
-checks for success, so it can't expect a `301` or a `404`.
+retries. Redirects aren't followed. Each attempt looks the hostname up through
+public resolvers (1.1.1.1 and 8.8.8.8), as the runner's own resolver caches a
+new domain's earlier NXDOMAIN for longer than the check runs; it falls back to
+the system lookup only when those can't be reached.
+`Jtalk/url-health-check-action` only checks for success, so it can't expect a
+`301` or a `404`.
 
 `r2-objects` runs `aws s3 sync`, `cp` or `rm` (`command`) against an R2 bucket
 with the aws CLI the runner image ships, so sync keeps aws's own comparison
@@ -413,8 +418,14 @@ call is small enough to own rather than hand a zone token to.
 `checkout-mise` is a composite action that checks out the caller's repository
 without persisting credentials (`fetch-depth`, default `1`) and installs its
 mise tools (`install-args`, default every tool) from `working-directory`
-(default `.`). `deploy-alchemy.yml`, `run-mise-task.yml`, `check-docs.yml` and
-`build-android.yml` use it, and so will the Alchemy placeholders.
+(default `.`). It installs without `--locked` by default (`locked`, default
+`"false"`), because mise-action adds `--locked` whenever it finds a mise lock
+file, and a locked install fails for a tool the lock has no full entry for,
+such as `pipx:yamllint` on a Python PyYAML has no wheels for. Unlocked, it runs
+`mise install` itself and caches mise's tools with `actions/cache`.
+`deploy-alchemy.yml`, `run-mise-task.yml`, `check-docs.yml`,
+`build-android.yml` and `publish-aur.yml`'s `prepare-mise` use it, and so will
+the Alchemy placeholders.
 
 ## mise project jobs
 
