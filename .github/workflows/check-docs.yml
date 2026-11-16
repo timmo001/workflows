@@ -1,0 +1,103 @@
+---
+name: Check docs
+
+# Regenerates a docs site's generated pages, such as a command or MCP tool
+# reference, fails if they differ from what's committed, then builds or checks
+# the site with the caller's mise tasks. Callers own the triggers, path filters
+# and concurrency.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      generate-task:
+        description: "Trusted mise task that regenerates the generated docs; empty skips regenerating and the check"
+        required: false
+        type: string
+        default: docs:gen
+      generated-paths:
+        description: >-
+          Paths the generated docs live in, one per line, checked for changed or new files after generate-task; empty
+          checks the whole working tree
+        required: false
+        type: string
+        default: ""
+      task:
+        description: >-
+          Trusted mise tasks that build or check the site, as words after mise run, such as docs:build or
+          "docs:check ::: docs:build"
+        required: false
+        type: string
+        default: docs:build
+      extra-checks:
+        description: >-
+          Trusted multi-line shell commands run after the task from the repository root, such as
+          "cd docs && bun run check"; empty skips them
+        required: false
+        type: string
+        default: ""
+      install-args:
+        description: "Tools mise installs, as mise-action's install_args; empty installs every tool in the config"
+        required: false
+        type: string
+        default: ""
+      fetch-depth:
+        description: "Commits to check out; 0 fetches the full history, which Blume needs for last-modified dates"
+        required: false
+        type: number
+        default: 0
+      timeout-minutes:
+        description: "Minutes before the job is cancelled"
+        required: false
+        type: number
+        default: 20
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Check out with mise
+        uses: $/.github/actions/checkout-mise
+        with:
+          fetch-depth: ${{ inputs.fetch-depth }}
+          install-args: ${{ inputs.install-args }}
+      - name: Regenerate docs
+        if: inputs.generate-task != ''
+        env:
+          TASK: ${{ inputs.generate-task }}
+        run: mise run "$TASK"
+      - name: Check the generated docs are committed
+        if: inputs.generate-task != ''
+        env:
+          GENERATE_TASK: ${{ inputs.generate-task }}
+          GENERATED_PATHS: ${{ inputs.generated-paths }}
+        run: |
+          paths=()
+          while read -r path; do
+            [ -n "$path" ] && paths+=("$path")
+          done <<< "$GENERATED_PATHS"
+          # porcelain also lists new files, which git diff misses
+          changes=$(git status --porcelain -- "${paths[@]}")
+          if [ -n "$changes" ]; then
+            echo "$changes"
+            git diff -- "${paths[@]}"
+            echo "::error title=Generated docs are out of date::Run mise run $GENERATE_TASK and commit the result"
+            exit 1
+          fi
+      - name: Build and check docs
+        if: inputs.task != ''
+        env:
+          TASK: ${{ inputs.task }}
+        run: |
+          read -ra words <<< "$TASK"
+          mise run "${words[@]}"
+      - name: Extra checks
+        if: inputs.extra-checks != ''
+        env:
+          EXTRA_CHECKS: ${{ inputs.extra-checks }}
+        run: bash -euo pipefail -c "$EXTRA_CHECKS"
