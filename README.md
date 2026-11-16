@@ -73,7 +73,8 @@ hooks {
 
 Pin `npm:markdownlint-cli2`, `yamllint`, `actionlint` and `shellcheck` in the
 repository's `mise.toml`. The Oxlint step runs `bunx oxlint`, so it uses the
-repository's own Oxlint version. Install hk's hooks once per machine with
+repository's own Oxlint version, and passes when a push only touches files its
+config ignores. Install hk's hooks once per machine with
 `hk install --global --mise`.
 
 ## Scope

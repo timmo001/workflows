@@ -20,9 +20,10 @@ local oxlintConfigs = List(
 
 local lint = new Mapping<String, Step> {
   // The repository's own pinned Oxlint and config, without the builtin's
-  // --deny-warnings, matching the plain `oxlint` lint scripts.
+  // --deny-warnings, matching the plain `oxlint` lint scripts. A push that
+  // only touches files the config ignores leaves nothing to lint, which passes.
   ["oxlint"] = (Builtins.ox_lint) {
-    check = "bunx oxlint {{files}}"
+    check = "bunx oxlint --no-error-on-unmatched-pattern {{files}}"
     step_condition = "exec_ok('ls \(oxlintConfigs.join(" ")) 2>/dev/null | grep -q .')"
   }
   ["markdownlint"] {
