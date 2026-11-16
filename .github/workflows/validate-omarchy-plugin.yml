@@ -1,0 +1,79 @@
+---
+name: Validate Omarchy plugin
+
+# Checks an Omarchy shell plugin with Omarchy's own validator and lints its QML
+# with Arch's Quickshell and Qt, in the pinned archlinux image. Callers own the
+# triggers and the concurrency.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      plugin-directory:
+        description: "Directory with the plugin's manifest.json, relative to the repository root"
+        required: false
+        type: string
+        default: "."
+      omarchy-repository:
+        description: "Omarchy repository whose bin/omarchy-plugin-validate checks the plugin"
+        required: false
+        type: string
+        default: omacom/omarchy
+      omarchy-ref:
+        description: "Omarchy branch or tag to validate against"
+        required: false
+        type: string
+        default: quattro
+      qmllint-args:
+        description: "Extra qmllint arguments, split on spaces; empty lints strictly"
+        required: false
+        type: string
+        default: --import disable --unqualified disable
+      timeout-minutes:
+        description: "Minutes before the job is cancelled"
+        required: false
+        type: number
+        default: 15
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    container: archlinux:latest@sha256:d4594bb2300cba11f41c2f27923eb56f63d9988909c402f9c95517d1e362c899
+    steps:
+      - name: Install validation tools
+        run: |
+          pacman -Sy --noconfirm --needed archlinux-keyring
+          pacman -Su --noconfirm --needed git jq quickshell qt6-declarative
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out Omarchy
+        env:
+          OMARCHY_REPOSITORY: ${{ inputs.omarchy-repository }}
+          OMARCHY_REF: ${{ inputs.omarchy-ref }}
+        run: |
+          git clone --depth 1 --branch "$OMARCHY_REF" "https://github.com/$OMARCHY_REPOSITORY.git" "$RUNNER_TEMP/omarchy"
+      - name: Validate manifest
+        env:
+          PLUGIN_DIRECTORY: ${{ inputs.plugin-directory }}
+        run: |
+          OMARCHY_PATH="$RUNNER_TEMP/omarchy" "$RUNNER_TEMP/omarchy/bin/omarchy-plugin-validate" "$PLUGIN_DIRECTORY"
+      - name: Lint QML
+        env:
+          PLUGIN_DIRECTORY: ${{ inputs.plugin-directory }}
+          QMLLINT_ARGS: ${{ inputs.qmllint-args }}
+        run: |
+          export PATH="/usr/lib/qt6/bin:$PATH"
+          read -ra args <<< "$QMLLINT_ARGS"
+          mapfile -t qml_files < <(find "$PLUGIN_DIRECTORY" -maxdepth 1 -name '*.qml' -type f -print | sort)
+          if [ "${#qml_files[@]}" -eq 0 ]; then
+            echo "::error title=No QML::No .qml files in $PLUGIN_DIRECTORY"
+            exit 1
+          fi
+          qmllint -I /usr/lib/qt6/qml "${args[@]}" "${qml_files[@]}"

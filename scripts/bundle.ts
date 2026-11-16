@@ -19,6 +19,7 @@ const actions = [
   "smoke-check",
   "r2-objects",
   "cloudflare-purge-cache",
+  "stage-omarchy-plugin",
 ] as const;
 
 type Outcome = "written" | "current" | "stale";

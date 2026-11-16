@@ -1,0 +1,97 @@
+---
+name: Publish Omarchy plugin
+
+# Copies an Omarchy shell plugin to its own publish repository, so it can be
+# installed from there, and commits when anything changed. Only files git
+# tracks in the plugin directory are published, plus the licence. Call it
+# after validate-omarchy-plugin.yml with needs:, and keep the branch check in
+# the caller's if:.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      plugin-directory:
+        description: "Flat directory with the plugin's manifest.json, relative to the repository root, such as omarchy-plugin"
+        required: true
+        type: string
+      publish-repository:
+        description: "Repository the plugin is published to, as owner/name, such as timmo001/omarchy-notes"
+        required: true
+        type: string
+      license:
+        description: "Licence file published as LICENSE, unless the plugin directory has its own"
+        required: false
+        type: string
+        default: LICENSE
+      timeout-minutes:
+        description: "Minutes before the job is cancelled"
+        required: false
+        type: number
+        default: 10
+    secrets:
+      DEPLOY_KEY:
+        description: "SSH deploy key with write access to publish-repository; pass this or PUSH_TOKEN"
+        required: false
+      PUSH_TOKEN:
+        description: "Token with Contents write on publish-repository; pass this or DEPLOY_KEY"
+        required: false
+    outputs:
+      commit:
+        description: "SHA of the commit pushed to publish-repository; empty when it was already current"
+        value: ${{ jobs.publish.outputs.commit }}
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    outputs:
+      commit: ${{ steps.commit.outputs.commit }}
+    steps:
+      - name: Check for a credential
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ] && [ -z "$PUSH_TOKEN" ]; then
+            echo "::error title=No credential::Pass DEPLOY_KEY or PUSH_TOKEN so the plugin can be pushed"
+            exit 1
+          fi
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out the publish repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.publish-repository }}
+          path: _omarchy-publish
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+          token: ${{ secrets.PUSH_TOKEN || github.token }}
+      - name: Stage plugin files
+        uses: $/.github/actions/stage-omarchy-plugin
+        with:
+          plugin-directory: ${{ inputs.plugin-directory }}
+          publish-directory: _omarchy-publish
+          license: ${{ inputs.license }}
+      - name: Commit and push
+        id: commit
+        working-directory: _omarchy-publish
+        env:
+          SOURCE: ${{ github.event.repository.name }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The published plugin is already current"
+            exit 0
+          fi
+          git commit -m "Publish from $SOURCE@${SOURCE_SHA:0:8}"
+          git push
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

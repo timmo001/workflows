@@ -1,0 +1,21 @@
+---
+name: Stage Omarchy plugin
+description: >-
+  Replace a publish checkout's files with the Omarchy plugin files git tracks, plus the licence, ready to commit
+inputs:
+  plugin-directory:
+    description: Flat directory with the plugin's manifest.json, relative to the workspace
+    required: true
+  publish-directory:
+    description: Git checkout of the publish repository; everything but .git is replaced
+    required: true
+  license:
+    description: Licence file published as LICENSE, unless the plugin directory has its own
+    required: false
+    default: LICENSE
+outputs:
+  files:
+    description: The published file names, one per line
+runs:
+  using: node24
+  main: dist/index.js
