@@ -1,0 +1,24 @@
+---
+name: Check out with mise
+description: Check out the caller's repository and install its mise tools
+inputs:
+  fetch-depth:
+    description: Commits to check out; 0 fetches the full history
+    required: false
+    default: "1"
+  install-args:
+    description: Tools mise installs, as mise-action's install_args; empty installs every tool in the config
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Check out source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+        fetch-depth: ${{ inputs.fetch-depth }}
+    - name: Set up mise
+      uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+      with:
+        install_args: ${{ inputs.install-args }}
