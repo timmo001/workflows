@@ -161,6 +161,38 @@ var addBackEdge = () => {
   backEdges++;
 };
 
+// node_modules/effect/dist/internal/record.js
+function ownEnumerableKeys(self) {
+  const keys = Object.keys(self);
+  for (const key of Object.getOwnPropertySymbols(self)) {
+    if (Object.prototype.propertyIsEnumerable.call(self, key)) {
+      keys.push(key);
+    }
+  }
+  return keys;
+}
+function assignProperty(self, key, value) {
+  if (key === "__proto__") {
+    Object.defineProperty(self, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  } else {
+    self[key] = value;
+  }
+}
+function assignProperties(self, source) {
+  if (!Object.hasOwn(source, "__proto__")) {
+    Object.assign(self, source);
+    return;
+  }
+  for (const key of ownEnumerableKeys(source)) {
+    assignProperty(self, key, source[key]);
+  }
+}
+
 // node_modules/effect/dist/Predicate.js
 function isString(input) {
   return typeof input === "string";
@@ -792,31 +824,6 @@ var pickInternalCall = () => {
 };
 var internalCall = /* @__PURE__ */ pickInternalCall();
 
-// node_modules/effect/dist/internal/record.js
-function assignProperty(self, key, value) {
-  if (key === "__proto__") {
-    Object.defineProperty(self, key, {
-      value,
-      writable: true,
-      enumerable: true,
-      configurable: true
-    });
-  } else {
-    self[key] = value;
-  }
-}
-function assignProperties(self, source) {
-  if (!Object.hasOwn(source, "__proto__")) {
-    Object.assign(self, source);
-    return;
-  }
-  for (const key of Reflect.ownKeys(source)) {
-    if (Object.prototype.propertyIsEnumerable.call(source, key)) {
-      assignProperty(self, key, source[key]);
-    }
-  }
-}
-
 // node_modules/effect/dist/internal/core.js
 var EffectTypeId = `~effect/Effect`;
 var ExitTypeId = `~effect/Exit`;
@@ -853,11 +860,11 @@ var PipeInspectableProto = {
 };
 var StructuralProto = {
   [symbol]() {
-    return structureKeys(this, Object.keys(this));
+    return structureKeys(this, ownEnumerableKeys(this));
   },
   [symbol2](that) {
-    const selfKeys = Object.keys(this);
-    if (selfKeys.length !== Object.keys(that).length)
+    const selfKeys = ownEnumerableKeys(this);
+    if (selfKeys.length !== ownEnumerableKeys(that).length)
       return false;
     for (const key of selfKeys) {
       if (!Object.prototype.propertyIsEnumerable.call(that, key) || !equals(this[key], that[key])) {
@@ -1331,7 +1338,7 @@ var SuccessProto = /* @__PURE__ */ Object.assign(/* @__PURE__ */ Object.create(C
     return {
       _id: "Result",
       _tag: this._tag,
-      value: toJson(this.success)
+      success: toJson(this.success)
     };
   }
 });
@@ -2647,6 +2654,7 @@ class FiberImpl {
     }
     const interruptChildren = fiberMiddleware.interruptChildren && fiberMiddleware.interruptChildren(this);
     if (interruptChildren !== undefined) {
+      this.interruptible = false;
       return this.evaluate(flatMap2(interruptChildren, () => exit));
     }
     this._exit = exit;
@@ -3227,7 +3235,7 @@ var raceAllFirst = (all, options) => withFiber((parent) => {
       if (done)
         break;
       const index = i++;
-      const fiber = forkUnsafe(parent, effect, true, true, false);
+      const fiber = new FiberImpl(parent.context);
       fibers.add(fiber);
       fiber.addObserver((exit) => {
         fibers.delete(fiber);
@@ -3243,6 +3251,12 @@ var raceAllFirst = (all, options) => withFiber((parent) => {
           });
         }
       });
+      if (done)
+        fiber.interruptUnsafe(parent.id, fiberStackAnnotations(parent));
+      else
+        fiber.evaluate(effect);
+      if (done)
+        break;
     }
   });
 });
@@ -3713,10 +3727,13 @@ var uninterruptibleMask = (f) => withFiber((fiber) => {
 var all = (arg, options) => {
   if (isIterable(arg)) {
     return options?.mode === "result" ? forEach(arg, result, options) : forEach(arg, identity, options);
-  } else if (options?.discard) {
-    return options.mode === "result" ? forEach(Object.values(arg), result, options) : forEach(Object.values(arg), identity, options);
   }
-  return suspend(() => map3(forEach(Object.entries(arg), ([key, effect]) => map3(options?.mode === "result" ? result(effect) : effect, (value) => [key, value]), {
+  const fields = arg;
+  if (options?.discard) {
+    const effects = ownEnumerableKeys(fields).map((key) => fields[key]);
+    return options.mode === "result" ? forEach(effects, result, options) : forEach(effects, identity, options);
+  }
+  return suspend(() => map3(forEach(ownEnumerableKeys(fields).map((key) => [key, fields[key]]), ([key, effect]) => map3(options?.mode === "result" ? result(effect) : effect, (value) => [key, value]), {
     concurrency: options?.concurrency
   }), Object.fromEntries));
 };
@@ -4633,6 +4650,11 @@ var mergeAll2 = (...layers) => fromBuildMemo((memoMap, scope) => mergeAllEffect(
 var provideWith = (self, that, f) => fromBuildMemo((memoMap, scope) => flatMap2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope) : that.build(memoMap, scope), (context) => self.build(memoMap, scope).pipe(provideContext(context), map3((merged) => f(merged, context)))));
 var provide2 = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, identity));
 var provideMerge = /* @__PURE__ */ dual(2, (self, that) => provideWith(self, that, (self, that) => merge(that, self)));
+
+// node_modules/effect/dist/String.js
+var String3 = globalThis.String;
+var loneSurrogate = /[\uD800-\uDFFF]/u;
+var isWellFormed = (self) => self.isWellFormed?.() ?? !loneSurrogate.test(self);
 
 // node_modules/effect/dist/Pull.js
 var catchDone = /* @__PURE__ */ dual(2, (effect, f) => catchCauseFilter(effect, filterDoneLeftover, (l) => f(l)));
@@ -6099,7 +6121,7 @@ var releaseCapacity = (self) => {
     return isDoneCause(self.state.exit.cause);
   } else if (self.state.offers.size === 0) {
     if (self.state._tag === "Closing" && self.messages.length === 0) {
-      finalize(self, self.state.exit);
+      finalize(self, self.state.exit, true);
       return isDoneCause(self.state.exit.cause);
     }
     return false;
@@ -6129,7 +6151,7 @@ var releaseCapacity = (self) => {
   }
   return false;
 };
-var finalize = (self, exit) => {
+var finalize = (self, exit, deferNotify = false) => {
   if (self.state._tag === "Done") {
     return;
   }
@@ -6138,14 +6160,22 @@ var finalize = (self, exit) => {
     _tag: "Done",
     exit
   };
-  for (const taker of openState.takers) {
-    taker.resume(exit);
-  }
-  openState.takers.clear();
-  for (const awaiter of openState.awaiters) {
-    awaiter(exit);
-  }
-  openState.awaiters.clear();
+  if (openState.takers.size === 0 && openState.awaiters.size === 0)
+    return;
+  const notify = () => {
+    for (const taker of openState.takers) {
+      taker.resume(exit);
+    }
+    openState.takers.clear();
+    for (const awaiter of openState.awaiters) {
+      awaiter(exit);
+    }
+    openState.awaiters.clear();
+  };
+  if (deferNotify)
+    self.dispatcher.scheduleTask(notify, 0);
+  else
+    notify();
 };
 
 // node_modules/effect/dist/Channel.js
@@ -7146,9 +7176,6 @@ function transformEffect(f) {
     transform: f
   });
 }
-function String3() {
-  return transform(globalThis.String);
-}
 function Number3() {
   return transform(globalThis.Number);
 }
@@ -7174,8 +7201,13 @@ function stringifyJson(options) {
     }, input, parseOptions)
   }));
 }
+function encodeWithWellFormedString(encode) {
+  return transformEffect((input, options) => typeof input === "string" && !isWellFormed(input) ? fail7(new InvalidValue({
+    expected: "a well-formed Unicode string"
+  }, input, options)) : succeed6(encode(input)));
+}
 function encodeBase64() {
-  return transform(encode);
+  return encodeWithWellFormedString(encode);
 }
 function decodeBase64() {
   return transformEffect((input, options) => mapErrorEager2(fromResult2(decode(input)), () => new InvalidValue({
@@ -7227,7 +7259,7 @@ var passthrough_2 = /* @__PURE__ */ new Transformation(/* @__PURE__ */ passthrou
 function passthrough2() {
   return passthrough_2;
 }
-var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ String3());
+var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number3(), /* @__PURE__ */ transform((n) => Object.is(n, -0) ? "-0" : globalThis.String(n)));
 var urlFromString = /* @__PURE__ */ transformEffect2({
   decode: (s, options) => URL.canParse(s) ? succeed6(new URL(s)) : fail7(new InvalidValue({
     expected: "a valid URL string"
@@ -7375,7 +7407,7 @@ function literalToString(ast) {
   const literalAsString = globalThis.String(ast.literal);
   return replaceEncoding(ast, [new Link(new Literal(literalAsString), new Transformation(transform(() => ast.literal), transform(() => literalAsString)))]);
 }
-var String4 = class extends ASTNodeImpl {
+var String5 = class extends ASTNodeImpl {
   _tag = "String";
   getParser() {
     return fromRefinement(this, isString);
@@ -7388,7 +7420,7 @@ var String4 = class extends ASTNodeImpl {
     return "string";
   }
 };
-var string2 = /* @__PURE__ */ new String4;
+var string2 = /* @__PURE__ */ new String5;
 var Number4 = class extends ASTNodeImpl {
   _tag = "Number";
   getParser() {
@@ -7623,10 +7655,10 @@ var Objects = class extends ASTNodeImpl {
                 coveredKeys.add(key);
             }
           }
-          const inputKeys = Reflect.ownKeys(record);
+          const inputKeys = ownEnumerableKeys(record);
           for (let i = 0;i < inputKeys.length; i++) {
             const key = inputKeys[i];
-            if (!coveredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(record, key)) {
+            if (!coveredKeys.has(key)) {
               const unexpected = new UnexpectedKey(ast, record[key], options);
               const issue = new Pointer([key], unexpected);
               if (errorsAllOption) {
@@ -7817,7 +7849,7 @@ function combineChecks(a, b) {
   return [...a, ...b];
 }
 function struct(fields, checks, annotations) {
-  return new Objects(Reflect.ownKeys(fields).map((key) => {
+  return new Objects(ownEnumerableKeys(fields).map((key) => {
     return new PropertySignature(key, fields[key].ast);
   }), [], annotations, checks);
 }
@@ -10957,7 +10989,7 @@ function Literal2(literal) {
   return out;
 }
 var Unknown2 = /* @__PURE__ */ make21(unknown);
-var String5 = /* @__PURE__ */ make21(string2);
+var String6 = /* @__PURE__ */ make21(string2);
 var Number5 = /* @__PURE__ */ make21(number2);
 function makeStruct(ast, fields) {
   return make21(ast, {
@@ -11059,8 +11091,8 @@ var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
   }),
   expected: "RegExp",
   toCodecJson: () => link3()(Struct({
-    source: String5,
-    flags: String5
+    source: String6,
+    flags: String6
   }), transformEffect2({
     decode: (e, options) => try_2({
       try: () => new globalThis.RegExp(e.source, e.flags),
@@ -11074,7 +11106,7 @@ var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
     })
   }))
 });
-var URLString = /* @__PURE__ */ String5.annotate({
+var URLString = /* @__PURE__ */ String6.annotate({
   expected: "a string that will be decoded as a URL"
 });
 var URL2 = /* @__PURE__ */ instanceOf(globalThis.URL, {
@@ -11100,9 +11132,9 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
   }),
   expected: "File",
   toCodecJson: () => link3()(Struct({
-    data: String5.check(isBase64()),
-    type: String5,
-    name: String5,
+    data: String6.check(isBase64()),
+    type: String6,
+    name: String6,
     lastModified: Int
   }), transformEffect2({
     decode: (e, options) => match2(decode(e.data), {
@@ -11143,14 +11175,14 @@ var URLSearchParams2 = /* @__PURE__ */ instanceOf(globalThis.URLSearchParams, {
     Type: `globalThis.URLSearchParams`
   }),
   expected: "URLSearchParams",
-  toCodecJson: () => link3()(String5.annotate({
+  toCodecJson: () => link3()(String6.annotate({
     expected: "a query string that will be decoded as URLSearchParams"
   }), transform2({
     decode: (e) => new globalThis.URLSearchParams(e),
     encode: (params) => params.toString()
   }))
 });
-var Base64String = /* @__PURE__ */ String5.annotate({
+var Base64String = /* @__PURE__ */ String6.annotate({
   expected: "a base64 encoded string that will be decoded as Uint8Array",
   format: "byte",
   contentEncoding: "base64"
@@ -11577,15 +11609,15 @@ var testLayer = effectContext(gen2(function* () {
 }));
 
 class ActionFailure extends TaggedError3()("ActionFailure", {
-  message: String5,
-  title: optionalKey2(String5)
+  message: String6,
+  title: optionalKey2(String6)
 }) {
 }
 // src/services/CommandExecutor.ts
 class CommandError extends TaggedError3()("CommandError", {
-  command: String5,
+  command: String6,
   exitCode: Int,
-  stderr: String5
+  stderr: String6
 }) {
 }
 var error = (command, cause) => new CommandError({ command, exitCode: -1, stderr: String(cause) });
@@ -11675,7 +11707,7 @@ var runAction = (program, layer) => {
 
 // src/actions/validate-json/workflow.ts
 import { join as join4 } from "node:path";
-var Json2 = String5.pipe(decodeTo2(Unknown2, fromJsonString()));
+var Json2 = String6.pipe(decodeTo2(Unknown2, fromJsonString()));
 var ValidationResult = taggedEnum();
 var parseLocation = (message) => {
   const match = /\(line (\d+) column (\d+)\)$/.exec(message);
