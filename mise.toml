@@ -1,5 +1,5 @@
 [tools]
-bun = "1.4.4"
+bun = "1.4.5"
 node = "26.13.1"
 pkl = "0.33.1"
 # The linters the hk pre-push hook runs, matching CI.
