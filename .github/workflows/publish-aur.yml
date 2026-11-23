@@ -130,6 +130,8 @@ jobs:
   publish-package:
     name: Publish AUR package
     needs: validate-package
+    # A skipped prepare-package would skip this too without the explicit check
+    if: ${{ !cancelled() && needs.validate-package.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
