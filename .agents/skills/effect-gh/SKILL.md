@@ -39,7 +39,8 @@ have a different transport contract.
    `PullRequest`, `Workflow`, `Cache`, `Secret`, `Variable`, `Release`,
    `Project`, `Codespace`, `Gist`, `Search`, `Skill` and `Auth`; the README
    lists them all. `Review`, `Comment` and `Discussion` add GraphQL-backed
-   operations. Select `fields` where the operation takes them. Use
+   operations. `Stack` wraps the gh-stack extension's `gh stack` commands for
+   stacked pull requests, with `Stack.exitReason` for its exit codes. Select `fields` where the operation takes them. Use
    `Graphql.query` with a data schema for other GraphQL, and `Api.json`,
    `Api.pages`, `Api.empty`, `Api.text` or `Api.headers` with a response schema
    for other REST endpoints. When a CLI command

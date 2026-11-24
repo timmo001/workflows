@@ -26,10 +26,11 @@
     },
     "effect-gh": {
       "source": "timmo001/effect-gh",
-      "ref": "7eba3b6d31615f6f47f39c66786f3a1c826daf34",
+      "ref": "a9ca545a7dc82f3fc6b0b38335492fb04e0881a4",
+      "commit": "a9ca545a7dc82f3fc6b0b38335492fb04e0881a4",
       "sourceType": "github",
       "skillPath": "skills/effect-gh/SKILL.md",
-      "computedHash": "70603446be7bb5b04efad75142134a97ddca917519865f2576e4bd4e49971f1c",
+      "computedHash": "d3b93a57e67fcc878c91d1ad45b18f22889bcb8568af86005a342b35bb1e48e7",
       "installMode": "copy"
     },
     "effect-service-design": {
