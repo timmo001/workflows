@@ -3,7 +3,7 @@ bun = "1.4.5"
 node = "26.13.1"
 pkl = "0.33.1"
 # The linters the hk pre-push hook runs, matching CI.
-uv = "0.13.9"
+uv = "0.13.10"
 # yamllint's PyYAML has no wheels for newer Pythons, and mise won't build it from source.
 python = "3.14.10"
 "pipx:yamllint" = "1.38.0"
