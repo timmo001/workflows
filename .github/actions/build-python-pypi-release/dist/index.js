@@ -119,10 +119,17 @@ function memoizeIdempotent(f) {
 
 // node_modules/effect/dist/internal/equal.js
 var errorSiteKeys = ["line", "column", "sourceURL", "originalLine", "originalColumn"];
+var ownKeys = (obj) => {
+  const names = Object.getOwnPropertyNames(obj);
+  const syms = Object.getOwnPropertySymbols(obj);
+  return syms.length > 0 ? [...names, ...syms] : names;
+};
 var getAllObjectKeys = (obj) => {
-  const keys = new Set(Reflect.ownKeys(obj));
-  if (obj.constructor === Object)
-    return keys;
+  const own = ownKeys(obj);
+  const proto = Object.getPrototypeOf(obj);
+  if (proto === Object.prototype || proto === null)
+    return own;
+  const keys = new Set(own);
   if (obj instanceof Error) {
     keys.delete("stack");
     for (const key of errorSiteKeys) {
@@ -130,26 +137,22 @@ var getAllObjectKeys = (obj) => {
         keys.delete(key);
     }
   }
-  const proto = Object.getPrototypeOf(obj);
   let current = proto;
   while (current !== null && current !== Object.prototype) {
-    const ownKeys = Reflect.ownKeys(current);
-    for (let i = 0;i < ownKeys.length; i++) {
-      keys.add(ownKeys[i]);
-    }
+    for (const key of ownKeys(current))
+      keys.add(key);
     current = Object.getPrototypeOf(current);
   }
-  if (keys.has("constructor") && typeof obj.constructor === "function" && proto === obj.constructor.prototype) {
+  if (typeof obj.constructor === "function" && proto === obj.constructor.prototype) {
     keys.delete("constructor");
   }
   return keys;
 };
 var byReferenceInstances = /* @__PURE__ */ new WeakSet;
-var viewBytes = (view) => new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-var isArrayBufferLike = (u) => u instanceof ArrayBuffer || typeof SharedArrayBuffer !== "undefined" && u instanceof SharedArrayBuffer;
-var bufferBytes = (buffer) => {
+var objectKind = (u) => Array.isArray(u) ? 5 : ArrayBuffer.isView(u) ? u instanceof DataView ? 7 : 6 : Object.getPrototypeOf(u) === Object.prototype ? 0 : u instanceof Date ? 1 : u instanceof RegExp ? 2 : u instanceof Map ? 3 : u instanceof Set ? 4 : u instanceof ArrayBuffer ? 8 : typeof SharedArrayBuffer !== "undefined" && u instanceof SharedArrayBuffer ? 9 : 0;
+var toBytes = (u, kind) => {
   try {
-    return new Uint8Array(buffer);
+    return kind === 7 ? new Uint8Array(u.buffer, u.byteOffset, u.byteLength) : new Uint8Array(u);
   } catch {
     return;
   }
@@ -160,6 +163,7 @@ var backEdges = 0;
 var addBackEdge = () => {
   backEdges++;
 };
+var hashCache = /* @__PURE__ */ new WeakMap;
 
 // node_modules/effect/dist/internal/record.js
 function ownEnumerableKeys(self) {
@@ -209,6 +213,9 @@ function isUndefined(input) {
 function isNotUndefined(input) {
   return input !== undefined;
 }
+function isNull(input) {
+  return input === null;
+}
 function isNotNull(input) {
   return input !== null;
 }
@@ -244,12 +251,14 @@ var hash = (self) => {
     case "object": {
       if (self === null) {
         break;
-      } else if (self instanceof Date) {
+      }
+      const kind = objectKind(self);
+      if (kind === 1) {
         if (Number.isNaN(self.getTime())) {
           return string("Invalid Date");
         }
         return string(self.toISOString());
-      } else if (self instanceof RegExp) {
+      } else if (kind === 2) {
         return string(self.toString());
       } else {
         if (byReferenceInstances.has(self)) {
@@ -271,16 +280,14 @@ var hash = (self) => {
             h = self[symbol]();
           } else if (typeof self === "function") {
             h = random(self);
-          } else if (isArrayBufferLike(self)) {
-            const bytes = bufferBytes(self);
-            h = bytes === undefined ? random(self) : array(bytes);
-          } else if (self instanceof DataView) {
-            h = array(viewBytes(self));
-          } else if (Array.isArray(self) || ArrayBuffer.isView(self)) {
-            h = array(self);
-          } else if (self instanceof Map) {
+          } else if (kind >= 7) {
+            const bytes = toBytes(self, kind);
+            h = bytes === undefined ? random(self) : hashIndexed(bytes);
+          } else if (kind >= 5) {
+            h = hashIndexed(self);
+          } else if (kind === 3) {
             h = hashMap(self);
-          } else if (self instanceof Set) {
+          } else if (kind === 4) {
             h = hashSet(self);
           } else {
             h = structure(self);
@@ -298,10 +305,11 @@ var hash = (self) => {
   return optimize(mix(string(String(self))));
 };
 var random = (self) => {
-  if (!randomHashCache.has(self)) {
-    randomHashCache.set(self, optimize(Math.random() * 4294967296 | 0));
+  let h = randomHashCache.get(self);
+  if (h === undefined) {
+    randomHashCache.set(self, h = optimize(Math.random() * 4294967296 | 0));
   }
-  return randomHashCache.get(self);
+  return h;
 };
 var mix = (h) => {
   h ^= h >>> 16;
@@ -351,11 +359,17 @@ var array = (arr) => {
   }
   return optimize(h);
 };
+var hashIndexed = (arr) => {
+  let h = 6151;
+  for (let i = 0;i < arr.length; i++) {
+    h = combine(h, hash(arr[i]));
+  }
+  return optimize(h);
+};
 var hashMap = /* @__PURE__ */ unordered(/* @__PURE__ */ string("Map"), ([k, v]) => combine(hash(k), hash(v)));
 var setSeed = /* @__PURE__ */ string("Set");
 var hashSet = /* @__PURE__ */ unordered(setSeed, (element) => combine(setSeed, hash(element)));
 var randomHashCache = /* @__PURE__ */ new WeakMap;
-var hashCache = /* @__PURE__ */ new WeakMap;
 var visitedObjects = /* @__PURE__ */ new WeakSet;
 
 // node_modules/effect/dist/Equal.js
@@ -367,106 +381,122 @@ function equals() {
   return compareBoth(arguments[0], arguments[1]);
 }
 function compareBoth(self, that) {
-  if (self === that)
-    return true;
   if (self == null || that == null)
-    return false;
+    return self === that;
   const selfType = typeof self;
-  if (selfType !== typeof that) {
-    return false;
+  if (selfType !== "object" && selfType !== "function") {
+    return self === that || self !== self && that !== that;
   }
-  if (selfType === "number" && self !== self && that !== that) {
+  if (self === that) {
+    if (pathLeft.length > 0 && !hashCache.has(self))
+      hash(self);
     return true;
   }
-  if (selfType !== "object" && selfType !== "function") {
-    return false;
-  }
-  if (byReferenceInstances.has(self) || byReferenceInstances.has(that)) {
+  if (selfType !== typeof that || byReferenceInstances.has(self) || byReferenceInstances.has(that)) {
     return false;
   }
   return compareObjects(self, that);
 }
 function compareObjects(self, that) {
   const depth = pathLeft.length;
-  for (let i = depth;i-- > 0; ) {
-    if (pathLeft[i] === self && pathRight[i] === that)
-      return true;
+  const prev = seen.get(self);
+  if (prev === that)
+    return true;
+  let known;
+  if (!depth || prev !== undefined) {
+    known = results.get(self);
+    const cached = known?.get(that);
+    if (cached !== undefined)
+      return cached;
   }
-  if (depth)
-    return compareOnPath(self, that);
-  let known = results.get(self);
-  if (!known)
-    results.set(self, known = new WeakMap);
-  let result = known.get(that);
-  if (result === undefined)
-    known.set(that, result = compareOnPath(self, that));
-  return result;
-}
-function compareOnPath(self, that) {
+  let revisited = false;
+  for (let i = depth;i-- > 0; ) {
+    const sameLeft = pathLeft[i] === self;
+    if (sameLeft || pathRight[i] === that) {
+      addBackEdge();
+      if (sameLeft && pathRight[i] === that)
+        return true;
+      revisited = true;
+    }
+  }
+  if (revisited && hash(self) !== hash(that))
+    return false;
+  const seenBack = backEdges;
   pathLeft.push(self);
   pathRight.push(that);
+  let result;
   try {
-    return compareStructure(self, that);
+    result = compareStructure(self, that);
   } finally {
     pathLeft.pop();
     pathRight.pop();
+    if (!depth)
+      seen.clear();
   }
+  if (seenBack !== backEdges)
+    return result && hash(self) === hash(that);
+  if (depth && prev === undefined) {
+    if (result)
+      seen.set(self, that);
+  } else {
+    if (!known)
+      results.set(self, known = new WeakMap);
+    known.set(that, result);
+  }
+  return result;
 }
 var pathLeft = [];
 var pathRight = [];
+var seen = /* @__PURE__ */ new Map;
 var results = /* @__PURE__ */ new WeakMap;
 function compareStructure(self, that) {
-  if (hash(self) !== hash(that)) {
+  const selfHash = hashCache.get(self);
+  if (selfHash !== undefined && selfHash !== (hashCache.get(that) ?? selfHash))
     return false;
-  } else if (self instanceof Date) {
-    if (!(that instanceof Date))
+  const kind = objectKind(self);
+  if (kind === 1 || kind === 2) {
+    if (objectKind(that) !== kind)
       return false;
-    const selfTime = self.getTime();
-    const thatTime = that.getTime();
-    return selfTime === thatTime || Number.isNaN(selfTime) && Number.isNaN(thatTime);
-  } else if (self instanceof RegExp) {
-    return that instanceof RegExp && self.toString() === that.toString();
+    if (kind === 2)
+      return self.toString() === that.toString();
+    if (hash(self) !== hash(that))
+      return false;
+    const a = self.getTime();
+    const b = that.getTime();
+    return a === b || a !== a && b !== b;
   }
   const bothEquals = isEqual(self);
   if (bothEquals !== isEqual(that) || typeof self === "function" && !bothEquals) {
     return false;
-  } else if (bothEquals) {
+  }
+  if ((bothEquals || isHash(self) || isHash(that)) && hash(self) !== hash(that)) {
+    return false;
+  }
+  if (bothEquals) {
     return self[symbol2](that);
-  } else if (Array.isArray(self)) {
-    if (!Array.isArray(that) || self.length !== that.length) {
-      return false;
-    }
-    return compareArrays(self, that);
-  } else if (isArrayBufferLike(self)) {
-    if (!isArrayBufferLike(that) || self instanceof ArrayBuffer !== that instanceof ArrayBuffer) {
-      return false;
-    }
-    const selfBytes = bufferBytes(self);
-    const thatBytes = bufferBytes(that);
+  }
+  if (kind !== objectKind(that)) {
+    return false;
+  }
+  if (kind >= 7) {
+    const selfBytes = toBytes(self, kind);
+    const thatBytes = toBytes(that, kind);
     return selfBytes !== undefined && thatBytes !== undefined && compareTypedArrays(selfBytes, thatBytes);
-  } else if (ArrayBuffer.isView(self)) {
-    const selfIsDataView = self instanceof DataView;
-    if (!ArrayBuffer.isView(that) || self.byteLength !== that.byteLength || selfIsDataView !== that instanceof DataView) {
-      return false;
-    }
-    if (selfIsDataView) {
-      return compareTypedArrays(viewBytes(self), viewBytes(that));
-    }
-    return compareTypedArrays(self, that);
-  } else if (self instanceof Map) {
-    if (!(that instanceof Map) || self.size !== that.size) {
-      return false;
-    }
-    return compareHashed(self, that, entryHash, equalEntries);
-  } else if (self instanceof Set) {
-    if (!(that instanceof Set) || self.size !== that.size) {
-      return false;
-    }
-    return compareHashed(self, that, hash, compareBoth);
+  } else if (kind === 5) {
+    return compareArrays(self, that);
+  } else if (kind === 6) {
+    return self.byteLength === that.byteLength && compareTypedArrays(self, that);
+  } else if (kind === 3) {
+    return self.size === that.size && compareHashed(self, that, entryHash, equalEntries);
+  } else if (kind === 4) {
+    return self.size === that.size && compareHashed(self, that, hash, compareBoth);
   }
   return compareRecords(self, that);
 }
 function compareArrays(self, that) {
+  if (self.length !== that.length) {
+    return false;
+  }
   for (let i = 0;i < self.length; i++) {
     if (!compareBoth(self[i], that[i])) {
       return false;
@@ -488,11 +518,12 @@ function compareTypedArrays(self, that) {
 function compareRecords(self, that) {
   const selfKeys = getAllObjectKeys(self);
   const thatKeys = getAllObjectKeys(that);
-  if (selfKeys.size !== thatKeys.size) {
+  const thatIsSet = thatKeys instanceof Set;
+  if ((selfKeys instanceof Set ? selfKeys.size : selfKeys.length) !== (thatIsSet ? thatKeys.size : thatKeys.length)) {
     return false;
   }
   for (const key of selfKeys) {
-    if (!thatKeys.has(key) || !compareBoth(self[key], that[key])) {
+    if (!(thatIsSet ? thatKeys.has(key) : Object.hasOwn(that, key)) || !compareBoth(self[key], that[key])) {
       return false;
     }
   }
@@ -3928,7 +3959,15 @@ var forkUnsafe = (parent, effect, immediate = false, daemon = false, uninterrupt
     child.evaluate(effect);
   } else {
     child._asyncContext = captureAsyncContext();
-    parentRuntime.currentDispatcher.scheduleTask(() => child.evaluate(effect), 0);
+    let resumed = false;
+    child.yieldWith(() => {
+      resumed = true;
+    });
+    parentRuntime.currentDispatcher.scheduleTask(() => {
+      if (resumed)
+        return;
+      child.evaluate(effect);
+    }, 0);
   }
   return child;
 };
@@ -4474,7 +4513,6 @@ var _await = (self) => callback((resume) => {
 var completeWith = /* @__PURE__ */ dual(2, (self, effect) => sync(() => doneUnsafe(self, effect)));
 var done3 = completeWith;
 var fail6 = /* @__PURE__ */ dual(2, (self, error) => done3(self, exitFail(error)));
-var isDone3 = (self) => sync(() => isDoneUnsafe(self));
 var isDoneUnsafe = (self) => self.effect !== undefined;
 var doneUnsafe = (self, effect) => {
   if (self.effect)
@@ -5330,14 +5368,39 @@ var decodeNative = (str, decodedLength, options) => {
   if (str.length < 128)
     return;
   const NativeUint8Array = Uint8Array;
-  if (typeof NativeUint8Array.fromBase64 !== "function")
-    return;
+  if (typeof NativeUint8Array.fromBase64 !== "function") {
+    const Buffer2 = getBuffer();
+    if (Buffer2 === undefined)
+      return;
+    const encoding = options?.alphabet ?? "base64";
+    const bytes = new Uint8Array(decodedLength);
+    const buffer = Buffer2.from(bytes.buffer);
+    const canonical = options !== undefined && str.endsWith("=") ? str.slice(0, str.indexOf("=")) : str;
+    return buffer.write(str, encoding) === decodedLength && buffer.toString(encoding) === canonical ? bytes : null;
+  }
   try {
     const bytes = NativeUint8Array.fromBase64(str, options);
     return bytes.length === decodedLength ? bytes : null;
   } catch {
     return null;
   }
+};
+var typedArrayPrototype = /* @__PURE__ */ Object.getPrototypeOf(Uint8Array.prototype);
+var typedArrayBuffer = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer").get;
+var typedArrayByteOffset = Object.getOwnPropertyDescriptor(typedArrayPrototype, "byteOffset").get;
+var typedArrayByteLength = Object.getOwnPropertyDescriptor(typedArrayPrototype, "byteLength").get;
+var getBuffer = () => {
+  const global = globalThis;
+  return typeof global.process?.versions?.node === "string" && typeof global.Buffer === "function" ? global.Buffer : undefined;
+};
+var encodeBuffer = (bytes, encoding) => {
+  const Buffer2 = getBuffer();
+  if (Buffer2 === undefined)
+    return;
+  const byteLength = typedArrayByteLength.call(bytes);
+  if (byteLength < 32)
+    return;
+  return Buffer2.from(typedArrayBuffer.call(bytes), typedArrayByteOffset.call(bytes), byteLength).toString(encoding);
 };
 var stripCrlf = (str) => str.indexOf(`
 `) === -1 && str.indexOf("\r") === -1 ? str : str.replace(/[\n\r]/g, "");
@@ -5401,8 +5464,13 @@ var decode = (str) => {
 var encodeBytes = (bytes) => {
   const length = bytes.length;
   const toBase64 = Uint8Array.prototype.toBase64;
-  if (length >= 32 && typeof toBase64 === "function")
-    return toBase64.call(bytes);
+  if (length >= 32) {
+    if (typeof toBase64 === "function")
+      return toBase64.call(bytes);
+    const encoded = encodeBuffer(bytes, "base64");
+    if (encoded !== undefined)
+      return encoded;
+  }
   return length < 128 ? encodeShort(bytes) : encodeLong(bytes);
 };
 var encodeShort = (bytes) => {
@@ -6925,9 +6993,6 @@ function isFinite2(annotations) {
     toJsonSchema: () => ({
       type: "number"
     }),
-    toCode: () => ({
-      runtime: "Schema.isFinite()"
-    }),
     arbitraryConstraint: {
       number: "finite"
     },
@@ -7879,9 +7944,6 @@ function isBase64(annotations) {
         flags: ""
       }]
     },
-    toCode: () => ({
-      runtime: "Schema.isBase64()"
-    }),
     ...annotations
   });
 }
@@ -7897,9 +7959,6 @@ function isInt(annotations) {
       minimum: globalThis.Number.MIN_SAFE_INTEGER,
       maximum: globalThis.Number.MAX_SAFE_INTEGER
     }),
-    toCode: () => ({
-      runtime: "Schema.isInt()"
-    }),
     arbitraryConstraint: {
       number: "integer"
     },
@@ -7912,10 +7971,6 @@ var RegExp2 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
     id: "effect/schema/RegExp",
     payload: null
   },
-  toCode: () => ({
-    runtime: `Schema.RegExp`,
-    Type: `globalThis.RegExp`
-  }),
   expected: "RegExp",
   toCodecJson: () => link()(Struct({
     source: String6,
@@ -7941,10 +7996,6 @@ var URL2 = /* @__PURE__ */ instanceOf(globalThis.URL, {
     id: "effect/schema/URL",
     payload: null
   },
-  toCode: () => ({
-    runtime: `Schema.URL`,
-    Type: `globalThis.URL`
-  }),
   expected: "URL",
   toCodecJson: () => link()(URLString, urlFromString)
 });
@@ -7953,10 +8004,6 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
     id: "effect/schema/File",
     payload: null
   },
-  toCode: () => ({
-    runtime: `Schema.File`,
-    Type: `globalThis.File`
-  }),
   expected: "File",
   toCodecJson: () => link()(Struct({
     data: String6.check(isBase64()),
@@ -7997,10 +8044,6 @@ var URLSearchParams2 = /* @__PURE__ */ instanceOf(globalThis.URLSearchParams, {
     id: "effect/schema/URLSearchParams",
     payload: null
   },
-  toCode: () => ({
-    runtime: `Schema.URLSearchParams`,
-    Type: `globalThis.URLSearchParams`
-  }),
   expected: "URLSearchParams",
   toCodecJson: () => link()(String6.annotate({
     expected: "a query string that will be decoded as URLSearchParams"
@@ -8019,10 +8062,6 @@ var Uint8Array2 = /* @__PURE__ */ instanceOf(globalThis.Uint8Array, {
     id: "effect/schema/Uint8Array",
     payload: null
   },
-  toCode: () => ({
-    runtime: `Schema.Uint8Array`,
-    Type: `globalThis.Uint8Array`
-  }),
   expected: "Uint8Array",
   toCodecJson: () => link()(Base64String, uint8ArrayFromBase64String)
 });
@@ -8266,7 +8305,9 @@ var merge2 = /* @__PURE__ */ dual((args) => isChannel(args[0]) && isChannel(args
   const runSide = (side, channel, scope) => toTransform(channel)(upstream, scope).pipe(flatMap3((pull) => pull.pipe(flatMap3((value) => offer(queue, value)), forever2)), onError2((cause) => onExitPrimitive2(doneExitFromCause(cause), (exit) => close(scope, exit)).pipe(matchCauseEffect2({
     onFailure: (cause) => onExit(side, cause),
     onSuccess: () => onExit(side, cause)
-  }))), forkIn2(forkedScope));
+  }))), forkIn2(forkedScope, {
+    startImmediately: true
+  }));
   yield* runSide("left", left, forkUnsafe2(forkedScope));
   yield* runSide("right", right, forkUnsafe2(forkedScope));
   return take2(queue);
@@ -10202,13 +10243,16 @@ var handleInputErrors = (writable) => {
   writable.once("close", () => writable.off("error", onError));
 };
 var hasExited = (childProcess) => childProcess.exitCode !== null || childProcess.signalCode !== null;
-var ownsProcessGroup = (command, childProcess) => command.options.detached !== false || !hasExited(childProcess);
+var ownsProcessGroup = (command) => globalThis.process.platform !== "win32" && command.options.detached !== false;
 var isUnsignallableProcessGroup = (error) => error?.code === "EPERM";
 var isProcessAlive = (command, childProcess) => {
+  if (childProcess.lost === true) {
+    return false;
+  }
   if (!hasExited(childProcess)) {
     return true;
   }
-  if (globalThis.process.platform === "win32" || !ownsProcessGroup(command, childProcess)) {
+  if (!ownsProcessGroup(command)) {
     return false;
   }
   try {
@@ -10227,7 +10271,8 @@ var taskkill = (childProcess, onExit = () => {}) => {
     windowsHide: true
   }, onExit);
 };
-var make23 = /* @__PURE__ */ gen2(function* () {
+var spawnDirect = (command, args, options) => NodeChildProcess.spawn(command, args, options);
+var makeWith = /* @__PURE__ */ fnUntraced2(function* (prepareSpawn) {
   const fs = yield* FileSystem;
   const path = yield* Path;
   const resolveWorkingDirectory = fnUntraced2(function* (options) {
@@ -10459,9 +10504,9 @@ var make23 = /* @__PURE__ */ gen2(function* () {
       all
     };
   };
-  const spawn2 = (command, spawnOptions) => callback2((resume) => {
+  const spawn = (spawnProcess, command, spawnOptions) => callback2((resume) => {
     const deferred = makeUnsafe2();
-    const handle = NodeChildProcess.spawn(command.command, command.args.map(unwrap5), spawnOptions);
+    const handle = spawnProcess(command.command, command.args.map(unwrap5), spawnOptions);
     handle.on("error", (error) => {
       if (command.args.some(isRedacted)) {
         Object.assign(error, {
@@ -10472,6 +10517,9 @@ var make23 = /* @__PURE__ */ gen2(function* () {
     });
     handle.on("exit", (...args) => {
       doneUnsafe(deferred, succeed4(args));
+    });
+    handle.on("lost", (error) => {
+      doneUnsafe(deferred, fail5(toPlatformError("exitCode", error, command)));
     });
     handle.on("spawn", () => {
       resume(succeed6([handle, deferred]));
@@ -10500,10 +10548,6 @@ var make23 = /* @__PURE__ */ gen2(function* () {
     });
   };
   const killProcessGroupOnExit = (childProcess, signal) => {
-    if (globalThis.process.platform === "win32") {
-      taskkill(childProcess);
-      return;
-    }
     try {
       globalThis.process.kill(-childProcess.pid, signal);
     } catch {}
@@ -10522,6 +10566,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
     const stop = () => {
       clearTimeout(timer);
       childProcess.removeListener("exit", poll);
+      childProcess.removeListener("lost", poll);
     };
     const poll = () => {
       clearTimeout(timer);
@@ -10533,11 +10578,12 @@ var make23 = /* @__PURE__ */ gen2(function* () {
       timer = setTimeout(poll, processGroupPollIntervalMillis);
     };
     childProcess.on("exit", poll);
+    childProcess.on("lost", poll);
     poll();
     return sync3(stop);
   });
   const terminateProcessGroup = fnUntraced2(function* (command, childProcess, exitSignal, options) {
-    const signalGroup = (signal) => ownsProcessGroup(command, childProcess) ? killProcessGroup(command, childProcess, signal).pipe(catch_2((error) => hasExited(childProcess) && isUnsignallableProcessGroup(error.cause) ? void_3 : killProcess(command, childProcess, signal))) : killProcess(command, childProcess, signal);
+    const signalGroup = (signal) => globalThis.process.platform === "win32" || ownsProcessGroup(command) ? killProcessGroup(command, childProcess, signal).pipe(catch_2((error) => hasExited(childProcess) && isUnsignallableProcessGroup(error.cause) ? void_3 : killProcess(command, childProcess, signal))) : killProcess(command, childProcess, signal);
     yield* signalGroup(options?.killSignal ?? "SIGTERM");
     if (isUndefined(options?.forceKillAfter)) {
       yield* _await(exitSignal);
@@ -10596,23 +10642,20 @@ var make23 = /* @__PURE__ */ gen2(function* () {
         const env = resolveEnvironment(cmd.options);
         const stdio = buildStdioArray(stdinConfig, stdoutConfig, stderrConfig, resolvedAdditionalFds);
         const releaseProcess = fnUntraced2(function* (childProcess, exitSignal) {
-          const exited = yield* isDone3(exitSignal);
-          if (exited) {
-            const [code] = yield* _await(exitSignal);
-            if (code !== 0 && isNotNull(code)) {
-              yield* ignore2(terminateProcessGroup(cmd, childProcess, exitSignal, cmd.options));
-            } else if (isReferenced && process.platform !== "win32" && cmd.options.detached !== false) {
-              yield* ignore2(terminateProcessGroup(cmd, childProcess, exitSignal, cmd.options));
-            }
+          if (childProcess.lost === true || !isReferenced) {
             return;
           }
-          if (!isReferenced) {
-            return;
+          if (isDoneUnsafe(exitSignal)) {
+            const [code] = yield* orDie2(_await(exitSignal));
+            if ((code === 0 || isNull(code)) && !ownsProcessGroup(cmd)) {
+              return;
+            }
           }
           yield* ignore2(terminateProcessGroup(cmd, childProcess, exitSignal, cmd.options));
         });
+        const spawnProcess = yield* prepareSpawn;
         const inputScope = makeUnsafe3();
-        const [childProcess, exitSignal] = yield* acquireRelease2(spawn2(cmd, buildSpawnOptions(cmd.options, {
+        const [childProcess, exitSignal] = yield* acquireRelease2(spawn(spawnProcess, cmd, buildSpawnOptions(cmd.options, {
           cwd,
           env,
           stdio
@@ -10621,9 +10664,9 @@ var make23 = /* @__PURE__ */ gen2(function* () {
           discard: true
         }));
         const pid = ProcessId(childProcess.pid);
-        if (cmd.options.detached !== false) {
+        if (ownsProcessGroup(cmd)) {
           childProcess.on("exit", (code) => {
-            if (code !== 0 && isNotNull(code)) {
+            if (isReferenced && code !== 0 && isNotNull(code)) {
               killProcessGroupOnExit(childProcess, cmd.options.killSignal ?? "SIGTERM");
             }
           });
@@ -10652,7 +10695,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
           getInputFd,
           getOutputFd
         } = yield* provide(inputScope)(setupAdditionalFds(cmd, childProcess, resolvedAdditionalFds, inputFailure));
-        const isRunning = map5(isDone3(exitSignal), (done) => !done);
+        const isRunning = suspend2(() => isDoneUnsafe(exitSignal) ? as2(_await(exitSignal), false) : succeed6(true));
         const exitCode = flatMap3(raceFirst2(_await(exitSignal), _await(inputFailure)), ([code, signal]) => {
           if (isDoneUnsafe(inputFailure)) {
             return _await(inputFailure);
@@ -10761,7 +10804,7 @@ var make23 = /* @__PURE__ */ gen2(function* () {
   });
   return make21(spawnCommand);
 });
-var layer = /* @__PURE__ */ effect(ChildProcessSpawner, make23);
+var layer = /* @__PURE__ */ effect(ChildProcessSpawner, /* @__PURE__ */ makeWith(/* @__PURE__ */ succeed6(spawnDirect)));
 var flattenCommand = (command) => {
   const commands = [];
   const pipeOptions = [];
@@ -10936,6 +10979,7 @@ var openFactory = (method) => {
   return (path, options) => pipe(acquireRelease2(options?.noFollow === true ? flatMap3(noFollowFlags(method, options.flag ?? "r"), (flags) => nodeOpen(path, flags, options.mode)) : nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie2(nodeClose(fd))), map5((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
 };
 var open2 = /* @__PURE__ */ openFactory("open");
+var isEspipe = (error) => error.reason.cause?.code === "ESPIPE";
 var negativePosition = (method) => badArgument({
   module: "FileSystem",
   method,
@@ -10960,6 +11004,7 @@ var makeFile = /* @__PURE__ */ (() => {
     fd;
     append;
     position = /* @__PURE__ */ BigInt(0);
+    sequential = false;
     constructor(fd, append) {
       this[FileTypeId] = FileTypeId;
       this.fd = fd;
@@ -10972,6 +11017,24 @@ var makeFile = /* @__PURE__ */ (() => {
     }
     get sync() {
       return nodeSync(this.fd);
+    }
+    atCursor(f) {
+      return suspend2(() => {
+        if (this.sequential) {
+          return f(null);
+        }
+        const position = this.position;
+        return catchIf2(map5(f(position), (bytes) => {
+          this.position = position + BigInt(bytes);
+          return bytes;
+        }), isEspipe, () => {
+          this.sequential = true;
+          return f(null);
+        });
+      });
+    }
+    writeOnce(method, write, buffer) {
+      return this.append ? suspend2(() => write(this.fd, buffer, undefined)) : this.atCursor((position) => position === null ? write(this.fd, buffer, undefined) : flatMap3(positionToNumber(position, method), (position) => write(this.fd, buffer, position)));
     }
     seek(offset, from) {
       return suspend2(() => {
@@ -10990,19 +11053,15 @@ var makeFile = /* @__PURE__ */ (() => {
     read(buffer, options) {
       return suspend2(() => {
         const explicit = options?.position;
-        if (explicit !== undefined) {
-          return explicit < BigInt(0) ? fail7(negativePosition("read")) : nodeRead(this.fd, {
+        if (explicit === undefined) {
+          return this.atCursor((position) => nodeRead(this.fd, {
             buffer,
-            position: explicit
-          });
+            position
+          }));
         }
-        const position = this.position;
-        return map5(nodeRead(this.fd, {
+        return explicit < BigInt(0) ? fail7(negativePosition("read")) : nodeRead(this.fd, {
           buffer,
-          position
-        }), (bytesRead) => {
-          this.position = position + BigInt(bytesRead);
-          return bytesRead;
+          position: explicit
         });
       });
     }
@@ -11017,16 +11076,13 @@ var makeFile = /* @__PURE__ */ (() => {
             return fail7(negativePosition("readAlloc"));
           }
           const buffer = Buffer.allocUnsafeSlow(size);
-          const position = explicit ?? this.position;
-          return map5(nodeReadAlloc(this.fd, {
+          const read = (position) => nodeReadAlloc(this.fd, {
             buffer,
             position
-          }), (bytesRead) => {
+          });
+          return map5(explicit === undefined ? this.atCursor(read) : read(explicit), (bytesRead) => {
             if (bytesRead === 0) {
               return none2();
-            }
-            if (explicit === undefined) {
-              this.position = position + BigInt(bytesRead);
             }
             if (bytesRead === size) {
               return some2(buffer);
@@ -11051,34 +11107,20 @@ var makeFile = /* @__PURE__ */ (() => {
       });
     }
     write(buffer) {
-      return suspend2(() => {
-        const position = this.position;
-        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "write"), (nodePosition) => map5(nodeWrite(this.fd, buffer, nodePosition), (bytesWritten) => {
-          if (!this.append) {
-            this.position = position + BigInt(bytesWritten);
-          }
-          return bytesWritten;
-        }));
-      });
+      return this.writeOnce("write", nodeWrite, buffer);
     }
     writeAllChunk(buffer) {
-      return suspend2(() => {
-        const position = this.position;
-        return flatMap3(this.append ? succeed6(undefined) : positionToNumber(position, "writeAll"), (nodePosition) => flatMap3(nodeWriteAll(this.fd, buffer, nodePosition), (bytesWritten) => {
-          if (bytesWritten === 0) {
-            return fail7(systemError({
-              module: "FileSystem",
-              method: "writeAll",
-              _tag: "WriteZero",
-              pathOrDescriptor: this.fd,
-              description: "write returned 0 bytes written"
-            }));
-          }
-          if (!this.append) {
-            this.position = position + BigInt(bytesWritten);
-          }
-          return bytesWritten < buffer.length ? this.writeAllChunk(buffer.subarray(bytesWritten)) : void_3;
-        }));
+      return flatMap3(this.writeOnce("writeAll", nodeWriteAll, buffer), (bytesWritten) => {
+        if (bytesWritten === 0) {
+          return fail7(systemError({
+            module: "FileSystem",
+            method: "writeAll",
+            _tag: "WriteZero",
+            pathOrDescriptor: this.fd,
+            description: "write returned 0 bytes written"
+          }));
+        }
+        return bytesWritten < buffer.length ? this.writeAllChunk(buffer.subarray(bytesWritten)) : void_3;
       });
     }
     writeAll(buffer) {
@@ -11325,6 +11367,13 @@ var layer4 = /* @__PURE__ */ succeed5(Path)(/* @__PURE__ */ make17({
 var layer5 = layer4;
 
 // node_modules/@effect/platform-node-shared/dist/NodeStdio.js
+var pauseStdin = /* @__PURE__ */ sync3(() => {
+  process.nextTick(() => {
+    if (process.stdin.readableFlowing === null) {
+      process.stdin.pause();
+    }
+  });
+});
 var layer6 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make19({
   args: /* @__PURE__ */ sync3(() => process.argv.slice(2)),
   stdinIsTerminal: /* @__PURE__ */ sync3(() => process.stdin.isTTY === true),
@@ -11350,7 +11399,7 @@ var layer6 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make19({
     }),
     endOnDone: options?.endOnDone ?? false
   }),
-  stdin: /* @__PURE__ */ fromReadable({
+  stdin: /* @__PURE__ */ unwrap3(/* @__PURE__ */ as2(/* @__PURE__ */ addFinalizer3(() => pauseStdin), /* @__PURE__ */ fromReadable({
     evaluate: () => process.stdin,
     onError: (cause) => systemError({
       module: "Stdio",
@@ -11359,7 +11408,7 @@ var layer6 = /* @__PURE__ */ succeed5(Stdio, /* @__PURE__ */ make19({
       cause
     }),
     closeOnDone: false
-  })
+  })))
 }));
 
 // node_modules/@effect/platform-node/dist/NodeStdio.js
@@ -11367,7 +11416,7 @@ var layer7 = layer6;
 
 // node_modules/@effect/platform-node-shared/dist/NodeTerminal.js
 import * as readline from "node:readline";
-var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
+var make23 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQuit) {
   const lines = yield* make6();
   let inputEnded = false;
   let readlineActive = false;
@@ -11511,7 +11560,7 @@ var make24 = /* @__PURE__ */ fnUntraced2(function* (shouldQuit = defaultShouldQu
     display
   });
 });
-var layer8 = /* @__PURE__ */ effect(Terminal, /* @__PURE__ */ make24(defaultShouldQuit));
+var layer8 = /* @__PURE__ */ effect(Terminal, /* @__PURE__ */ make23(defaultShouldQuit));
 function defaultShouldQuit(input) {
   const key = input.key;
   return key.name === "escape" || key.ctrl && (key.name === "c" || key.name === "d");
