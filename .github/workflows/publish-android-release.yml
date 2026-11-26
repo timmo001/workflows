@@ -68,7 +68,7 @@ permissions:
 
 env:
   # renovate: datasource=pypi depName=fdroidserver
-  FDROIDSERVER_VERSION: "2.4.5"
+  FDROIDSERVER_VERSION: "2.4.6"
 
 jobs:
   publish:
