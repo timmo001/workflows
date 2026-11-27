@@ -157,85 +157,22 @@ var toBytes = (u, kind) => {
     return;
   }
 };
-
-// node_modules/effect/dist/internal/hash.js
 var backEdges = 0;
 var addBackEdge = () => {
   backEdges++;
 };
 var hashCache = /* @__PURE__ */ new WeakMap;
+var mix = (h) => {
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  return h ^ h >>> 16;
+};
+var combine = (self, b) => mix(Math.imul(self, 2654435761) + Math.imul(b, 2246822507));
 
-// node_modules/effect/dist/internal/record.js
-function ownEnumerableKeys(self) {
-  const keys = Object.keys(self);
-  for (const key of Object.getOwnPropertySymbols(self)) {
-    if (Object.prototype.propertyIsEnumerable.call(self, key)) {
-      keys.push(key);
-    }
-  }
-  return keys;
-}
-function assignProperty(self, key, value) {
-  if (key === "__proto__") {
-    Object.defineProperty(self, key, {
-      value,
-      writable: true,
-      enumerable: true,
-      configurable: true
-    });
-  } else {
-    self[key] = value;
-  }
-}
-function assignProperties(self, source) {
-  if (!Object.hasOwn(source, "__proto__")) {
-    Object.assign(self, source);
-    return;
-  }
-  for (const key of ownEnumerableKeys(source)) {
-    assignProperty(self, key, source[key]);
-  }
-}
-
-// node_modules/effect/dist/Predicate.js
-function isString(input) {
-  return typeof input === "string";
-}
-function isNumber(input) {
-  return typeof input === "number";
-}
-function isFunction(input) {
-  return typeof input === "function";
-}
-function isUndefined(input) {
-  return input === undefined;
-}
-function isNotUndefined(input) {
-  return input !== undefined;
-}
-function isNull(input) {
-  return input === null;
-}
-function isNotNull(input) {
-  return input !== null;
-}
-function isNullish(input) {
-  return input === null || input === undefined;
-}
-function isNotNullish(input) {
-  return input != null;
-}
-function isUnknown(_) {
-  return true;
-}
-function isObjectKeyword(input) {
-  return typeof input === "object" && input !== null || isFunction(input);
-}
-var hasProperty = /* @__PURE__ */ dual(2, (self, property) => isObjectKeyword(self) && (property in self));
-var isTagged = /* @__PURE__ */ dual(2, (self, tag) => hasProperty(self, "_tag") && self["_tag"] === tag);
-function isIterable(input) {
-  return hasProperty(input, Symbol.iterator) || isString(input);
-}
+// node_modules/effect/dist/internal/predicate.js
+var hasProperty = (self, property) => (typeof self === "object" && self !== null || typeof self === "function") && (property in self);
 
 // node_modules/effect/dist/Hash.js
 var symbol = "~effect/Hash";
@@ -286,9 +223,9 @@ var hash = (self) => {
           } else if (kind >= 5) {
             h = hashIndexed(self);
           } else if (kind === 3) {
-            h = hashMap(self);
+            h = hashUnordered(mapSeed, self, hashMapEntry);
           } else if (kind === 4) {
-            h = hashSet(self);
+            h = hashUnordered(setSeed, self, hashSetElement);
           } else {
             h = structure(self);
           }
@@ -311,14 +248,7 @@ var random = (self) => {
   }
   return h;
 };
-var mix = (h) => {
-  h ^= h >>> 16;
-  h = Math.imul(h, 2246822507);
-  h ^= h >>> 13;
-  h = Math.imul(h, 3266489909);
-  return h ^ h >>> 16;
-};
-var combine = /* @__PURE__ */ dual(2, (self, b) => mix(Math.imul(self, 2654435761) + Math.imul(b, 2246822507)));
+var combine2 = /* @__PURE__ */ dual(2, combine);
 var optimize = (n) => n & 3221225471 | n >>> 1 & 1073741824;
 var isHash = (u) => hasProperty(u, symbol) && typeof u[symbol] === "function";
 var float64 = /* @__PURE__ */ new DataView(/* @__PURE__ */ new ArrayBuffer(8));
@@ -337,15 +267,9 @@ var string = (str) => {
   }
   return optimize(h);
 };
-var structureKeys = (o, keys) => {
-  let h = 12289;
-  for (const key of keys) {
-    h ^= combine(hash(key), hash(o[key]));
-  }
-  return optimize(h);
-};
+var structureKeys = (o, keys) => hashUnordered(12289, keys, (key) => combine(hash(key), hash(o[key])));
 var structure = (o) => structureKeys(o, getAllObjectKeys(o));
-var unordered = (seed, f) => (iter) => {
+var hashUnordered = (seed, iter, f) => {
   let h = seed;
   for (const element of iter) {
     h ^= f(element);
@@ -366,9 +290,10 @@ var hashIndexed = (arr) => {
   }
   return optimize(h);
 };
-var hashMap = /* @__PURE__ */ unordered(/* @__PURE__ */ string("Map"), ([k, v]) => combine(hash(k), hash(v)));
+var mapSeed = /* @__PURE__ */ string("Map");
 var setSeed = /* @__PURE__ */ string("Set");
-var hashSet = /* @__PURE__ */ unordered(setSeed, (element) => combine(setSeed, hash(element)));
+var hashMapEntry = ([k, v]) => combine(hash(k), hash(v));
+var hashSetElement = (element) => combine(setSeed, hash(element));
 var randomHashCache = /* @__PURE__ */ new WeakMap;
 var visitedObjects = /* @__PURE__ */ new WeakSet;
 
@@ -562,9 +487,81 @@ var entryHash = (entry) => hash(entry[0]);
 var equalEntries = (self, that) => compareBoth(self[0], that[0]) && compareBoth(self[1], that[1]);
 var isEqual = (u) => hasProperty(u, symbol2) && typeof u[symbol2] === "function";
 
+// node_modules/effect/dist/internal/record.js
+function ownEnumerableKeys(self) {
+  const keys = Object.keys(self);
+  for (const key of Object.getOwnPropertySymbols(self)) {
+    if (Object.prototype.propertyIsEnumerable.call(self, key)) {
+      keys.push(key);
+    }
+  }
+  return keys;
+}
+function assignProperty(self, key, value) {
+  if (key === "__proto__") {
+    Object.defineProperty(self, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  } else {
+    self[key] = value;
+  }
+}
+function assignProperties(self, source) {
+  if (!Object.hasOwn(source, "__proto__")) {
+    Object.assign(self, source);
+    return;
+  }
+  for (const key of ownEnumerableKeys(source)) {
+    assignProperty(self, key, source[key]);
+  }
+}
+
+// node_modules/effect/dist/Predicate.js
+function isString(input) {
+  return typeof input === "string";
+}
+function isNumber(input) {
+  return typeof input === "number";
+}
+function isFunction(input) {
+  return typeof input === "function";
+}
+function isUndefined(input) {
+  return input === undefined;
+}
+function isNotUndefined(input) {
+  return input !== undefined;
+}
+function isNull(input) {
+  return input === null;
+}
+function isNotNull(input) {
+  return input !== null;
+}
+function isNullish(input) {
+  return input === null || input === undefined;
+}
+function isNotNullish(input) {
+  return input != null;
+}
+function isUnknown(_) {
+  return true;
+}
+function isObjectKeyword(input) {
+  return typeof input === "object" && input !== null || isFunction(input);
+}
+var hasProperty2 = /* @__PURE__ */ dual(2, hasProperty);
+var isTagged = /* @__PURE__ */ dual(2, (self, tag) => hasProperty2(self, "_tag") && self["_tag"] === tag);
+function isIterable(input) {
+  return hasProperty2(input, Symbol.iterator) || isString(input);
+}
+
 // node_modules/effect/dist/Redactable.js
 var symbolRedactable = /* @__PURE__ */ Symbol.for("~effect/Redactable");
-var isRedactable = (u) => hasProperty(u, symbolRedactable);
+var isRedactable = (u) => hasProperty2(u, symbolRedactable);
 function redact(u) {
   if (isRedactable(u))
     return getRedacted(u);
@@ -761,7 +758,7 @@ var NodeInspectSymbol = /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")
 var toJson = (input) => {
   try {
     input = redact(input);
-    if (hasProperty(input, "toJSON") && isFunction(input["toJSON"]) && input["toJSON"].length === 0) {
+    if (hasProperty2(input, "toJSON") && isFunction(input["toJSON"]) && input["toJSON"].length === 0) {
       return input.toJSON();
     } else if (Array.isArray(input)) {
       return input.map(toJson);
@@ -910,15 +907,6 @@ var EffectProto = {
   ...PipeInspectableProto,
   [Symbol.iterator]() {
     return new SingleShotGen(this);
-  },
-  toJSON() {
-    return {
-      _id: "Effect",
-      op: this[identifier],
-      ...args in this ? {
-        args: this[args]
-      } : undefined
-    };
   }
 };
 var isEffect = (u) => hasProperty(u, EffectTypeId);
@@ -954,14 +942,25 @@ class CauseImpl {
   }
 }
 var annotationsMap = /* @__PURE__ */ new WeakMap;
+var annotateReasonMap = (reason, annotations, options) => {
+  if (annotations.size === 0)
+    return reason;
+  const overwrite = options?.overwrite === true;
+  const newAnnotations = new Map(reason.annotations);
+  for (const [key, value] of annotations) {
+    if (overwrite || !newAnnotations.has(key)) {
+      newAnnotations.set(key, value);
+    }
+  }
+  if (!overwrite && newAnnotations.size === reason.annotations.size)
+    return reason;
+  const self = Object.assign(Object.create(Object.getPrototypeOf(reason)), reason);
+  self.annotations = newAnnotations;
+  return self;
+};
 
 class ReasonBase {
-  [CauseReasonTypeId];
-  annotations;
-  _tag;
   constructor(_tag, annotations, originalError) {
-    this[CauseReasonTypeId] = CauseReasonTypeId;
-    this._tag = _tag;
     if (annotations !== constEmptyAnnotations && typeof originalError === "object" && originalError !== null && annotations.size > 0) {
       const prevAnnotations = annotationsMap.get(originalError);
       if (prevAnnotations) {
@@ -969,28 +968,15 @@ class ReasonBase {
       }
       annotationsMap.set(originalError, annotations);
     }
+    this[CauseReasonTypeId] = CauseReasonTypeId;
     this.annotations = annotations;
+    this._tag = _tag;
   }
   annotate(annotations, options) {
-    if (annotations.mapUnsafe.size === 0)
-      return this;
-    const newAnnotations = new Map(this.annotations);
-    annotations.mapUnsafe.forEach((value, key) => {
-      if (options?.overwrite !== true && newAnnotations.has(key))
-        return;
-      newAnnotations.set(key, value);
-    });
-    if (options?.overwrite !== true && newAnnotations.size === this.annotations.size)
-      return this;
-    const self = Object.assign(Object.create(Object.getPrototypeOf(this)), this);
-    self.annotations = newAnnotations;
-    return self;
+    return annotateReasonMap(this, annotations.mapUnsafe, options);
   }
   pipe() {
     return pipeArguments(this, arguments);
-  }
-  toString() {
-    return format(this);
   }
   [NodeInspectSymbol]() {
     return this.toString();
@@ -1016,7 +1002,8 @@ class Fail extends ReasonBase {
     return isFailReason(that) && equals(this.error, that.error) && equals(this.annotations, that.annotations);
   }
   [symbol]() {
-    return combine(string(this._tag))(combine(hash(this.error))(hash(this.annotations)));
+    const error = hash(this.error);
+    return combine(combine(hash(this.annotations), error), string(this._tag));
   }
 }
 var causeFromReasons = (reasons) => new CauseImpl(reasons);
@@ -1076,15 +1063,17 @@ class Die extends ReasonBase {
     return isDieReason(that) && equals(this.defect, that.defect) && equals(this.annotations, that.annotations);
   }
   [symbol]() {
-    return combine(string(this._tag))(combine(hash(this.defect))(hash(this.annotations)));
+    const defect = hash(this.defect);
+    return combine(combine(hash(this.annotations), defect), string(this._tag));
   }
 }
 var causeDie = (defect) => new CauseImpl([new Die(defect)]);
-var causeAnnotate = /* @__PURE__ */ dual((args) => isCause(args[0]), (self, annotations, options) => {
-  if (annotations.mapUnsafe.size === 0)
+var contextMaker = {};
+var causeAnnotateMap = (self, annotations, options, context) => {
+  if (annotations.size === 0)
     return self;
-  return new CauseImpl(self.reasons.map((f) => f.annotate(annotations, options)));
-});
+  return new CauseImpl(self.reasons.map((f) => f.annotate === ReasonBase.prototype.annotate ? annotateReasonMap(f, annotations, options) : f.annotate(context ?? contextMaker.makeUnsafe(annotations), options)));
+};
 var isFailReason = (self) => self._tag === "Fail";
 var isDieReason = (self) => self._tag === "Die";
 var isInterruptReason = (self) => self._tag === "Interrupt";
@@ -1093,6 +1082,15 @@ function defaultEvaluate(_fiber) {
 }
 var makePrimitiveProto = (options) => ({
   ...EffectProto,
+  toJSON() {
+    return {
+      _id: "Effect",
+      op: this[identifier],
+      ...args in this ? {
+        args: this[args]
+      } : undefined
+    };
+  },
   [identifier]: options.op,
   [evaluate]: options[evaluate] ?? defaultEvaluate,
   [contA]: options[contA],
@@ -1110,13 +1108,16 @@ var makePrimitive = (options) => {
   };
 };
 var makeExit = (options) => {
+  const opHash = string(options.op);
   const Proto = {
     [ExitTypeId]: ExitTypeId,
     _tag: options.op,
     get [options.prop]() {
       return this[args];
     },
-    ...makePrimitiveProto(options),
+    ...EffectProto,
+    [identifier]: options.op,
+    [evaluate]: options[evaluate],
     toString() {
       return `${options.op}(${format(this[args])})`;
     },
@@ -1131,7 +1132,7 @@ var makeExit = (options) => {
       return isExit(that) && that._tag === this._tag && equals(this[args], that[args]);
     },
     [symbol]() {
-      return combine(string(options.op), hash(this[args]));
+      return combine(opHash, hash(this[args]));
     }
   };
   const ExitPrimitive = function(value) {
@@ -1150,9 +1151,7 @@ var exitSucceed = /* @__PURE__ */ makeExit({
     return cont ? cont[contA](this[args], fiber, this) : fiber.yieldWith(this);
   }
 });
-var StackTraceKey = {
-  key: "effect/Cause/StackTrace"
-};
+var StackTraceKey = "effect/Cause/StackTrace";
 var InterruptorStackTrace = {
   key: "effect/Cause/InterruptorStackTrace"
 };
@@ -1163,9 +1162,7 @@ var exitFailCause = /* @__PURE__ */ makeExit({
     let cause = this[args];
     let annotated = false;
     if (fiber.cache.stackFrame) {
-      cause = causeAnnotate(cause, {
-        mapUnsafe: new Map([[StackTraceKey.key, fiber.cache.stackFrame]])
-      });
+      cause = causeAnnotateMap(cause, new Map([[StackTraceKey, fiber.cache.stackFrame]]));
       annotated = true;
     }
     let cont = fiber.getCont(contE);
@@ -1275,6 +1272,25 @@ var Prototype2 = (options) => makePrimitiveProto({
   [evaluate]: options.evaluate
 });
 
+// node_modules/effect/dist/internal/fiberCachedKeys.js
+var SchedulerKey = "effect/Scheduler";
+var MaxOpsBeforeYieldKey = "effect/Scheduler/MaxOpsBeforeYield";
+var PreventSchedulerYieldKey = "effect/Scheduler/PreventSchedulerYield";
+var TracerKey = "effect/Tracer";
+var ParentSpanKey = "effect/Tracer/ParentSpan";
+var TracerEnabledKey = "effect/References/TracerEnabled";
+var CurrentStackFrameKey = "effect/References/CurrentStackFrame";
+var CurrentLogLevelKey = "effect/References/CurrentLogLevel";
+var MinimumLogLevelKey = "effect/References/MinimumLogLevel";
+var FiberRuntimeMetricsKey = "effect/Metric/FiberRuntimeMetrics";
+var defaultMaxOpsBeforeYield = 2048;
+var defaultPreventSchedulerYield = false;
+var defaultTracerEnabled = true;
+var defaultCurrentLogLevel = "Info";
+var defaultMinimumLogLevel = "Info";
+var runtimeKeys = [SchedulerKey, TracerKey, TracerEnabledKey, ParentSpanKey, CurrentLogLevelKey, MinimumLogLevelKey, CurrentStackFrameKey, FiberRuntimeMetricsKey, MaxOpsBeforeYieldKey, PreventSchedulerYieldKey];
+var fiberCachedKeys = /* @__PURE__ */ new Set(runtimeKeys);
+
 // node_modules/effect/dist/internal/option.js
 var TypeId = "~effect/Option";
 var CommonProto = {
@@ -1293,7 +1309,7 @@ var SomeProto = /* @__PURE__ */ Object.defineProperty(/* @__PURE__ */ Object.ass
     return isOption(that) && isSome(that) && equals(this.value, that.value);
   },
   [symbol]() {
-    return combine(hash(this._tag))(hash(this.value));
+    return combine2(hash(this._tag))(hash(this.value));
   },
   toString() {
     return `some(${format(this.value)})`;
@@ -1331,7 +1347,7 @@ var NoneProto = /* @__PURE__ */ Object.assign(/* @__PURE__ */ Object.create(Comm
     };
   }
 });
-var isOption = (input) => hasProperty(input, TypeId);
+var isOption = (input) => hasProperty2(input, TypeId);
 var isNone = (fa) => fa._tag === "None";
 var isSome = (fa) => fa._tag === "Some";
 var none = /* @__PURE__ */ Object.create(NoneProto);
@@ -1360,7 +1376,7 @@ var SuccessProto = /* @__PURE__ */ Object.assign(/* @__PURE__ */ Object.create(C
     return isResult(that) && isSuccess(that) && equals(this.success, that.success);
   },
   [symbol]() {
-    return combine(hash(this._tag))(hash(this.success));
+    return combine2(hash(this._tag))(hash(this.success));
   },
   toString() {
     return `success(${format(this.success)})`;
@@ -1380,7 +1396,7 @@ var FailureProto = /* @__PURE__ */ Object.assign(/* @__PURE__ */ Object.create(C
     return isResult(that) && isFailure(that) && equals(this.failure, that.failure);
   },
   [symbol]() {
-    return combine(hash(this._tag))(hash(this.failure));
+    return combine2(hash(this._tag))(hash(this.failure));
   },
   toString() {
     return `failure(${format(this.failure)})`;
@@ -1393,7 +1409,7 @@ var FailureProto = /* @__PURE__ */ Object.assign(/* @__PURE__ */ Object.create(C
     };
   }
 });
-var isResult = (input) => hasProperty(input, TypeId2);
+var isResult = (input) => hasProperty2(input, TypeId2);
 var isFailure = (result) => result._tag === "Failure";
 var isSuccess = (result) => result._tag === "Success";
 var FailureImpl = function(failure) {
@@ -1458,20 +1474,20 @@ var Service = function() {
       self.make = options.make;
     }
     if (options?.fiberCached) {
-      cacheKeys.add(key);
+      fiberCachedKeys.add(key);
     }
     return self;
   };
   return arguments.length > 0 ? init(arguments[0], arguments[1]) : init;
 };
-var ServiceProto = {
-  [ServiceTypeId]: ServiceTypeId,
-  .../* @__PURE__ */ Prototype2({
-    label: "Service",
-    evaluate(fiber) {
-      return exitSucceed(get(fiber.context, this));
-    }
-  }),
+var ServiceProto = /* @__PURE__ */ Object.assign({
+  [ServiceTypeId]: ServiceTypeId
+}, /* @__PURE__ */ Prototype2({
+  label: "Service",
+  evaluate(fiber) {
+    return exitSucceed(get(fiber.context, this));
+  }
+}), {
   toJSON() {
     return {
       _id: "Service",
@@ -1490,13 +1506,20 @@ var ServiceProto = {
   useSync(f) {
     return withFiber((fiber) => exitSucceed(f(get(fiber.context, this))));
   }
-};
-var cacheKeys = /* @__PURE__ */ new Set;
+});
 var ReferenceTypeId = "~effect/Context/Reference";
 var TypeId3 = "~effect/Context";
 var FlattenAfterBaseHits = 8;
-var makeImpl = (cacheRoot, base, overlay, depth, maxDepth) => {
+var makeFlat = (cacheRoot, base, maxDepth) => {
   const self = Object.create(Proto);
+  self.cacheRoot = cacheRoot ?? self;
+  self.base = base;
+  self.depth = 0;
+  self.maxDepth = maxDepth;
+  return self;
+};
+var makeOverlay = (cacheRoot, base, overlay, depth, maxDepth) => {
+  const self = Object.create(OverlayProto);
   self.cacheRoot = cacheRoot ?? self;
   self.base = base;
   self.overlay = overlay;
@@ -1524,41 +1547,48 @@ var flatten = (self) => {
 var withFlat = (self, f) => {
   const map = new Map(self.mapUnsafe);
   f(map);
-  return makeImpl(undefined, map, undefined, 0, self.maxDepth);
+  return makeFlat(undefined, map, self.maxDepth);
 };
 var notFound = /* @__PURE__ */ Symbol();
 var lookup = (self, key) => {
   const impl = self;
-  for (let overlay = impl.overlay;overlay; overlay = overlay.parent) {
+  if (impl.overlay !== undefined)
+    return overlayLookup(impl, key);
+  const value = impl.base.get(key);
+  return value === undefined && !impl.base.has(key) ? notFound : value;
+};
+var overlayLookup = (self, key) => {
+  for (let overlay = self.overlay;overlay; overlay = overlay.parent) {
     if (overlay.key === key)
       return overlay.value;
   }
-  const value = impl.base.get(key);
-  if (value === undefined && !impl.base.has(key))
+  const value = self.base.get(key);
+  if (value === undefined && !self.base.has(key))
     return notFound;
-  if (impl.overlay && ++impl.baseHits >= impl.base.size && impl.baseHits >= FlattenAfterBaseHits) {
-    impl.base = flatten(impl);
-    impl.overlay = undefined;
-    impl.depth = 0;
+  if (++self.baseHits >= self.base.size && self.baseHits >= FlattenAfterBaseHits) {
+    self.base = self.mapUnsafe;
+    self.overlay = undefined;
+    self.depth = 0;
   }
   return value;
 };
 var makeUnsafe = (mapUnsafe, options) => {
   const maxDepth = options?.maxDepth;
-  return makeImpl(undefined, mapUnsafe, undefined, 0, Number.isInteger(maxDepth) && maxDepth >= 0 ? maxDepth : 8);
+  return makeFlat(undefined, mapUnsafe, Number.isInteger(maxDepth) && maxDepth >= 0 ? maxDepth : 8);
 };
+contextMaker.makeUnsafe = (mapUnsafe) => makeFlat(undefined, mapUnsafe, 8);
 var Proto = {
   get mapUnsafe() {
-    return flatten(this);
+    return this.base;
   },
   ...PipeInspectableProto,
   [TypeId3]: {
-    _Services: (_) => _
+    _Services: identity
   },
   toJSON() {
     return {
       _id: "Context",
-      services: Array.from(this.mapUnsafe).map(([key, value]) => ({
+      services: Array.from(this.mapUnsafe, ([key, value]) => ({
         key,
         value
       }))
@@ -1581,6 +1611,15 @@ var Proto = {
     return number(this.mapUnsafe.size);
   }
 };
+var OverlayProto = /* @__PURE__ */ Object.create(Proto, {
+  mapUnsafe: {
+    get() {
+      return flatten(this);
+    },
+    enumerable: true,
+    configurable: true
+  }
+});
 var hasSameCache = (self, that) => self.cacheRoot === that.cacheRoot;
 var isContext = (u) => hasProperty(u, TypeId3);
 var isReference = (u) => !!u[ReferenceTypeId];
@@ -1590,15 +1629,15 @@ var make2 = (key, service) => makeUnsafe(new Map([[key.key, service]]));
 var add = /* @__PURE__ */ dual(3, (self, key, service) => addUnsafe(self, key.key, service));
 var addUnsafe = (self, key, service) => {
   const impl = self;
-  const cacheRoot = cacheKeys.has(key) ? undefined : impl.cacheRoot;
+  const cacheRoot = fiberCachedKeys.has(key) ? undefined : impl.cacheRoot;
   if (impl.depth >= impl.maxDepth) {
     const map = new Map(impl._flat ?? impl.base);
     if (!impl._flat)
       applyOverlays(map, impl.overlay);
     map.set(key, service);
-    return makeImpl(cacheRoot, map, undefined, 0, impl.maxDepth);
+    return makeFlat(cacheRoot, map, impl.maxDepth);
   }
-  return makeImpl(cacheRoot, impl.base, {
+  return makeOverlay(cacheRoot, impl.base, {
     key,
     value: service,
     parent: impl.overlay
@@ -1625,6 +1664,10 @@ var getDefaultValue = (ref) => {
     return ref[defaultValueCacheKey];
   }
   return ref[defaultValueCacheKey] = ref.defaultValue();
+};
+var getReferenceUnsafe = (self, ref) => {
+  const value = lookup(self, ref.key);
+  return value === notFound ? getDefaultValue(ref) : value;
 };
 var serviceNotFoundError = (service) => {
   const error = new Error(`Service not found${service.key ? `: ${String(service.key)}` : ""}`);
@@ -1687,7 +1730,6 @@ var getOrThrow = /* @__PURE__ */ getOrThrowWith(identity);
 // node_modules/effect/dist/Array.js
 var Array2 = globalThis.Array;
 var fromIterable = (collection) => Array2.isArray(collection) ? collection : Array2.from(collection);
-var append = /* @__PURE__ */ dual(2, (self, last) => [...self, last]);
 var isArray = Array2.isArray;
 var isArrayNonEmpty2 = isArrayNonEmpty;
 var isReadonlyArrayNonEmpty = isArrayNonEmpty;
@@ -1963,7 +2005,7 @@ var make3 = (input) => {
   }
   return duration;
 };
-var isDuration = (u) => hasProperty(u, TypeId4);
+var isDuration = (u) => hasProperty2(u, TypeId4);
 var isFinite = (self) => self.value._tag !== "Infinity" && self.value._tag !== "NegativeInfinity";
 var zero = /* @__PURE__ */ make3(0);
 var infinity = /* @__PURE__ */ make3(Infinity);
@@ -2017,10 +2059,8 @@ var Equivalence = (self, that) => matchPair(self, that, {
 var equals2 = /* @__PURE__ */ dual(2, (self, that) => Equivalence(self, that));
 
 // node_modules/effect/dist/Scheduler.js
-var Scheduler = /* @__PURE__ */ Reference("effect/Scheduler", {
-  fiberCached: true,
-  defaultValue: () => new MixedScheduler
-});
+var defaultScheduler;
+var getDefaultScheduler = () => defaultScheduler ??= new MixedScheduler;
 var setMicrotask = (f) => {
   let cancelled = false;
   Promise.resolve().then(() => {
@@ -2124,14 +2164,6 @@ class MixedSchedulerDispatcher {
     }
   }
 }
-var MaxOpsBeforeYield = /* @__PURE__ */ Reference("effect/Scheduler/MaxOpsBeforeYield", {
-  fiberCached: true,
-  defaultValue: () => 2048
-});
-var PreventSchedulerYield = /* @__PURE__ */ Reference("effect/Scheduler/PreventSchedulerYield", {
-  fiberCached: true,
-  defaultValue: () => false
-});
 
 // node_modules/effect/dist/Data.js
 var Error3 = Error2;
@@ -2178,18 +2210,11 @@ var random32 = () => {
   const d = randomWord();
   return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15], hexCharCodes[b >>> 28], hexCharCodes[b >>> 24 & 15], hexCharCodes[b >>> 20 & 15], hexCharCodes[b >>> 16 & 15], hexCharCodes[b >>> 12 & 15], hexCharCodes[b >>> 8 & 15], hexCharCodes[b >>> 4 & 15], hexCharCodes[b & 15], hexCharCodes[c >>> 28], hexCharCodes[c >>> 24 & 15], hexCharCodes[c >>> 20 & 15], hexCharCodes[c >>> 16 & 15], hexCharCodes[c >>> 12 & 15], hexCharCodes[c >>> 8 & 15], hexCharCodes[c >>> 4 & 15], hexCharCodes[c & 15], hexCharCodes[d >>> 28], hexCharCodes[d >>> 24 & 15], hexCharCodes[d >>> 20 & 15], hexCharCodes[d >>> 16 & 15], hexCharCodes[d >>> 12 & 15], hexCharCodes[d >>> 8 & 15], hexCharCodes[d >>> 4 & 15], hexCharCodes[d & 15]);
 };
-var hexCodes = /* @__PURE__ */ new Uint8Array(256).fill(255);
-for (let i = 0;i < 16; i++) {
-  hexCodes[/* @__PURE__ */ "0123456789abcdef".charCodeAt(i)] = i;
-  hexCodes[/* @__PURE__ */ "0123456789ABCDEF".charCodeAt(i)] = i;
-}
 
 // node_modules/effect/dist/Tracer.js
-var ParentSpanKey = "effect/Tracer/ParentSpan";
+var ParentSpanKey2 = "effect/Tracer/ParentSpan";
 
-class ParentSpan extends (/* @__PURE__ */ Service()(ParentSpanKey, {
-  fiberCached: true
-})) {
+class ParentSpan extends (/* @__PURE__ */ Service()(ParentSpanKey2)) {
 }
 var make4 = (options) => options;
 var DisablePropagation = /* @__PURE__ */ Reference("effect/Tracer/DisablePropagation", {
@@ -2201,7 +2226,6 @@ var CurrentTraceLevel = /* @__PURE__ */ Reference("effect/Tracer/CurrentTraceLev
 var MinimumTraceLevel = /* @__PURE__ */ Reference("effect/Tracer/MinimumTraceLevel", {
   defaultValue: () => "All"
 });
-var TracerKey = "effect/Tracer";
 var nativeTracer = /* @__PURE__ */ make4({
   span: (options) => new NativeSpan(options)
 });
@@ -2272,17 +2296,9 @@ class NativeSpan {
   }
 }
 
-// node_modules/effect/dist/internal/metric.js
-var FiberRuntimeMetricsKey = "effect/Metric/FiberRuntimeMetrics";
-
 // node_modules/effect/dist/internal/references.js
-var CurrentStackFrame = /* @__PURE__ */ Reference("effect/References/CurrentStackFrame", {
-  fiberCached: true,
+var CurrentStackFrame = /* @__PURE__ */ Reference(CurrentStackFrameKey, {
   defaultValue: constUndefined
-});
-var TracerEnabled = /* @__PURE__ */ Reference("effect/References/TracerEnabled", {
-  fiberCached: true,
-  defaultValue: constTrue
 });
 var TracerTimingEnabled = /* @__PURE__ */ Reference("effect/References/TracerTimingEnabled", {
   defaultValue: constTrue
@@ -2295,14 +2311,6 @@ var TracerSpanLinks = /* @__PURE__ */ Reference("effect/References/TracerSpanLin
 });
 var CurrentLogAnnotations = /* @__PURE__ */ Reference("effect/References/CurrentLogAnnotations", {
   defaultValue: () => ({})
-});
-var CurrentLogLevel = /* @__PURE__ */ Reference("effect/References/CurrentLogLevel", {
-  fiberCached: true,
-  defaultValue: () => "Info"
-});
-var MinimumLogLevel = /* @__PURE__ */ Reference("effect/References/MinimumLogLevel", {
-  fiberCached: true,
-  defaultValue: () => "Info"
 });
 var UnhandledLogLevel = /* @__PURE__ */ Reference("effect/References/UnhandledLogLevel", {
   defaultValue: () => "Error"
@@ -2486,7 +2494,7 @@ var cleanErrorStack = (stack, error, annotations) => {
 `);
 };
 var addStackAnnotations = (stack, annotations) => {
-  const frame = annotations?.get(StackTraceKey.key);
+  const frame = annotations?.get(StackTraceKey);
   if (frame) {
     stack = `${stack}
 ${currentStackTrace(frame)}`;
@@ -2555,9 +2563,7 @@ var fiberVariance = {
   _A: identity,
   _E: identity
 };
-var fiberIdStore = {
-  id: 0
-};
+var nextFiberId = 0;
 var AsyncResource = /* @__PURE__ */ (() => {
   try {
     return globalThis.process?.getBuiltinModule?.("node:async_hooks")?.AsyncResource;
@@ -2571,7 +2577,7 @@ var getCurrentFiber = () => globalThis[currentFiberTypeId];
 class FiberImpl {
   constructor(context, interruptible = true) {
     this.setContext(context);
-    this.id = ++fiberIdStore.id;
+    this.id = ++nextFiberId;
     this.currentOpCount = 0;
     this.interruptible = interruptible;
     this._stack = [];
@@ -2594,18 +2600,14 @@ class FiberImpl {
     return this._dispatcher ??= this.cache.scheduler.makeDispatcher();
   }
   getRef(ref) {
-    return get(this.context, ref);
+    return getReferenceUnsafe(this.context, ref);
   }
   addObserver(cb) {
     if (this._exit) {
       cb(this._exit);
       return constVoid;
     }
-    if (this._observers === undefined) {
-      this._observers = [cb];
-    } else {
-      this._observers.push(cb);
-    }
+    (this._observers ??= []).push(cb);
     return () => this.removeObserver(cb);
   }
   removeObserver(cb) {
@@ -2622,10 +2624,10 @@ class FiberImpl {
     }
     let cause = causeInterrupt(fiberId);
     if (this.cache.stackFrame) {
-      cause = causeAnnotate(cause, make2(StackTraceKey, this.cache.stackFrame));
+      cause = causeAnnotateMap(cause, new Map([[StackTraceKey, this.cache.stackFrame]]));
     }
     if (annotations) {
-      cause = causeAnnotate(cause, annotations);
+      cause = causeAnnotateMap(cause, annotations.mapUnsafe);
     }
     this._interruptedCause = this._interruptedCause ? causeAddInterrupts(this._interruptedCause, cause) : cause;
     if (this.interruptible) {
@@ -2660,10 +2662,10 @@ class FiberImpl {
       this._asyncContext = captureAsyncContext();
       return;
     }
-    const interruptChildren = fiberMiddleware.interruptChildren && fiberMiddleware.interruptChildren(this);
+    const interruptChildren = fiberMiddleware.interruptChildren && fiberMiddleware.interruptChildren(this, exit);
     if (interruptChildren !== undefined) {
       this.interruptible = false;
-      return this.evaluate(flatMap2(interruptChildren, () => exit));
+      return this.evaluate(interruptChildren);
     }
     this._exit = exit;
     this.cache.runtimeMetrics?.recordFiberEnd(this.context, this._exit);
@@ -2809,19 +2811,20 @@ class FiberImpl {
   }
 }
 var makeFiberContextCache = (context) => {
-  const currentTracer = getOrUndefinedUnsafe(context, TracerKey);
+  const get = (key) => getOrUndefinedUnsafe(context, key);
+  const currentTracer = get(TracerKey);
   return {
-    scheduler: get(context, Scheduler),
+    scheduler: get(SchedulerKey) ?? getDefaultScheduler(),
     tracer: currentTracer,
-    tracerContext: currentTracer ? currentTracer["context"] : undefined,
-    tracerEnabled: get(context, TracerEnabled),
-    span: getOrUndefinedUnsafe(context, ParentSpanKey),
-    logLevel: get(context, CurrentLogLevel),
-    minimumLogLevel: get(context, MinimumLogLevel),
-    stackFrame: get(context, CurrentStackFrame),
-    runtimeMetrics: getOrUndefinedUnsafe(context, FiberRuntimeMetricsKey),
-    maxOpsBeforeYield: get(context, MaxOpsBeforeYield),
-    preventYield: get(context, PreventSchedulerYield)
+    tracerContext: currentTracer?.["context"],
+    tracerEnabled: get(TracerEnabledKey) ?? defaultTracerEnabled,
+    span: get(ParentSpanKey),
+    logLevel: get(CurrentLogLevelKey) ?? defaultCurrentLogLevel,
+    minimumLogLevel: get(MinimumLogLevelKey) ?? defaultMinimumLogLevel,
+    stackFrame: get(CurrentStackFrameKey),
+    runtimeMetrics: get(FiberRuntimeMetricsKey),
+    maxOpsBeforeYield: get(MaxOpsBeforeYieldKey) ?? defaultMaxOpsBeforeYield,
+    preventYield: get(PreventSchedulerYieldKey) ?? defaultPreventSchedulerYield
   };
 };
 var deferredInterruptCont = {
@@ -2843,11 +2846,11 @@ var fiberStackAnnotations = (fiber) => {
   annotations.set(InterruptorStackTrace.key, fiber.cache.stackFrame);
   return makeUnsafe(annotations);
 };
-var fiberInterruptChildren = (fiber) => {
+var fiberInterruptChildren = (fiber, exit) => {
   if (fiber._children === undefined || fiber._children.size === 0) {
     return;
   }
-  return fiberInterruptAll(fiber._children);
+  return flatMap2(fiberInterruptAll(fiber._children), () => exit);
 };
 var fiberAwait = (self) => {
   const impl = self;
@@ -3986,27 +3989,27 @@ var forkIn = /* @__PURE__ */ dual((args) => isEffect(args[0]), (self, scope, opt
   return succeed3(fiber);
 }));
 var forkScoped = /* @__PURE__ */ dual((args) => isEffect(args[0]), (self, options) => flatMap2(scope, (scope) => forkIn(self, scope, options)));
-var runForkWith = (context) => (effect, options) => {
-  const fiber = new FiberImpl(options?.scheduler ? add(context, Scheduler, options.scheduler) : context, options?.uninterruptible !== true);
+var runFiber = (context, effect, options) => {
+  const fiber = new FiberImpl(context, options?.uninterruptible !== true);
   fiber.evaluate(effect);
-  if (fiber._exit)
-    return fiber;
-  if (options?.signal) {
-    if (options.signal.aborted) {
-      fiber.interruptUnsafe();
-    } else {
-      const abort = () => fiber.interruptUnsafe();
-      options.signal.addEventListener("abort", abort, {
-        once: true
-      });
-      fiber.addObserver(() => options.signal.removeEventListener("abort", abort));
+  if (!fiber._exit) {
+    const signal = options?.signal;
+    if (signal) {
+      if (signal.aborted) {
+        fiber.interruptUnsafe();
+      } else {
+        const abort = () => fiber.interruptUnsafe();
+        signal.addEventListener("abort", abort, {
+          once: true
+        });
+        fiber.addObserver(() => signal.removeEventListener("abort", abort));
+      }
     }
-  }
-  if (options?.onFiberStart) {
-    options.onFiberStart(fiber);
+    options?.onFiberStart?.(fiber);
   }
   return fiber;
 };
+var runForkWith = (context) => (effect, options) => runFiber(options?.scheduler ? addUnsafe(context, SchedulerKey, options.scheduler) : context, effect, options);
 var fiberRunIn = /* @__PURE__ */ dual(2, (self, scope) => {
   if (self._exit) {
     return self;
@@ -4019,7 +4022,7 @@ var fiberRunIn = /* @__PURE__ */ dual(2, (self, scope) => {
   self.addObserver(() => scopeRemoveFinalizerUnsafe(scope, self));
   return self;
 });
-var runFork = /* @__PURE__ */ runForkWith(/* @__PURE__ */ empty());
+var runFork = (effect, options) => runFiber(options?.scheduler ? makeUnsafe(new Map([[SchedulerKey, options.scheduler]])) : empty(), effect, options);
 var runSyncExitWith = (context) => {
   const runFork = runForkWith(context);
   return (effect) => {
@@ -4833,7 +4836,7 @@ var emptyBucket = () => ({
   offset: 0,
   next: undefined
 });
-var append2 = (self, message) => {
+var append = (self, message) => {
   if (!self.tail) {
     self.head = self.tail = emptyBucket();
   } else if (!self.tail.mutable) {
@@ -4976,7 +4979,7 @@ var offerUnsafe = (self, message) => {
     return false;
   } else if (self.messages.length >= self.capacity) {
     if (self.capacity <= 0 && self.state.takers.size > (self.strategy === "sliding" ? 0 : self.messages.length)) {
-      append2(self.messages, message);
+      append(self.messages, message);
       if (self.strategy === "sliding") {
         takeNVoid(self.messages, self.messages.length - self.state.takers.size);
       }
@@ -4985,13 +4988,13 @@ var offerUnsafe = (self, message) => {
     } else if (self.strategy === "sliding") {
       if (self.capacity > 0) {
         take(self.messages);
-        append2(self.messages, message);
+        append(self.messages, message);
       }
       return true;
     }
     return false;
   }
-  append2(self.messages, message);
+  append(self.messages, message);
   scheduleReleaseTaker(self);
   return true;
 };
@@ -5173,14 +5176,14 @@ var releaseCapacity = (self) => {
     if (n <= 0)
       break;
     else if (entry._tag === "Single") {
-      append2(self.messages, entry.message);
+      append(self.messages, entry.message);
       self.state.offers.delete(entry);
       entry.resume(exitTrue);
     } else {
       for (;entry.offset < entry.remaining.length; entry.offset++) {
         if (n === 0)
           return false;
-        append2(self.messages, entry.remaining[entry.offset]);
+        append(self.messages, entry.remaining[entry.offset]);
         n--;
       }
       self.state.offers.delete(entry);
@@ -5553,7 +5556,7 @@ var value = (self) => {
 
 // node_modules/effect/dist/Redacted.js
 var TypeId8 = "~effect/Redacted";
-var isRedacted = (u) => hasProperty(u, TypeId8);
+var isRedacted = (u) => hasProperty2(u, TypeId8);
 var make8 = (value, options) => {
   const self = Object.create(Proto2);
   if (options?.label) {
@@ -5611,7 +5614,7 @@ var fromOptionExit = (option) => option._tag === "None" ? missingExit : succeed7
 // node_modules/effect/dist/SchemaIssue.js
 var TypeId9 = "~effect/SchemaIssue/Issue";
 function isIssue(u) {
-  return hasProperty(u, TypeId9) && u[TypeId9] === TypeId9;
+  return hasProperty2(u, TypeId9) && u[TypeId9] === TypeId9;
 }
 function hasInput(issue) {
   return Object.hasOwn(issue, "input");
@@ -5943,7 +5946,7 @@ var Transformation = class extends Class {
   }
 };
 function isTransformation(u) {
-  return hasProperty(u, TypeId10) && u[TypeId10] === TypeId10;
+  return hasProperty2(u, TypeId10) && u[TypeId10] === TypeId10;
 }
 var makeTransformation = (options) => {
   if (isTransformation(options)) {
@@ -6020,6 +6023,13 @@ class ASTNodeImpl {
     return `<${this._tag}>`;
   }
 }
+function flipChecks(ast) {
+  return ast.checks === ast.encodingChecks ? ast : copy(ast, {
+    checks: ast.encodingChecks,
+    encodingChecks: ast.checks,
+    encoding: undefined
+  });
+}
 var Declaration = class extends ASTNodeImpl {
   _tag = "Declaration";
   typeParameters;
@@ -6046,15 +6056,20 @@ var Declaration = class extends ASTNodeImpl {
       }
     };
   }
-  _rebuild(recur, checks, encodingChecks, run, encodingRun) {
-    const tps = mapOrSame(this.typeParameters, recur);
-    return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run, this.annotations, checks, undefined, this.context, encodingChecks, encodingRun);
-  }
   recur(recur) {
-    return this._rebuild(recur, this.checks, this.encodingChecks, this.run, this.encodingRun);
+    const typeParameters = mapOrSame(this.typeParameters, recur);
+    return typeParameters === this.typeParameters ? this : copy(this, {
+      typeParameters,
+      encoding: undefined
+    });
   }
   flip(recur) {
-    return this._rebuild(recur, this.encodingChecks, this.checks, this.encodingRun ?? this.run, this.run);
+    const out = flipChecks(this.recur(recur));
+    return this.run === this.encodingRun ? out : copy(out, {
+      run: this.encodingRun ?? this.run,
+      encodingRun: this.run,
+      encoding: undefined
+    });
   }
   getExpected() {
     const expected = this.annotations?.expected;
@@ -6475,7 +6490,7 @@ var Objects = class extends ASTNodeImpl {
       return succeed7(out);
     };
   }
-  _rebuild(recur, recurParameter, checks, encodingChecks) {
+  recur(recur, recurParameter = recur) {
     const props = mapOrSame(this.propertySignatures, (ps) => {
       const t = recur(ps.type);
       return t === ps.type ? ps : new PropertySignature(ps.name, t);
@@ -6485,13 +6500,14 @@ var Objects = class extends ASTNodeImpl {
       const t = recur(is.type);
       return p === is.parameter && t === is.type ? is : new IndexSignature(p, t);
     });
-    return props === this.propertySignatures && indexes === this.indexSignatures && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Objects(props, indexes, this.annotations, checks, undefined, this.context, encodingChecks);
+    return props === this.propertySignatures && indexes === this.indexSignatures ? this : copy(this, {
+      propertySignatures: props,
+      indexSignatures: indexes,
+      encoding: undefined
+    });
   }
   flip(recur) {
-    return this._rebuild(recur, recur, this.encodingChecks, this.checks);
-  }
-  recur(recur, recurParameter = recur) {
-    return this._rebuild(recur, recurParameter, this.checks, this.encodingChecks);
+    return flipChecks(this.recur(recur));
   }
   getExpected() {
     if (this.propertySignatures.length === 0 && this.indexSignatures.length === 0)
@@ -6835,15 +6851,15 @@ var Union = class extends ASTNodeImpl {
       return parseUnionCandidates(ast, parser, candidates, input, options);
     };
   }
-  _rebuild(recur, checks, encodingChecks) {
-    const types = mapOrSame(this.types, recur);
-    return types === this.types && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Union(types, this.options, this.annotations, checks, undefined, this.context, encodingChecks);
-  }
   recur(recur) {
-    return this._rebuild(recur, this.checks, this.encodingChecks);
+    const types = mapOrSame(this.types, recur);
+    return types === this.types ? this : copy(this, {
+      types,
+      encoding: undefined
+    });
   }
   flip(recur) {
-    return this._rebuild(recur, this.encodingChecks, this.checks);
+    return flipChecks(this.recur(recur));
   }
   matchPart(s, options) {
     for (const type of this.types) {
@@ -6959,6 +6975,10 @@ function formatIsMutable(isMutable) {
 function formatIsOptional(isOptional) {
   return isOptional ? "?" : "";
 }
+function memoizeThunk(thunk) {
+  let ast;
+  return () => ast ??= thunk();
+}
 var Filter2 = class extends Class {
   _tag = "Filter";
   run;
@@ -7047,10 +7067,11 @@ function isPattern(regExp, annotations) {
 }
 var bodyOwners = /* @__PURE__ */ new WeakMap;
 function copy(ast, changes) {
-  const out = Object.assign(Object.create(Object.getPrototypeOf(ast)), ast, changes);
-  if (Reflect.ownKeys(changes).every((key) => key === "context" || key === "encoding")) {
-    bodyOwners.set(out, getContextOwner(ast));
-  }
+  return Object.assign(Object.create(Object.getPrototypeOf(ast)), ast, changes);
+}
+function copyBody(ast, changes) {
+  const out = copy(ast, changes);
+  bodyOwners.set(out, getContextOwner(ast));
   return out;
 }
 function getContextOwner(ast) {
@@ -7059,14 +7080,14 @@ function getContextOwner(ast) {
     return existing;
   if (ast.encoding === undefined)
     return ast;
-  const owner = Object.assign(Object.create(Object.getPrototypeOf(ast)), ast, {
+  const owner = copy(ast, {
     encoding: undefined
   });
   bodyOwners.set(ast, owner);
   return owner;
 }
 function replaceEncoding(ast, encoding) {
-  return ast.encoding === encoding ? ast : copy(ast, {
+  return ast.encoding === encoding ? ast : copyBody(ast, {
     encoding
   });
 }
@@ -7078,7 +7099,7 @@ function replaceContext(ast, context) {
   if (owner.context === context && owner.encoding === ast.encoding) {
     return owner;
   }
-  return copy(ast, {
+  return copyBody(ast, {
     context
   });
 }
@@ -7087,8 +7108,7 @@ function getLastEncoding(ast) {
 }
 function annotate(ast, annotations) {
   if (ast.checks) {
-    const last = ast.checks[ast.checks.length - 1];
-    return replaceChecks(ast, append(ast.checks.slice(0, -1), last.annotate(annotations)));
+    return replaceChecks(ast, mapLast(ast.checks, (check) => check.annotate(annotations)));
   }
   return copy(ast, {
     annotations: {
@@ -7115,11 +7135,17 @@ function mapLink(link, f) {
   const to = f(link.to);
   return to === link.to ? link : new Link(to, link.transformation);
 }
+function mapLast(items, f) {
+  const last = items[items.length - 1];
+  const out = f(last);
+  if (last === out)
+    return items;
+  const copy = [...items];
+  copy[copy.length - 1] = out;
+  return copy;
+}
 function updateLastLink(encoding, f) {
-  const links = encoding;
-  const last = links[links.length - 1];
-  const out = mapLink(last, f);
-  return out === last ? encoding : append(encoding.slice(0, encoding.length - 1), out);
+  return mapLast(encoding, (link) => mapLink(link, f));
 }
 function applyToLastLink(f) {
   return (ast) => ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, f)) : ast;
@@ -7155,27 +7181,34 @@ function mapOrSame(as, f) {
   }
   return out ?? as;
 }
+function updateContext2(ast, optional = isOptional(ast), mutable = isMutable(ast), constructorDefault = ast.context?.constructorDefault, annotations = ast.context?.annotations) {
+  return replaceContext(ast, new Context(optional, mutable, constructorDefault, annotations));
+}
+function setContextFlag(key) {
+  const optional = key === "isOptional" ? true : undefined;
+  const mutable = key === "isMutable" ? true : undefined;
+  const set = memoizeIdempotent((ast) => last(ast.context?.[key] ? ast : updateContext2(ast, optional, mutable)));
+  const last = applyToLastLink(set);
+  return set;
+}
 function annotateKey(ast, annotations) {
-  const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, ast.context.constructorDefault, {
+  return updateContext2(ast, undefined, undefined, undefined, ast.context ? {
     ...ast.context.annotations,
     ...annotations
-  }) : new Context(false, false, undefined, annotations);
-  return replaceContext(ast, context);
+  } : annotations);
 }
-var optionalKey = /* @__PURE__ */ memoizeIdempotent((ast) => {
-  const context = ast.context ? ast.context.isOptional === false ? new Context(true, ast.context.isMutable, ast.context.constructorDefault, ast.context.annotations) : ast.context : new Context(true, false);
-  return optionalKeyLastLink(replaceContext(ast, context));
-});
-var optionalKeyLastLink = /* @__PURE__ */ applyToLastLink(optionalKey);
+var optionalKey = /* @__PURE__ */ setContextFlag("isOptional");
 function withConstructorDefault(ast, defaultValue) {
-  const context = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, defaultValue, ast.context.annotations) : new Context(false, false, defaultValue);
-  return replaceContext(ast, context);
+  return updateContext2(ast, undefined, undefined, defaultValue);
 }
 function decodeTo(from, to, transformation) {
   return appendTransformation(from, transformation, to);
 }
 function isOptional(ast) {
   return ast.context?.isOptional ?? false;
+}
+function isMutable(ast) {
+  return ast.context?.isMutable ?? false;
 }
 function isStructuralCheck(check) {
   return check.annotations?.[STRUCTURAL_ANNOTATION_KEY] === true || check._tag === "FilterGroup" && check.checks.every(isStructuralCheck);
@@ -7189,63 +7222,159 @@ function extractStructuralChecks(checks) {
   const out = checks.flatMap(extract);
   return isArrayNonEmpty2(out) ? out : undefined;
 }
-function canPreserveEncodingChecks(ast) {
-  let preserve = true;
+function everyNode(root, predicate, proven) {
+  const nodes = new Set([root]);
+  for (const ast of nodes) {
+    if (proven?.has(ast))
+      continue;
+    if (!predicate(ast))
+      return false;
+    if (!isSuspend(ast) && "recur" in ast)
+      ast.recur(visit);
+  }
+  if (proven) {
+    for (const ast of nodes) {
+      proven.add(ast);
+    }
+  }
+  return true;
   function visit(child) {
-    preserve = preserve && !child.encoding && !isSuspend(child);
-    if (preserve && "recur" in child)
-      child.recur(visit);
+    nodes.add(child);
     return child;
   }
-  if ("recur" in ast)
-    ast.recur(visit);
-  return preserve;
 }
-var toType = /* @__PURE__ */ memoizeIdempotent((ast) => {
+var preservesShape = /* @__PURE__ */ new WeakSet;
+function projectChecks(ast, checks) {
+  const structural = isArrays(ast) || isObjects(ast) || isDeclaration(ast) && ast.typeParameters.length > 0;
+  if (structural && checks.every(isStructuralCheck) || everyNode(ast, (node) => !node.encoding && !isSuspend(node), preservesShape)) {
+    return checks;
+  }
+  if (structural)
+    return extractStructuralChecks(checks);
+}
+function hasDirectionalParser(ast) {
+  return isDeclaration(ast) && ast.encodingRun !== undefined && ast.encodingRun !== ast.run;
+}
+function canReuse(root, edge) {
+  function same(ast) {
+    if (isSuspend(ast))
+      return ast.thunk === edge;
+    return !hasDirectionalParser(ast) && !(("encodingChecks" in ast) && ast.checks && projectChecks(ast, ast.checks) !== ast.checks);
+  }
+  return everyNode(root, same);
+}
+var types = /* @__PURE__ */ new WeakMap;
+var reversed = /* @__PURE__ */ new WeakMap;
+var encoded = /* @__PURE__ */ new WeakSet;
+var reprojected = /* @__PURE__ */ new WeakSet;
+var flippedFrom = /* @__PURE__ */ new WeakMap;
+var flippedThunks = /* @__PURE__ */ new WeakMap;
+var toType = (ast) => flippedFrom.has(ast) ? toFlippedType(ast) : stripEncoding(ast);
+var toFlippedType = /* @__PURE__ */ memoize((ast) => {
+  const source = flippedFrom.get(ast);
+  if (source && encoded.has(source))
+    return source;
+  const out = stripEncoding(ast);
+  if (source)
+    encoded.add(out);
+  return out;
+});
+function stripEncoding(ast) {
+  const cached = types.get(ast);
+  if (cached)
+    return cached;
+  const source = flippedFrom.get(ast);
+  const wasProjected = source && types.get(source) === source;
+  const out = source && reversed.get(source) || projectType(ast);
+  if (wasProjected)
+    reversed.set(source, out);
+  types.set(ast, out);
+  if (out !== ast)
+    types.set(out, out);
+  return out;
+}
+function projectOwner(ast, project) {
   const owner = getContextOwner(ast);
   if (owner !== ast) {
-    const type = toType(owner);
-    return type === owner && ast.encoding === undefined ? ast : replaceContext(type, ast.context);
-  }
-  const type = "recur" in ast ? ast.recur(toType) : ast;
-  if ("encodingChecks" in type && type.encodingChecks) {
-    const checks = canPreserveEncodingChecks(ast) ? type.encodingChecks : isArrays(type) || isObjects(type) || isDeclaration(type) && type.typeParameters.length > 0 ? extractStructuralChecks(type.encodingChecks) : undefined;
-    return copy(type, {
-      encodingChecks: undefined,
-      checks: combineChecks(checks, type.checks)
-    });
-  }
-  return type;
-});
-var toEncoded = /* @__PURE__ */ memoizeIdempotent((ast) => {
-  return toType(flip2(ast));
-});
-function flipEncoding(ast, encoding) {
-  const links = encoding;
-  const len = links.length;
-  const last = links[len - 1];
-  const ls = [new Link(flip2(replaceEncoding(ast, undefined)), links[0].transformation.flip())];
-  for (let i = 1;i < len; i++) {
-    ls.unshift(new Link(flip2(links[i - 1].to), links[i].transformation.flip()));
-  }
-  const to = flip2(last.to);
-  if (to.encoding) {
-    return replaceEncoding(to, [...to.encoding, ...ls]);
-  } else {
-    return replaceEncoding(to, ls);
+    const out = project(owner);
+    return out === owner && !ast.encoding ? ast : replaceContext(out, ast.context);
   }
 }
+function projectType(ast) {
+  const owned = projectOwner(ast, stripEncoding);
+  if (owned)
+    return owned;
+  if (isSuspend(ast))
+    return flippedThunks.get(ast.thunk)?.project(ast) ?? ast.recur(stripEncoding);
+  const type = "recur" in ast ? ast.recur(stripEncoding) : ast;
+  if ("encodingChecks" in type && type.encodingChecks) {
+    return copy(type, {
+      encodingChecks: undefined,
+      checks: combineChecks(projectChecks(ast, type.encodingChecks), type.checks)
+    });
+  }
+  return type === ast && hasDirectionalParser(type) && flippedFrom.has(ast) ? copy(type, {}) : type;
+}
+var toEncoded = (ast) => toType(flip2(ast));
+function flipEncoding(ast, encoding) {
+  let from = replaceEncoding(ast, undefined);
+  const reversed = encoding.map((link) => {
+    const out = new Link(flip2(from), link.transformation.flip());
+    from = link.to;
+    return out;
+  }).reverse();
+  const to = flip2(from);
+  return replaceEncoding(to, to.encoding ? [...to.encoding, ...reversed] : reversed);
+}
 var flip2 = /* @__PURE__ */ memoize((ast) => {
+  const out = flipAST(ast);
+  if (out !== ast)
+    flippedFrom.set(out, ast);
+  return out;
+});
+function flipAST(ast) {
   if (ast.encoding) {
     return flipEncoding(ast, ast.encoding);
   }
-  const owner = getContextOwner(ast);
-  if (owner !== ast) {
-    const flipped = flip2(owner);
-    return flipped === owner ? ast : replaceContext(flipped, ast.context);
+  const owned = projectOwner(ast, flip2);
+  if (owned)
+    return owned;
+  if (isSuspend(ast)) {
+    const previous = flippedThunks.get(ast.thunk);
+    if (previous)
+      return copy(ast, {
+        thunk: previous.source.thunk
+      });
+    const flipped = ast.recur(flip2);
+    flippedThunks.set(flipped.thunk, {
+      source: ast,
+      project(node) {
+        const thunk = memoizeThunk(() => reverseBody(ast.thunk(), thunk));
+        return copy(node, {
+          thunk
+        });
+      }
+    });
+    return flipped;
   }
-  return "flip" in ast ? ast.flip(flip2) : ("recur" in ast) ? ast.recur(flip2) : ast;
-});
+  return "flip" in ast ? ast.flip(flip2) : ast;
+}
+function reverseBody(body, edge) {
+  if (types.get(body) !== body)
+    return stripEncoding(flip2(body));
+  const existing = reversed.get(body);
+  if (existing)
+    return existing;
+  if (canReuse(body, edge)) {
+    reversed.set(body, body);
+    return body;
+  }
+  const out = stripEncoding(flip2(body));
+  if (reprojected.has(body) && !reversed.has(out))
+    reversed.set(out, body);
+  reprojected.add(out);
+  return out;
+}
 function fromConst(ast, value) {
   const succeed = value === 0 ? sameExit : succeed7(value);
   return (input, options) => {
@@ -7609,38 +7738,26 @@ function resolve2(ast) {
 // node_modules/effect/dist/SchemaParser.js
 function makeEffect(schema) {
   const ast = schema.ast;
-  let parser;
-  return (input, options) => {
-    return (parser ??= runWithCompiler(constructorCompiler, toType(ast)))(input, options?.disableChecks ? options?.parseOptions ? {
-      ...options.parseOptions,
-      disableChecks: true
-    } : {
-      disableChecks: true
-    } : options?.parseOptions);
-  };
+  let entry;
+  return (input, options) => constructEffect(entry ??= resolve2(toType(ast)), input, constructorParseOptions(options));
 }
 function makeOption(schema) {
   const parser = makeEffect(schema);
-  return (input, options) => {
-    const exit = runSyncExit2(parser(input, options));
-    if (isSuccess3(exit)) {
-      return some2(exit.value);
-    }
-    getSchemaIssueOrThrow(exit.cause, "Option adapter can only return none for schema issues");
-    return none2();
-  };
+  return (input, options) => exitToOption(runSyncExit2(parser(input, options)));
 }
 function make9(schema) {
   return makeConstructorSync(toType(schema.ast));
 }
 function decodeUnknownEffect(schema, options) {
   const parser = run(schema.ast);
-  return options === undefined ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
+  return withParseOptions(parser, options);
 }
-var mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
-  ...options,
-  ...overrideOptions
-} : options;
+function withParseOptions(parse, options) {
+  return options === undefined ? parse : (input, overrides) => parse(input, overrides ? {
+    ...options,
+    ...overrides
+  } : options);
+}
 var getValue = (value) => {
   if (value === missing) {
     return fail7(new InvalidValue);
@@ -7662,15 +7779,14 @@ function parserResult(result, input) {
 function runWithCompiler(compiler, ast) {
   let parser;
   return (input, options) => {
-    const result = (parser ??= compiler(ast))(input, options ?? defaultParseOptions);
-    if (isSameExit(result)) {
-      return succeed6(input);
-    }
-    if (!effectIsExit(result)) {
-      return flatMapEager2(result, getValue);
-    }
-    return result[args] === missing ? getValue(missing) : result;
+    return parserResult((parser ??= compiler(ast))(input, options ?? defaultParseOptions), input);
   };
+}
+function exitToOption(exit) {
+  if (isSuccess3(exit))
+    return some2(exit.value);
+  getSchemaIssueOrThrow(exit.cause, "Option adapter can only return none for schema issues");
+  return none2();
 }
 function runSync2(effect, message) {
   const exit = runSyncExit2(effect);
@@ -7692,14 +7808,18 @@ function makeConstructorSync(ast) {
   let entry;
   return (input, options) => constructSync(entry ??= resolve2(ast), input, options);
 }
-function constructSync(entry, input, options) {
-  const parseOptions = options?.disableChecks ? options.parseOptions ? {
+function constructorParseOptions(options) {
+  return options?.disableChecks ? {
     ...options.parseOptions,
     disableChecks: true
-  } : {
-    disableChecks: true
   } : options?.parseOptions ?? defaultParseOptions;
-  const make = entry.make;
+}
+function constructEffect(entry, input, options) {
+  return parserResult(entry.makeEffect(input, options), input);
+}
+function constructSync(entry, input, options) {
+  const parseOptions = constructorParseOptions(options);
+  const make = compilerAdaptersEnabled ? entry.make : undefined;
   if (make !== undefined && input !== missing) {
     let output;
     try {
@@ -7710,7 +7830,7 @@ function constructSync(entry, input, options) {
     if (output !== invalid3 && output !== missing)
       return output;
   }
-  return runSync2(parserResult(entry.makeEffect(input, parseOptions), input), constructorDefectMessage);
+  return runSync2(constructEffect(entry, input, parseOptions), constructorDefectMessage);
 }
 function makeClassSync(ast, input, options, construct) {
   const entry = resolve2(ast);
@@ -7728,7 +7848,6 @@ function makeClassSync(ast, input, options, construct) {
   }
 }
 var normalCompiler = (ast) => resolve2(ast).parser;
-var constructorCompiler = (ast) => resolve2(ast).makeEffect;
 
 // node_modules/effect/dist/internal/schema/make.js
 var TypeId12 = "~effect/Schema/Schema";
@@ -7796,7 +7915,7 @@ var lambda = (f) => f;
 // node_modules/effect/dist/internal/schemaError.js
 var SchemaErrorTypeId = "~effect/Schema/SchemaError";
 function isSchemaError(u) {
-  return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
+  return hasProperty2(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
 }
 
 // node_modules/effect/dist/Schema.js
@@ -7858,7 +7977,7 @@ function decodeUnknownEffect2(schema, options) {
 }
 var make11 = make10;
 function isSchema(u) {
-  return hasProperty(u, TypeId13) && u[TypeId13] === TypeId13;
+  return hasProperty2(u, TypeId13) && u[TypeId13] === TypeId13;
 }
 var optionalKey2 = /* @__PURE__ */ lambda((schema) => make11(optionalKey(schema.ast), {
   schema
@@ -8218,7 +8337,7 @@ function getClassSchemaFactory(from, identifier, annotations) {
       return memo;
     }
     const ClassTypeId = getClassTypeId(identifier);
-    const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
+    const isClassValue = (input) => input instanceof self || hasProperty2(input, ClassTypeId);
     const transformation = getClassTransformation(self);
     const to = make11(new Declaration([from.ast], () => (input, ast, options) => {
       return isClassValue(input) ? succeed6(input) : fail7(new InvalidType(ast, input, options));
@@ -8289,7 +8408,7 @@ var make12 = (value) => {
 
 // node_modules/effect/dist/Channel.js
 var TypeId15 = "~effect/Channel";
-var isChannel = (u) => hasProperty(u, TypeId15);
+var isChannel = (u) => hasProperty2(u, TypeId15);
 var ChannelProto = {
   [TypeId15]: {
     _Env: identity,
@@ -9249,7 +9368,7 @@ var SinkProto = {
     return pipeArguments(this, arguments);
   }
 };
-var isSink = (u) => hasProperty(u, TypeId18);
+var isSink = (u) => hasProperty2(u, TypeId18);
 var fromChannel2 = (channel) => fromTransform2((upstream, scope) => toTransform(channel)(upstream, scope).pipe(flatMap3(forever2({
   disableYield: true
 })), catchDone(succeed6)));
@@ -9414,7 +9533,7 @@ var get3 = get2;
 
 // node_modules/effect/dist/Stream.js
 var TypeId20 = "~effect/Stream";
-var isStream = (u) => hasProperty(u, TypeId20);
+var isStream = (u) => hasProperty2(u, TypeId20);
 var fromChannel3 = fromChannel;
 var fromPull2 = (pull) => fromChannel3(fromPull(pull));
 var transformPull2 = (self, f) => fromChannel3(fromTransform((_, scope) => flatMap3(toPullScoped(self.channel, scope), (pull) => f(pull, scope))));
@@ -10322,7 +10441,15 @@ var taskkill = (childProcess, onExit = () => {}) => {
     windowsHide: true
   }, onExit);
 };
-var spawnDirect = (command, args, options) => NodeChildProcess.spawn(command, args, options);
+var spawnDirect = (command, args, options, halfOpen) => {
+  const childProcess = NodeChildProcess.spawn(command, args, options);
+  for (const fd of halfOpen) {
+    const stream = childProcess.stdio[fd];
+    if (stream && "allowHalfOpen" in stream)
+      stream.allowHalfOpen = true;
+  }
+  return childProcess;
+};
 var makeWith = /* @__PURE__ */ fnUntraced2(function* (prepareSpawn) {
   const fs = yield* FileSystem;
   const path = yield* Path;
@@ -10493,9 +10620,6 @@ var makeWith = /* @__PURE__ */ fnUntraced2(function* (prepareSpawn) {
           break;
         }
         case "duplex": {
-          if (nodeStream && "allowHalfOpen" in nodeStream) {
-            nodeStream.allowHalfOpen = true;
-          }
           setupOutput(fd, nodeStream, config.sink);
           yield* setupInput(fd, nodeStream, config.stream);
           break;
@@ -10555,9 +10679,9 @@ var makeWith = /* @__PURE__ */ fnUntraced2(function* (prepareSpawn) {
       all
     };
   };
-  const spawn = (spawnProcess, command, spawnOptions) => callback2((resume) => {
+  const spawn = (spawnProcess, command, spawnOptions, halfOpen) => callback2((resume) => {
     const deferred = makeUnsafe2();
-    const handle = spawnProcess(command.command, command.args.map(unwrap5), spawnOptions);
+    const handle = spawnProcess(command.command, command.args.map(unwrap5), spawnOptions, halfOpen);
     handle.on("error", (error) => {
       if (command.args.some(isRedacted)) {
         Object.assign(error, {
@@ -10692,6 +10816,10 @@ var makeWith = /* @__PURE__ */ fnUntraced2(function* (prepareSpawn) {
         const cwd = yield* resolveWorkingDirectory(cmd.options);
         const env = resolveEnvironment(cmd.options);
         const stdio = buildStdioArray(stdinConfig, stdoutConfig, stderrConfig, resolvedAdditionalFds);
+        const halfOpen = resolvedAdditionalFds.flatMap(({
+          config,
+          fd
+        }) => config.type === "duplex" ? [fd] : []);
         const releaseProcess = fnUntraced2(function* (childProcess, exitSignal) {
           if (childProcess.lost === true || !isReferenced) {
             return;
@@ -10710,7 +10838,7 @@ var makeWith = /* @__PURE__ */ fnUntraced2(function* (prepareSpawn) {
           cwd,
           env,
           stdio
-        }, process.platform)), ([childProcess, exitSignal], exit) => all2([close(inputScope, exit), releaseProcess(childProcess, exitSignal)], {
+        }, process.platform), halfOpen), ([childProcess, exitSignal], exit) => all2([close(inputScope, exit), releaseProcess(childProcess, exitSignal)], {
           concurrency: "unbounded",
           discard: true
         }));

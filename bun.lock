@@ -5,13 +5,13 @@
     "": {
       "name": "@timmo001/workflows-actions",
       "dependencies": {
-        "@effect/platform-node": "4.1.6",
+        "@effect/platform-node": "4.1.7",
         "@timmo001/effect-gh": "0.14.1",
-        "effect": "4.1.6",
+        "effect": "4.1.7",
       },
       "devDependencies": {
         "@effect/tsgo": "0.73.7",
-        "@effect/vitest": "4.1.6",
+        "@effect/vitest": "4.1.7",
         "@oxlint/plugins": "1.95.0",
         "@timmo001/oxlint-rules": "0.7.1",
         "@types/bun": "1.4.5",
@@ -24,9 +24,9 @@
     },
   },
   "packages": {
-    "@effect/platform-node": ["@effect/platform-node@4.1.6", "", { "dependencies": { "@effect/platform-node-shared": "4.1.6", "undici": "^8.13.1" }, "peerDependencies": { "effect": "^4.1.6", "redis": ">=5.1.0 <7.0.0" } }, "sha512-DNHzWIRARCCoK6Ez5MOqJ6H81e5FbQecH8GY41ftJGqATENUOVOLkT1iNgxBt6zPi36iF1EpraBen+MjKUqHpw=="],
+    "@effect/platform-node": ["@effect/platform-node@4.1.7", "", { "dependencies": { "@effect/platform-node-shared": "4.1.7", "undici": "^8.13.1" }, "peerDependencies": { "effect": "^4.1.7", "redis": ">=5.1.0 <7.0.0" } }, "sha512-+hWmfkd5QtfeDKdCnyf+Vs/XK6lnNCfwXWMXWb6YOAyhAQC6qBvHNR5Tx6Lkk8l33eL8xAalHexXF64jL8ABiQ=="],
 
-    "@effect/platform-node-shared": ["@effect/platform-node-shared@4.1.6", "", { "dependencies": { "@types/ws": "^8.18.2", "ws": "^8.23.0" }, "peerDependencies": { "effect": "^4.1.6" } }, "sha512-RWKHX5TEZet2KC/NlBu5prBkZT30m6h8YTSWfJM0wIw0BNMkfEzCuH6N5HOw8mUudclWp5z1XTzsZ7xg0h+6Qw=="],
+    "@effect/platform-node-shared": ["@effect/platform-node-shared@4.1.7", "", { "dependencies": { "@types/ws": "^8.18.2", "ws": "^8.23.0" }, "peerDependencies": { "effect": "^4.1.7" } }, "sha512-EDnlB5zL6EW0ahVAeQAUtpuMHc/0yruMLKBsX3nC4Zn3PuG4McWv2A6Rvdk2OUSFM/OFTCclt3sKWNCvk3pEUw=="],
 
     "@effect/tsgo": ["@effect/tsgo@0.73.7", "", { "optionalDependencies": { "@effect/tsgo-darwin-arm64": "0.73.7", "@effect/tsgo-darwin-x64": "0.73.7", "@effect/tsgo-linux-arm": "0.73.7", "@effect/tsgo-linux-arm64": "0.73.7", "@effect/tsgo-linux-x64": "0.73.7", "@effect/tsgo-win32-arm64": "0.73.7", "@effect/tsgo-win32-x64": "0.73.7" }, "bin": { "effect-tsgo": "dist/effect-tsgo.cjs" } }, "sha512-Ks+JDKKrQxhV370MX/AZyBwX+/zUScIHBZ0n4rbS2/bwTcpCPga+9H5yNKX+uOMMUwreH7GFnBka0iZKqkRbfw=="],
 
@@ -44,7 +44,7 @@
 
     "@effect/tsgo-win32-x64": ["@effect/tsgo-win32-x64@0.73.7", "", { "os": "win32", "cpu": "x64" }, "sha512-PLhmEx7oY4XJajVdaak20f9v4xDWXX5JVQ5+lgWqNZ8mMao2ITlwbQBv6Ds9kpb39A533cnqgaVkqVSFxoiVhA=="],
 
-    "@effect/vitest": ["@effect/vitest@4.1.6", "", { "peerDependencies": { "effect": "^4.1.6", "vitest": ">=5.0.0 <6.0.0" } }, "sha512-Knb13gPhDbtOuNUnPXE/Sl+UvrKFHRATwU2vy+DGQCpjK1yI3oy1feQo1g2X8ZdOdc63sJB7HJXCMNsDy8xYvg=="],
+    "@effect/vitest": ["@effect/vitest@4.1.7", "", { "peerDependencies": { "effect": "^4.1.7", "vitest": ">=5.0.0 <6.0.0" } }, "sha512-4Rj7db3Zol7HtCkuQ2KZ26KrbIWIKAS2rpvH5s3drB1sMZh93nSaK6zXZ6EOtMtWl2CM/flz7tJ8ADaMCRHUWw=="],
 
     "@emnapi/core": ["@emnapi/core@2.0.0-beta.2", "", { "dependencies": { "@emnapi/wasi-threads": "2.2.0", "tslib": "^2.4.0" } }, "sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A=="],
 
@@ -228,7 +228,7 @@
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 
-    "effect": ["effect@4.1.6", "", {}, "sha512-P3CxMsdcSCle/7/FnPILd9GJkNqGtduKam2LX9Xsb8LoOjmeQ9Kmsuh16JwtIthaxLyiTCOzUUt+PZsXIohl+A=="],
+    "effect": ["effect@4.1.7", "", {}, "sha512-8QUe2XO3auHF5r7+bfIDWxyXlLA0sso4Sia1QYP+vrYA7qb3sq1u2eJmhyXGmKc8yZ+TY2SNxPozeMdyKmWing=="],
 
     "es-module-lexer": ["es-module-lexer@2.3.2", "", {}, "sha512-poHGpORABojJJucnV9KbOavETW8lBVnphkW77ER5/BQ5Fz7oXSoCNek7IH3vR5nRjdsEz926ibFYX8KtLQmdyw=="],
 
